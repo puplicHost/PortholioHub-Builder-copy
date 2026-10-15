@@ -40,9 +40,15 @@ export function ProjectPageView({ profile, projectPage }: { profile: any; projec
   const [theme, setTheme] = useState<'light' | 'dark'>(defaultColorMode)
   const [showScrollTop, setShowScrollTop] = useState(false)
 
+  // Mount-only read of the browser-persisted theme. Kept in an effect
+  // (not a state initializer) so the first committed render always matches
+  // SSR; applied inside rAF so it lands before the next paint.
   useEffect(() => {
-    const savedTheme = localStorage.getItem('portfolio-theme') as 'light' | 'dark' | null
-    if (savedTheme) setTheme(savedTheme)
+    const id = requestAnimationFrame(() => {
+      const savedTheme = localStorage.getItem('portfolio-theme') as 'light' | 'dark' | null
+      if (savedTheme === 'light' || savedTheme === 'dark') setTheme(savedTheme)
+    })
+    return () => cancelAnimationFrame(id)
   }, [])
 
   useEffect(() => {

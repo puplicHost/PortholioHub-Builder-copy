@@ -10,7 +10,10 @@ import { getServerLang } from '@/lib/i18n/server'
 import { getAppUrl } from '@/lib/urls'
 import './globals.css'
 
-export const dynamic = 'force-dynamic'
+// NOTE: no `export const dynamic` here on purpose. The layout reads the
+// language cookie (getServerLang), which already opts every route into
+// dynamic rendering — an explicit force-dynamic would only forbid any
+// future static optimization without adding anything.
 
 const inter = Inter({
   subsets: ['latin'],

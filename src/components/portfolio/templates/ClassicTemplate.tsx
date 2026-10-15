@@ -38,12 +38,15 @@ export function ClassicTemplate({ profile }: { profile: any }) {
 
   const [lang, setLang] = useState<'ar' | 'en'>(defaultLangMode === 'ar' ? 'ar' : 'en')
   const [theme, setTheme] = useState<'light' | 'dark'>(defaultColorMode)
-  const [isScrolled, setIsScrolled] = useState(false)
-
-  useEffect(() => {
+  // Sync when the incoming defaults change (render-phase adjustment instead
+  // of setState-in-effect: same end state, no cascading render pass).
+  const [prevDefaults, setPrevDefaults] = useState({ lang: defaultLangMode, theme: defaultColorMode })
+  if (prevDefaults.lang !== defaultLangMode || prevDefaults.theme !== defaultColorMode) {
+    setPrevDefaults({ lang: defaultLangMode, theme: defaultColorMode })
     setLang(defaultLangMode === 'ar' ? 'ar' : 'en')
     setTheme(defaultColorMode)
-  }, [defaultLangMode, defaultColorMode])
+  }
+  const [isScrolled, setIsScrolled] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => {

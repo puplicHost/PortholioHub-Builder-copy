@@ -98,11 +98,14 @@ function ProjectPagePreview({ profile, projectPage }: { profile: any; projectPag
   const defaultColorMode = appearance.colorMode || 'light'
   const [lang, setLang] = useState<'ar' | 'en'>(defaultLangMode === 'ar' ? 'ar' : 'en')
   const [theme, setTheme] = useState<'light' | 'dark'>(defaultColorMode)
-
-  useEffect(() => {
+  // Sync when the incoming defaults change (render-phase adjustment instead
+  // of setState-in-effect: same end state, no cascading render pass).
+  const [prevDefaults, setPrevDefaults] = useState({ lang: defaultLangMode, theme: defaultColorMode })
+  if (prevDefaults.lang !== defaultLangMode || prevDefaults.theme !== defaultColorMode) {
+    setPrevDefaults({ lang: defaultLangMode, theme: defaultColorMode })
     setLang(defaultLangMode === 'ar' ? 'ar' : 'en')
     setTheme(defaultColorMode)
-  }, [defaultLangMode, defaultColorMode])
+  }
 
   const primary = appearance.primaryColor || '#60a5fa'
   const primaryLight = adjustColor(primary, 40)

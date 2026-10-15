@@ -35,31 +35,27 @@ export async function getOrCreateProfile() {
     },
   })
 
-  // Ensure experience section exists for existing profiles (deduplicate too)
+  // Ensure default sections exist for existing profiles (single pass).
+  // Mutations run against the DB in order; a local mirror keeps later blocks
+  // consistent, and the profile is re-fetched at most ONCE at the end
+  // (zero extra fetches when nothing needs migrating).
   if (profile?.pages?.[0]) {
-    const sections = profile.pages[0].sections || []
+    const pageId = profile.pages[0].id
+    let sections: any[] = [...(profile.pages[0].sections || [])]
+    let migrated = false
+
+    // — Experience: deduplicate, or insert after About —
     const experienceSections = sections.filter((s: any) => s.sectionType === 'experience')
 
-    // Remove duplicate experience sections
     if (experienceSections.length > 1) {
+      // Remove duplicate experience sections
       const toDelete = experienceSections.slice(1)
       for (const dup of toDelete) {
         await prisma.pageSection.delete({ where: { id: dup.id } })
       }
-      // Re-fetch after cleanup
-      profile = await prisma.userProfile.findUnique({
-        where: { userId: user.id },
-        include: {
-          pages: {
-            include: { sections: { orderBy: { sectionOrder: 'asc' } } },
-            orderBy: { pageOrder: 'asc' },
-          },
-          projectPages: {
-            include: { items: { orderBy: { sortOrder: 'asc' } } },
-            orderBy: { sortOrder: 'asc' }
-          }
-        },
-      })
+      const deletedIds = new Set(toDelete.map((d: any) => d.id))
+      sections = sections.filter((s: any) => !deletedIds.has(s.id))
+      migrated = true
     } else if (experienceSections.length === 0 && sections.length > 0) {
       // Add the experience section
       const aboutSection = sections.find((s: any) => s.sectionType === 'about')
@@ -76,9 +72,9 @@ export async function getOrCreateProfile() {
         }
       }
 
-      await prisma.pageSection.create({
+      const created = await prisma.pageSection.create({
         data: {
-          pageId: profile.pages[0].id,
+          pageId,
           sectionType: 'experience',
           sectionOrder: insertOrder,
           content: {
@@ -89,126 +85,105 @@ export async function getOrCreateProfile() {
           settings: { isVisible: true } as Prisma.InputJsonValue,
         },
       })
-
-      // Re-fetch to include the new section
-      profile = await prisma.userProfile.findUnique({
-        where: { userId: user.id },
-        include: {
-          pages: {
-            include: { sections: { orderBy: { sectionOrder: 'asc' } } },
-            orderBy: { pageOrder: 'asc' },
-          },
-          projectPages: {
-            include: { items: { orderBy: { sortOrder: 'asc' } } },
-            orderBy: { sortOrder: 'asc' }
-          }
-        },
-      })
+      sections.push(created)
+      migrated = true
     }
 
-    // Ensure footer section exists (migrating old contact section if present)
-    if (profile?.pages?.[0]) {
-      const currentSections = profile.pages[0].sections || []
-      const contactSec = currentSections.find((s: any) => s.sectionType === 'contact')
-      const footerSec = currentSections.find((s: any) => s.sectionType === 'footer')
+    // — Footer: migrate legacy contact section, or append —
+    const contactSec = sections.find((s: any) => s.sectionType === 'contact')
+    const footerSec = sections.find((s: any) => s.sectionType === 'footer')
 
-      if (contactSec && !footerSec) {
-        const existingContent = (contactSec.content as any) || {}
-        await prisma.pageSection.update({
-          where: { id: contactSec.id },
-          data: {
-            sectionType: 'footer',
-            content: {
-              headline: existingContent.heading || existingContent.title || { en: 'Work with me', ar: 'تواصل معي' },
-              subheading: existingContent.description || { en: "Let's build something great together.", ar: 'دعنا نبني شيئاً رائعاً معاً.' },
-              links: (profile.contactLinks as any) || [],
-            } as Prisma.InputJsonValue,
-          },
-        })
-      } else if (contactSec && footerSec) {
-        await prisma.pageSection.delete({ where: { id: contactSec.id } })
-      } else if (!footerSec && currentSections.length > 0) {
-        const maxOrder = currentSections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0)
-        await prisma.pageSection.create({
-          data: {
-            pageId: profile.pages[0].id,
-            sectionType: 'footer',
-            sectionOrder: maxOrder + 1,
-            content: {
-              headline: { en: 'Work with me', ar: 'تواصل معي' },
-              subheading: { en: "Let's build something great together.", ar: 'دعنا نبني شيئاً رائعاً معاً.' },
-              links: (profile.contactLinks as any) || [],
-            } as Prisma.InputJsonValue,
-            settings: { isVisible: true } as Prisma.InputJsonValue,
-          },
-        })
-      }
-
-      // Re-fetch profile to reflect section updates
-      profile = await prisma.userProfile.findUnique({
-        where: { userId: user.id },
-        include: {
-          pages: {
-            include: { sections: { orderBy: { sectionOrder: 'asc' } } },
-            orderBy: { pageOrder: 'asc' },
-          },
-          projectPages: {
-            include: { items: { orderBy: { sortOrder: 'asc' } } },
-            orderBy: { sortOrder: 'asc' }
-          }
+    if (contactSec && !footerSec) {
+      const existingContent = (contactSec.content as any) || {}
+      const updated = await prisma.pageSection.update({
+        where: { id: contactSec.id },
+        data: {
+          sectionType: 'footer',
+          content: {
+            headline: existingContent.heading || existingContent.title || { en: 'Work with me', ar: 'تواصل معي' },
+            subheading: existingContent.description || { en: "Let's build something great together.", ar: 'دعنا نبني شيئاً رائعاً معاً.' },
+            links: (profile.contactLinks as any) || [],
+          } as Prisma.InputJsonValue,
         },
       })
+      Object.assign(contactSec, updated)
+      migrated = true
+    } else if (contactSec && footerSec) {
+      await prisma.pageSection.delete({ where: { id: contactSec.id } })
+      sections = sections.filter((s: any) => s.id !== contactSec.id)
+      migrated = true
+    } else if (!footerSec && sections.length > 0) {
+      const maxOrder = sections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0)
+      const created = await prisma.pageSection.create({
+        data: {
+          pageId,
+          sectionType: 'footer',
+          sectionOrder: maxOrder + 1,
+          content: {
+            headline: { en: 'Work with me', ar: 'تواصل معي' },
+            subheading: { en: "Let's build something great together.", ar: 'دعنا نبني شيئاً رائعاً معاً.' },
+            links: (profile.contactLinks as any) || [],
+          } as Prisma.InputJsonValue,
+          settings: { isVisible: true } as Prisma.InputJsonValue,
+        },
+      })
+      sections.push(created)
+      migrated = true
     }
 
-    // Ensure testimonials section exists for existing profiles
-    if (profile?.pages?.[0]) {
-      const currentSections = profile.pages[0].sections || []
-      const testimonialsSec = currentSections.find((s: any) => s.sectionType === 'testimonials')
+    // — Testimonials: insert before footer (or append) —
+    const testimonialsSec = sections.find((s: any) => s.sectionType === 'testimonials')
 
-      if (!testimonialsSec && currentSections.length > 0) {
-        const footerSection = currentSections.find((s: any) => s.sectionType === 'footer')
-        const insertOrder = footerSection
-          ? footerSection.sectionOrder
-          : currentSections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0) + 1
+    if (!testimonialsSec && sections.length > 0) {
+      const footerSection = sections.find((s: any) => s.sectionType === 'footer')
+      const insertOrder = footerSection
+        ? footerSection.sectionOrder
+        : sections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0) + 1
 
-        for (const sec of currentSections) {
-          if (sec.sectionOrder >= insertOrder) {
-            await prisma.pageSection.update({
-              where: { id: sec.id },
-              data: { sectionOrder: sec.sectionOrder + 1 },
-            })
-          }
+      for (const sec of sections) {
+        if (sec.sectionOrder >= insertOrder) {
+          await prisma.pageSection.update({
+            where: { id: sec.id },
+            data: { sectionOrder: sec.sectionOrder + 1 },
+          })
+          sec.sectionOrder = sec.sectionOrder + 1
         }
-
-        await prisma.pageSection.create({
-          data: {
-            pageId: profile.pages[0].id,
-            sectionType: 'testimonials',
-            sectionOrder: insertOrder,
-            content: {
-              title: { en: 'Testimonials', ar: 'آراء العملاء' },
-              subtitle: { en: 'What clients say', ar: 'ماذا يقول العملاء' },
-              icon: 'message',
-              items: [],
-            } as Prisma.InputJsonValue,
-            settings: { isVisible: true } as Prisma.InputJsonValue,
-          },
-        })
-
-        profile = await prisma.userProfile.findUnique({
-          where: { userId: user.id },
-          include: {
-            pages: {
-              include: { sections: { orderBy: { sectionOrder: 'asc' } } },
-              orderBy: { pageOrder: 'asc' },
-            },
-            projectPages: {
-              include: { items: { orderBy: { sortOrder: 'asc' } } },
-              orderBy: { sortOrder: 'asc' }
-            }
-          },
-        })
       }
+
+      const created = await prisma.pageSection.create({
+        data: {
+          pageId,
+          sectionType: 'testimonials',
+          sectionOrder: insertOrder,
+          content: {
+            title: { en: 'Testimonials', ar: 'آراء العملاء' },
+            subtitle: { en: 'What clients say', ar: 'ماذا يقول العملاء' },
+            icon: 'message',
+            items: [],
+          } as Prisma.InputJsonValue,
+          settings: { isVisible: true } as Prisma.InputJsonValue,
+        },
+      })
+      sections.push(created)
+      migrated = true
+    }
+
+    // Single re-fetch so the returned profile reflects the migration
+    // (skipped entirely when nothing changed).
+    if (migrated) {
+      profile = await prisma.userProfile.findUnique({
+        where: { userId: user.id },
+        include: {
+          pages: {
+            include: { sections: { orderBy: { sectionOrder: 'asc' } } },
+            orderBy: { pageOrder: 'asc' },
+          },
+          projectPages: {
+            include: { items: { orderBy: { sortOrder: 'asc' } } },
+            orderBy: { sortOrder: 'asc' }
+          }
+        },
+      })
     }
   }
 
@@ -751,24 +726,43 @@ export async function getPortfolioAnalytics(): Promise<PortfolioAnalytics> {
   const since30 = new Date(now.getTime() - 30 * day)
   const since60 = new Date(now.getTime() - 60 * day)
 
-  const [totalAllTime, total7d, total30d, prev7d, prev30d, projectViews, projectViews30d, projectViewsPrev30d, whatsappClicks, whatsapp30d, whatsappPrev30d, events30] =
-    await Promise.all([
-      prisma.portfolioViewEvent.count({ where: { profileId: profile.id } }),
-      prisma.portfolioViewEvent.count({ where: { profileId: profile.id, createdAt: { gte: since7 } } }),
-      prisma.portfolioViewEvent.count({ where: { profileId: profile.id, createdAt: { gte: since30 } } }),
-      prisma.portfolioViewEvent.count({ where: { profileId: profile.id, createdAt: { gte: since14, lt: since7 } } }),
-      prisma.portfolioViewEvent.count({ where: { profileId: profile.id, createdAt: { gte: since60, lt: since30 } } }),
-      prisma.portfolioViewEvent.count({ where: { profileId: profile.id, eventType: 'project_view' } }),
-      prisma.portfolioViewEvent.count({ where: { profileId: profile.id, eventType: 'project_view', createdAt: { gte: since30 } } }),
-      prisma.portfolioViewEvent.count({ where: { profileId: profile.id, eventType: 'project_view', createdAt: { gte: since60, lt: since30 } } }),
-      prisma.portfolioViewEvent.count({ where: { profileId: profile.id, eventType: 'whatsapp_click' } }),
-      prisma.portfolioViewEvent.count({ where: { profileId: profile.id, eventType: 'whatsapp_click', createdAt: { gte: since30 } } }),
-      prisma.portfolioViewEvent.count({ where: { profileId: profile.id, eventType: 'whatsapp_click', createdAt: { gte: since60, lt: since30 } } }),
-      prisma.portfolioViewEvent.findMany({
-        where: { profileId: profile.id, createdAt: { gte: since30 } },
-        select: { eventType: true, projectPageId: true, country: true, createdAt: true },
-      }),
-    ])
+  type TypeCount = { eventType: string; _count: { _all: number } }
+  const countAll = (rows: TypeCount[], type?: string) =>
+    rows.filter((r) => !type || r.eventType === type).reduce((n, r) => n + r._count._all, 0)
+
+  // Two grouped queries replace eleven COUNTs. The 30-day windows are
+  // derived from the events30 rows below (same predicates, exact counts);
+  // the [60d,30d) windows are 60d-grouped minus 30d-derived.
+  const [byTypeAllTime, byType60d, events30] = await Promise.all([
+    prisma.portfolioViewEvent.groupBy({
+      by: ['eventType'],
+      where: { profileId: profile.id },
+      _count: { _all: true },
+    }),
+    prisma.portfolioViewEvent.groupBy({
+      by: ['eventType'],
+      where: { profileId: profile.id, createdAt: { gte: since60 } },
+      _count: { _all: true },
+    }),
+    prisma.portfolioViewEvent.findMany({
+      where: { profileId: profile.id, createdAt: { gte: since30 } },
+      select: { eventType: true, projectPageId: true, country: true, createdAt: true },
+    }),
+  ])
+
+  const totalAllTime = countAll(byTypeAllTime)
+  const projectViews = countAll(byTypeAllTime, 'project_view')
+  const whatsappClicks = countAll(byTypeAllTime, 'whatsapp_click')
+
+  const total30d = events30.length
+  const projectViews30d = events30.filter((e) => e.eventType === 'project_view').length
+  const whatsapp30d = events30.filter((e) => e.eventType === 'whatsapp_click').length
+  const total7d = events30.filter((e) => e.createdAt >= since7).length
+  const prev7d = events30.filter((e) => e.createdAt >= since14 && e.createdAt < since7).length
+
+  const prev30d = countAll(byType60d) - total30d
+  const projectViewsPrev30d = countAll(byType60d, 'project_view') - projectViews30d
+  const whatsappPrev30d = countAll(byType60d, 'whatsapp_click') - whatsapp30d
 
   // Daily series (last 30 days, page_view + project_view only)
   const buckets = new Map<string, number>()
