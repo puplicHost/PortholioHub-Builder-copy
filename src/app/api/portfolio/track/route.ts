@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma'
+import { validateSession } from '@/lib/auth'
+import { recordVisit } from '@/lib/visits'
 
 const VALID_EVENTS = new Set(['page_view', 'project_view', 'whatsapp_click'])
 
@@ -59,7 +61,7 @@ export async function POST(req: Request) {
 
     const profile = await prisma.userProfile.findUnique({
       where: { username },
-      select: { id: true },
+      select: { id: true, userId: true },
     })
     if (!profile) return Response.json({ ok: false }, { status: 202 })
 
@@ -72,8 +74,34 @@ export async function POST(req: Request) {
       projectPageId = page?.id ?? null
     }
 
+    // Owner visits never count (plan Phase 11): same-session owner check.
+    let isOwner = false
+    try {
+      const { cookies } = await import('next/headers')
+      const sessionToken = (await cookies()).get('session_token')?.value
+      const viewer = await validateSession(sessionToken)
+      isOwner = !!viewer && viewer.id === profile.userId
+    } catch {
+      isOwner = false
+    }
+
     const acceptLanguage = req.headers.get('accept-language')
     const referer = req.headers.get('referer')?.slice(0, 500) ?? null
+    const userAgent = req.headers.get('user-agent')?.slice(0, 500) ?? null
+
+    // Cumulative aggregate (dedupe-gated). The raw row below keeps the
+    // existing dashboard (countries tab) pixel-identical until it migrates
+    // to DailyVisit; both writes are skipped for owners and duplicates.
+    const { counted } = await recordVisit({
+      portfolioId: profile.id,
+      projectSlug: eventType === 'project_view' ? projectSlug : null,
+      ip,
+      userAgent,
+      isOwner,
+    })
+    if (!counted) {
+      return Response.json({ ok: true }, { status: 202 })
+    }
 
     await prisma.portfolioViewEvent.create({
       data: {

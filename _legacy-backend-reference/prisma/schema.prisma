@@ -869,6 +869,7 @@ model UserProfile {
   testimonials   Testimonial[]
   services       Service[]
   viewEvents     PortfolioViewEvent[]
+  dailyVisits    DailyVisit[]
 
   @@map("user_profiles")
 }
@@ -1000,4 +1001,25 @@ model PortfolioViewEvent {
   @@index([profileId, createdAt])
   @@index([profileId, eventType, createdAt])
   @@map("portfolio_view_events")
+}
+
+model DailyVisit {
+  id          String   @id @default(cuid())
+  portfolioId String   @map("portfolio_id")
+  profile     UserProfile @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  projectSlug String?  @map("project_slug")
+  day         DateTime @db.Date
+  count       Int      @default(0)
+
+  @@unique([portfolioId, projectSlug, day])
+  @@index([portfolioId, day])
+  @@map("daily_visits")
+}
+
+model VisitDedup {
+  key String   @id
+  day DateTime @db.Date
+
+  @@index([day])
+  @@map("visit_dedups")
 }

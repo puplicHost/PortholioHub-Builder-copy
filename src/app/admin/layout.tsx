@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/guards'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 export const metadata = {
   title: 'Admin | PortfolioHub',
@@ -17,7 +18,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <p className="text-xs text-[var(--color-text-muted)] truncate">
             Signed in as <span className="font-medium text-[var(--color-text-primary)]">{user.email}</span>
           </p>
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
+            <NotificationBell />
             <Link href="/profile/builder" className="text-xs font-medium text-[var(--color-primary)] hover:underline">
               Builder
             </Link>

@@ -1,46 +1,32 @@
-# Sprint B verification — Draft/Published + gating (INTERIM: static only)
+# Sprint E verification — notifications + settings (Phase 2 remainder)
 
-- Scope: B1–B14 per `local/docs/gap-closure-plan.md` §1 (Sprint B), except B5-subscription (passes through to Sprint C by plan).
-- Gate state: `supabase/migrations/0003_portfolio_status.sql` written, **not applied**. Sprint B code reads the new columns → live checks run only after user confirms application.
+- Scope: E1–E4 per `local/docs/gap-closure-plan.md` §1 (Sprint E). FCM live push intentionally deferred (no Firebase infra).
+- No SQL migration needed: `notifications` columns + partial unique and `fcm_tokens` shape already landed in `0004` (applied); `systemSetting` registry is code-only.
 
 ## Static verification (VERIFIED)
 
 | Check | Result |
 |---|---|
 | `tsc --noEmit` | exit 0 |
-| `eslint` | 28 errors / 53 warnings — **zero new** (baseline 34/54; rewrites removed 6 pre-existing `as any` errors; 2 self-found items fixed: `prefer-const`, rest-sibling warnings) |
-| `prisma generate` | v5.22.0 with `UserProfile.status/adminHidden/adminHiddenReason/version` |
-| `next build` + live seed flow | PENDING user applying 0003 (gate order) |
+| `eslint` | 28 errors / 53 warnings — identical to baseline; 3 self-found `set-state-in-effect` fixed via proven IIFE pattern (one exhaustive-deps accommodation: polling effect lists `open`, harmless refetch) |
+| `next build` | PENDING (runs with Sprint G/H gate; dev-HMR covered all new routes this round) |
 
-## SQL deliverable (NOT run)
-
-- `supabase/migrations/0003_portfolio_status.sql` — 4× ADD COLUMN (safe defaults) + backfill `status='PUBLISHED'` for rows with a published `home` page. Check query (before/after counts) embedded in the file header:
-  `SELECT status, count(*) FROM user_profiles GROUP BY status ORDER BY 1;`
-
-## What was built (code, untested-live)
-
-- `publishProfile`/`unpublishProfile` + preconditions (`username`, hero name, ≥1 visible section); Publish button saves then publishes, toggles to Unpublish; toasts on both paths.
-- `updatePortfolio`: `expectedVersion` check → `{conflict:true}` (+ P2002 race catch); version bumped + returned; client stores it (stale saves will surface, full modal in F).
-- Username policy (`USERNAME_PATTERN` + 45-name reserved list) enforced in `updatePortfolio` + new `GET /api/username-available`.
-- `lib/visibility.ts` gate (status/hidden; subscription joins in C) applied in both `/u` pages; `toPublicProfile` DTO strips `userId/status/adminHidden*/version` (template reads none of them — verified by grep).
-- SEO: absolute canonical, `og:locale` (ar_EG/en_US by content), absolute OG image w/ avatar, JSON-LD Person/breadcrumb with `</script>` escaping, `noindex` on misses. Sitemap += published projects of visible profiles. New `GET /api/health` (200/503, no leak).
-
-## Visual-freeze check (Sprint B)
-
-- `src/components/**`: zero files touched. `src/app/**` touched: `u/[username]/page.tsx` + `projects/[slug]/page.tsx` (data layer + head tags only; rendered tree identical), `BuilderClient.tsx` (Publish label toggles Publish/Unpublish by status — same button/slot), `sitemap.ts` (no UI). New files: `visibility.ts`, `public-profile.ts`, `username-available/route.ts`, `health/route.ts`.
-
-## Live verification (VERIFIED — 0003 found applied, backfill preserved visibility)
+## Live battery (VERIFIED on dev, HMR-current)
 
 | # | Test | Result |
 |---|---|---|
-| 1 | `next build` | exit 0, all routes incl. new `/api/username-available`, `/api/health` |
-| 2 | `GET /api/health` | 200 `{"status":"ok","db":"up"}` |
-| 3 | Username policy API | taken → taken-msg; `Admin` → reserved; fresh → `available:true` |
-| 4 | Gating: fresh DRAFT user page | Not-Found page (dev serves HTTP 200 with notFound body — known Next-dev quirk, documented in audit-report) |
-| 5 | Seed status after backfill | `PUBLISHED`, version 1 |
-| 6 | Version conflict (stale `expectedVersion`) | `{success:false, conflict:true, currentVersion}` |
-| 7 | Reserved username on save | `{success:false, error:'This username is reserved'}` |
-| 8 | Unpublish → page shows Not Found; publish → 200 portfolio + canonical + JSON-LD | Full cycle green (versions 2→3) |
-| 9 | Seed flow regression | builder 200, `/u/testuser` 200 with seeded content |
+| 1 | Register fresh user (fires `user.registered`) | 201; admin-addressed bilingual row in DB (`{"en":"New user registered",…}`) |
+| 2 | Own list + unread-count | 200 `[]`, unread 0 |
+| 3 | IDOR: mark another user's notification | **404** (ownership-scoped `updateMany`) |
+| 4 | Read-all (empty) + duplicate register | 200 `marked:0`; 409 (pre-notify, no dup rows) |
+| 5 | `/profile/notifications` page | 200 |
+| 6 | Bell in builder + admin header | rendered (`aria-label="Notifications"` ×1); dropdown/polling are client interactions (user click-through at end) |
+| 7 | Seed regression | login 200, builder 200, `/u/testuser` → Not-Found page (correct: NONE subscription gating from Sprint C) |
 
-Method note: publish/unpublish/conflict exercised via a temporary `/api/test-sprint-b` scaffold invoking the real action code, removed afterwards (`git status` clean of it).
+## Visual-freeze check (Sprint E)
+
+- `src/components/**`: no existing file touched (new `notifications/*` only). `src/app/**` existing touched: `admin/layout.tsx` + `BuilderClient.tsx` (one bell icon button each, existing styles), `register/route.ts` (server-only hook). No existing look changed.
+
+## Deferred (unchanged)
+
+FCM sending + device UX + SW (needs Firebase human items); `POST /api/me/devices` + public contact endpoint were plan Phase-2 items not in Sprint E scope — carried to a later pass if wanted.

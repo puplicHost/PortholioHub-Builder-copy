@@ -35,6 +35,7 @@ import { useToast } from '@/components/ui/Toast'
 import { updatePortfolio, createProjectPage, updateProjectPage, deleteProjectPage, publishProfile, unpublishProfile } from '@/lib/actions/portfolio'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { LivePreview } from './LivePreview'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { ThemeSettings } from './ThemeSettings'
 import { ProjectManager } from './ProjectManager'
 import { TestimonialsEditor } from './TestimonialsEditor'
@@ -2376,6 +2377,7 @@ case 'skills':
             </a>
           )}
 
+          <NotificationBell />
           <Button
             variant="primary"
             size="sm"

@@ -4,6 +4,7 @@ import {
   getUserByEmail,
   SESSION_EXPIRES_IN,
 } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 import { setSessionCookie } from '@/lib/session-cookie'
 import { ensurePersonalWorkspace } from '@/lib/workspaces'
 import { validatePasswordPolicy } from '@/lib/password'
@@ -48,18 +49,49 @@ export async function POST(req: Request) {
     if (existing) {
       throw Errors.conflict('An account with this email already exists')
     }
+    const phoneTaken = await prisma.user.findUnique({ where: { phone }, select: { id: true } })
+    if (phoneTaken) {
+      throw Errors.conflict('An account with this mobile number already exists')
+    }
 
     // No email verification: new users are active immediately.
-    const user = await createUser(email, password, {
-      ...(displayName ? { displayName } : {}),
-      phone,
-      emailVerified: true,
-    })
+    let user
+    try {
+      user = await createUser(email, password, {
+        ...(displayName ? { displayName } : {}),
+        phone,
+        emailVerified: true,
+      })
+    } catch (err: unknown) {
+      // Unique race on email/phone between precheck and insert.
+      if ((err as { code?: string })?.code === 'P2002') {
+        throw Errors.conflict('An account with these details already exists')
+      }
+      throw err
+    }
 
     // Every builder user needs a workspace — create it here so the first
     // builder visit never redirects anywhere (see also ensurePersonalWorkspace
     // on first builder visit for pre-existing users).
     await ensurePersonalWorkspace(user.id, user.displayName || email.split('@')[0] || 'My')
+
+    // Notify active admins of the signup (plan Phase 2 hook; push deferred).
+    try {
+      const { notify } = await import('@/lib/notify')
+      await notify({
+        toAdmins: true,
+        type: 'user.registered',
+        title: { en: 'New user registered', ar: 'مستخدم جديد سجّل' },
+        body: {
+          en: `${user.displayName || user.email} just registered.`,
+          ar: `${user.displayName || user.email} سجّل للتو.`,
+        },
+        link: `/admin/users/${user.id}`,
+        dedupeKey: `user.registered:${user.id}`,
+      })
+    } catch (err) {
+      console.error('[auth/register] notify failed:', err)
+    }
 
     const sessionToken = await createSession(user.id)
     await setSessionCookie(sessionToken, Math.floor(SESSION_EXPIRES_IN / 1000))
