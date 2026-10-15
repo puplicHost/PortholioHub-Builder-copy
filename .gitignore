@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+out/
+
+# Env files (secrets live only in local .env, never committed)
+.env
+.env*.local
+
+# Uploads (local dev only; production uses Supabase Storage)
+public/uploads/
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / editor
+.DS_Store
+*.pem
