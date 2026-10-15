@@ -2,16 +2,19 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useI18n } from '@/components/I18nProvider'
+import { getSafeRedirect } from '@/lib/urls'
 
 export function RegisterForm() {
   const { t } = useI18n()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -24,14 +27,14 @@ export function RegisterForm() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, displayName }),
+        body: JSON.stringify({ email, password, displayName, phone }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok) {
-        setError(data?.error || 'Registration failed, please try again')
+        setError(data?.message || 'Registration failed, please try again')
         return
       }
-      router.push('/profile/builder')
+      router.push(getSafeRedirect(searchParams.get('redirect'), '/profile/builder'))
       router.refresh()
     } catch {
       setError('Registration failed, please try again')
@@ -69,6 +72,17 @@ export function RegisterForm() {
             placeholder={t('auth.emailPlaceholder')}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-[var(--color-text-secondary)]">{t('auth.phone')}</label>
+          <Input
+            type="tel"
+            required
+            autoComplete="tel"
+            placeholder={t('auth.phonePlaceholder')}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
           />
         </div>
         <div className="space-y-1">

@@ -11,7 +11,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   try {
     const profiles = await prisma.userProfile.findMany({
-      where: { pages: { some: { slug: 'home', isPublished: true } } },
+      where: {
+        status: 'PUBLISHED',
+        adminHidden: false,
+        pages: { some: { slug: 'home', isPublished: true } },
+      },
       orderBy: { updatedAt: 'desc' },
       take: 500,
       select: { username: true, updatedAt: true },
@@ -23,6 +27,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         changeFrequency: 'daily',
         priority: 0.6,
         lastModified: profile.updatedAt,
+      })
+    }
+
+    const projects = await prisma.projectPage.findMany({
+      where: {
+        isPublished: true,
+        profile: { status: 'PUBLISHED', adminHidden: false },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 500,
+      select: { slug: true, updatedAt: true, profile: { select: { username: true } } },
+    })
+
+    for (const project of projects) {
+      entries.push({
+        url: `${baseUrl}/u/${project.profile.username}/projects/${project.slug}`,
+        changeFrequency: 'weekly',
+        priority: 0.5,
+        lastModified: project.updatedAt,
       })
     }
   } catch {

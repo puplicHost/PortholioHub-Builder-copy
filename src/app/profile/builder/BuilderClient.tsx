@@ -32,7 +32,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
-import { updatePortfolio, createProjectPage, updateProjectPage, deleteProjectPage } from '@/lib/actions/portfolio'
+import { updatePortfolio, createProjectPage, updateProjectPage, deleteProjectPage, publishProfile, unpublishProfile } from '@/lib/actions/portfolio'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { LivePreview } from './LivePreview'
 import { ThemeSettings } from './ThemeSettings'
@@ -522,8 +522,8 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
     return getProfileSnapshot(profile) !== savedSnapshot
   }, [profile, savedSnapshot])
 
-  const handleSaveChanges = async () => {
-    if (saveStatus === 'saving') return
+  const handleSaveChanges = async (): Promise<boolean> => {
+    if (saveStatus === 'saving') return false
     setSaveStatus('saving')
     try {
       const res = await updatePortfolio({
@@ -535,10 +535,15 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
         contactLinks: profile.contactLinks,
         sections: profile.pages[0]?.sections,
         projects: ensureValidProjectItemTypes(profile.projectPages),
+        expectedVersion: profile.version,
       })
       if (res.success) {
         setLastSaved(new Date())
         let nextProfile = profile
+        if (typeof (res as any).version === 'number') {
+          nextProfile = { ...nextProfile, version: (res as any).version }
+          setProfile(nextProfile)
+        }
         if ((res as any).savedProjects && (res as any).savedProjects.length > 0) {
           let updatedPages = [...(profile.projectPages || [])]
           for (const sp of (res as any).savedProjects) {
@@ -567,7 +572,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
             }
           }
           nextProfile = {
-            ...profile,
+            ...nextProfile,
             projectPages: updatedPages,
           }
           setProfile(nextProfile)
@@ -580,18 +585,42 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
         setSavedSnapshot(getProfileSnapshot(nextProfile))
         setSaveStatus('saved')
         toast('success', 'Changes saved successfully!')
+        return true
       } else {
         setSaveStatus('error')
         toast('error', res.error || 'Failed to save changes')
+        return false
       }
     } catch (err: any) {
       console.error('Failed to save changes', err)
       setSaveStatus('error')
       toast('error', 'An unexpected error occurred')
+      return false
     }
   }
 
-  const handlePublish = handleSaveChanges
+  const handlePublish = async () => {
+    if (saveStatus === 'saving') return
+    if (profile.status === 'PUBLISHED') {
+      const res = await unpublishProfile()
+      if (res.success) {
+        setProfile((p: any) => ({ ...p, status: 'DRAFT', version: (res as any).version ?? p.version }))
+        toast('success', 'Unpublished. Your public page is now hidden.')
+      } else {
+        toast('error', (res as any).error || 'Failed to unpublish')
+      }
+      return
+    }
+    const saved = await handleSaveChanges()
+    if (!saved) return
+    const res = await publishProfile()
+    if (res.success) {
+      setProfile((p: any) => ({ ...p, status: 'PUBLISHED', version: (res as any).version ?? p.version }))
+      toast('success', 'Published! Your portfolio is now live.')
+    } else {
+      toast('error', (res as any).error || 'Failed to publish')
+    }
+  }
 
   // State updater
   const updateProfile = useCallback((updater: (prev: any) => any) => {
@@ -2354,7 +2383,7 @@ case 'skills':
             onClick={handlePublish}
           >
             <Globe className="h-3.5 w-3.5" />
-            <span>Publish</span>
+            <span>{profile.status === 'PUBLISHED' ? 'Unpublish' : 'Publish'}</span>
           </Button>
 
           <button

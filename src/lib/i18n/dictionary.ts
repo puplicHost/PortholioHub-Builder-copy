@@ -327,9 +327,11 @@ export const en = {
   'auth.startWorkspace': 'Start your marketing workspace',
   'auth.displayName': 'Display name',
   'auth.displayNamePlaceholder': 'Your name',
-  'auth.newPasswordPlaceholder': 'At least 6 characters',
+  'auth.newPasswordPlaceholder': 'At least 8 characters',
   'auth.createAccountBtn': 'Create account',
   'auth.haveAccount': 'Already have an account?',
+  'auth.phone': 'Mobile number',
+  'auth.phonePlaceholder': '+201012345678',
 
   // Language toggle
   'lang.switch': 'Switch language',
@@ -735,9 +737,11 @@ export const ar: Record<TranslationKey, string> = {
   'auth.startWorkspace': 'ابدأ مساحة عملك التسويقية',
   'auth.displayName': 'الاسم المعروض',
   'auth.displayNamePlaceholder': 'اسمك',
-  'auth.newPasswordPlaceholder': '6 أحرف على الأقل',
+  'auth.newPasswordPlaceholder': '8 أحرف على الأقل',
   'auth.createAccountBtn': 'إنشاء الحساب',
   'auth.haveAccount': 'لديك حساب بالفعل؟',
+  'auth.phone': 'رقم الموبايل',
+  'auth.phonePlaceholder': '+201012345678',
 
   // Language toggle
   'lang.switch': 'تبديل اللغة',

@@ -219,6 +219,32 @@ function slugify(input: string): string {
   return slug
 }
 
+// Plan Phase 5 §24: 3–30 chars, lowercase alphanumerics with interior
+// single hyphens only.
+export const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){1,28}[a-z0-9]$/
+
+const RESERVED_USERNAMES = new Set([
+  'admin', 'administrator', 'api', 'app', 'u', 'login', 'register',
+  'dev', 'uploads', 'upload', 'www', 'support', 'settings', 'help',
+  'about', 'terms', 'privacy', 'blog', 'status', 'health', 'sitemap',
+  'robots', 'favicon', 'static', 'public', 'cdn', 'mail', 'email',
+  'test', 'demo', 'null', 'undefined', 'root', 'system', 'portfolio',
+  'portfolios', 'user', 'users', 'account', 'dashboard', 'builder',
+  'site', 'web', 'home', 'contact', 'workspace', 'workspaces',
+])
+
+// Returns an error message when the username is unusable, else null.
+export function validateUsername(username: string): string | null {
+  const normalized = username.toLowerCase().trim()
+  if (!USERNAME_PATTERN.test(normalized)) {
+    return 'Username must be 3-30 lowercase letters, digits, or hyphens (not at the ends)'
+  }
+  if (RESERVED_USERNAMES.has(normalized)) {
+    return 'This username is reserved'
+  }
+  return null
+}
+
 function randomSuffix(): string {
   return Math.floor(1000 + Math.random() * 9000).toString()
 }

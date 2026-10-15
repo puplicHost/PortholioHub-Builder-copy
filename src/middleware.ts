@@ -28,10 +28,26 @@ export async function middleware(request: NextRequest) {
   if (!isBaseHost && hostOnly !== `www.${baseHostOnly}` && !pathname.startsWith('/api') && !pathname.startsWith('/_next')) {
     const subdomain = hostOnly.replace(`.${baseHostOnly}`, '')
     // Rewrite to /u/[subdomain]
-    return NextResponse.rewrite(new URL(`/u/${subdomain}${pathname === '/' ? '' : pathname}`, request.url))
+    return withSecurityHeaders(
+      NextResponse.rewrite(new URL(`/u/${subdomain}${pathname === '/' ? '' : pathname}`, request.url)),
+    )
   }
 
-  return NextResponse.next()
+  return withSecurityHeaders(NextResponse.next())
+}
+
+function withSecurityHeaders(response: NextResponse): NextResponse {
+  // Baseline hardening. No script-src tightening here: Cloudinary and
+  // Google Fonts must keep working (visual freeze); tighten to report-only
+  // in a later pass after auditing every inline script.
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  response.headers.set('X-Frame-Options', 'DENY')
+  if (process.env.NODE_ENV === 'production') {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  }
+  return response
 }
 
 export const config = {

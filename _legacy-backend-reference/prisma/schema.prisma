@@ -19,11 +19,14 @@ datasource db {
 model User {
   id            String    @id @default(uuid())
   email         String    @unique
+  phone         String?   @unique
   passwordHash  String?   @map("password_hash")
   displayName   String?   @map("display_name")
   avatarUrl     String?   @map("avatar_url")
   isAdmin       Boolean   @default(false) @map("is_admin")
   emailVerified Boolean   @default(false) @map("email_verified")
+  status        String    @default("ACTIVE")
+  mustChangePassword Boolean @default(false) @map("must_change_password")
   lastLoginAt   DateTime? @map("last_login_at")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
@@ -37,6 +40,7 @@ model User {
   ownedWorkspaces           Workspace[]          @relation("WorkspaceOwner")
   memberships               WorkspaceMember[]
   subscriptions             Subscription[]
+  subscriptionRequests      SubscriptionRequest[]
   payments                  Payment[]
   fcmTokens                 FcmToken[]
   notifications             Notification[]
@@ -68,15 +72,27 @@ model Profile {
 }
 
 model Session {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token     String   @unique
-  expiresAt DateTime @map("expires_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  remember   Boolean  @default(false)
+  expiresAt  DateTime @map("expires_at")
+  lastSeenAt DateTime? @map("last_seen_at")
+  userAgent  String?  @map("user_agent")
+  ip         String?
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([userId])
   @@map("sessions")
+}
+
+model RateLimitBucket {
+  key     String   @id
+  count   Int
+  resetAt DateTime @map("reset_at")
+
+  @@map("rate_limit_buckets")
 }
 
 model PasswordResetToken {
@@ -574,10 +590,12 @@ model Notification {
   userId    String   @map("user_id")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      String
-  title     String
-  body      String
+  title     Json
+  body      Json
   link      String?
   isRead    Boolean  @default(false) @map("is_read")
+  dedupeKey String?  @map("dedupe_key")
+  readAt    DateTime? @map("read_at")
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([userId, isRead])
@@ -633,8 +651,11 @@ model MediaFile {
 model Plan {
   id                   String    @id @default(uuid())
   name                 String
+  nameI18n             Json?     @map("name_i18n")
   priceEgp             Int       @map("price_egp")
   priceEgpAnnual       Int?      @map("price_egp_annual")
+  durationDays         Int?      @map("duration_days")
+  limits               Json?
   workspaceLimit       Int       @map("workspace_limit")
   postsPerMonth        Int       @map("posts_per_month")
   storageMb            Int       @map("storage_mb")
@@ -647,6 +668,7 @@ model Plan {
   deletedAt            DateTime? @map("deleted_at")
 
   subscriptions Subscription[]
+  requests      SubscriptionRequest[]
 
   @@index([isActive])
   @@map("plans")
@@ -670,6 +692,9 @@ model Subscription {
   paymentProvider     String?   @map("payment_provider")
   paymentId           String?   @map("payment_id")
   amountEgp           Int?      @map("amount_egp")
+  planSnapshot        Json?     @map("plan_snapshot")
+  requestId           String?   @unique @map("request_id")
+  createdBy           String?   @map("created_by")
   deletedAt           DateTime? @map("deleted_at")
 
   events   SubscriptionEvent[]
@@ -678,6 +703,23 @@ model Subscription {
   @@index([userId])
   @@index([planId])
   @@map("subscriptions")
+}
+
+model SubscriptionRequest {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId    String    @map("plan_id")
+  plan      Plan      @relation(fields: [planId], references: [id])
+  status    String    @default("PENDING")
+  note      String?
+  handledBy String?   @map("handled_by")
+  handledAt DateTime? @map("handled_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@map("subscription_requests")
 }
 
 model SubscriptionEvent {
@@ -709,7 +751,9 @@ model Payment {
   currency       String
   status         String
   metadata       Json
-  createdAt      DateTime     @default(now()) @map("created_at")
+  confirmedBy    String?   @map("confirmed_by")
+  confirmedAt    DateTime? @map("confirmed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
   completedAt    DateTime?    @map("completed_at")
 
   @@index([subscriptionId])
@@ -813,6 +857,10 @@ model UserProfile {
   contactLinks      Json?    @map("contact_links")
   appearance        Json?
   localized         Json?
+  status            String   @default("DRAFT")
+  adminHidden       Boolean  @default(false) @map("admin_hidden")
+  adminHiddenReason String?  @map("admin_hidden_reason")
+  version           Int      @default(1)
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 

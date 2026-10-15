@@ -1,29 +1,19 @@
 import { notFound } from 'next/navigation'
+import { cache } from 'react'
 import { prisma } from '@/lib/prisma'
 import { Metadata } from 'next'
 import { ProjectPageView } from './ProjectPageView'
 import { TrackBeacon } from '@/components/portfolio/TrackBeacon'
+import { isPortfolioVisible } from '@/lib/visibility'
+import { getSubscriptionState } from '@/lib/subscriptions'
+import { getAppUrl } from '@/lib/urls'
 
-export async function generateMetadata({ params }: { params: Promise<{ username: string; slug: string }> }): Promise<Metadata> {
-  const { username, slug } = await params
+// Shared within a single request (metadata + page, one round trip).
+// Unpublished projects — or projects of unpublished/hidden portfolios —
+// resolve to null → uniform 404 (plan Phase 6 §13).
+const getPublicProject = cache(async (username: string, slug: string) => {
   const projectPage = await prisma.projectPage.findFirst({
-    where: { slug, profile: { username } },
-    include: { profile: true },
-  })
-
-  if (!projectPage) return { title: 'Not Found' }
-
-  return {
-    title: `${projectPage.title} | ${(projectPage as any).profile.displayName || (projectPage as any).profile.username}`,
-    description: projectPage.description || `Check out ${projectPage.title} by ${(projectPage as any).profile.displayName || (projectPage as any).profile.username}`,
-  }
-}
-
-export default async function ProjectPageDetail({ params }: { params: Promise<{ username: string; slug: string }> }) {
-  const { username, slug } = await params
-
-  const projectPage = await prisma.projectPage.findFirst({
-    where: { slug, profile: { username } },
+    where: { slug, isPublished: true, profile: { username } },
     include: {
       profile: {
         include: {
@@ -37,17 +27,76 @@ export default async function ProjectPageDetail({ params }: { params: Promise<{ 
       items: { orderBy: { sortOrder: 'asc' } },
     },
   })
+  if (!projectPage) return null
+  const owner = projectPage.profile as unknown as { userId: string; status?: string | null; adminHidden?: boolean | null }
+  const sub = await getSubscriptionState(owner.userId)
+  if (!isPortfolioVisible(owner, sub.state)) return null
+  return projectPage
+})
+
+export async function generateMetadata({ params }: { params: Promise<{ username: string; slug: string }> }): Promise<Metadata> {
+  const { username, slug } = await params
+  const projectPage = await getPublicProject(username, slug)
+  const base = getAppUrl()
+
+  if (!projectPage) return { title: 'Not Found', robots: { index: false, follow: false } }
+
+  const owner = projectPage.profile as unknown as { displayName?: string | null; username?: string | null }
+  const ownerName = owner.displayName || owner.username || username
+  const title = `${projectPage.title} | ${ownerName}`
+  const description = projectPage.description || `Check out ${projectPage.title} by ${ownerName}`
+  const url = `${base}/u/${username}/projects/${projectPage.slug}`
+  const cover = typeof projectPage.coverImage === 'string' && projectPage.coverImage.startsWith('http')
+    ? projectPage.coverImage
+    : `${base}/opengraph.png`
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    robots: { index: true, follow: true },
+    openGraph: {
+      title,
+      description,
+      url,
+      siteName: 'PortfolioHub',
+      type: 'article',
+      images: cover,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: cover,
+    },
+  }
+}
+
+export default async function ProjectPageDetail({ params }: { params: Promise<{ username: string; slug: string }> }) {
+  const { username, slug } = await params
+
+  const projectPage = await getPublicProject(username, slug)
 
   if (!projectPage) {
     notFound()
   }
 
-  const profile = (projectPage as any).profile
-  const appearance = (profile as any).appearance || {}
-  const font = appearance.font || 'Inter'
+  const profile = projectPage.profile as unknown as Record<string, unknown>
+  const appearance = (profile['appearance'] ?? {}) as Record<string, unknown>
+  const font = typeof appearance['font'] === 'string' ? appearance['font'] : 'Inter'
+
+  const breadcrumbLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Portfolio', item: `${getAppUrl()}/u/${username}` },
+      { '@type': 'ListItem', position: 2, name: projectPage.title, item: `${getAppUrl()}/u/${username}/projects/${projectPage.slug}` },
+    ],
+  }).replace(/</g, '\\u003c')
 
   return (
     <div style={{ fontFamily: `"${font}", system-ui, sans-serif` }}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: breadcrumbLd }} />
       <TrackBeacon username={username} eventType="project_view" projectSlug={slug} />
       <ProjectPageView profile={profile} projectPage={projectPage} />
     </div>

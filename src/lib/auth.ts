@@ -12,6 +12,12 @@ const PASSWORD_SALT_ROUNDS = 12
 const SESSION_TOKEN_LENGTH = 32
 const SESSION_EXPIRES_IN = 7 * 24 * 60 * 60 * 1000 // 7 days (ms)
 
+// Session tokens are bearer credentials: only the SHA-256 hash is stored.
+// The raw token exists solely in the httpOnly cookie (plan Phase 1 §16).
+function hashSessionToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}
+
 // ============================================================
 // SESSION MANAGEMENT
 // ============================================================
@@ -23,7 +29,7 @@ export async function createSession(userId: string): Promise<string> {
   const expiresAt = new Date(Date.now() + SESSION_EXPIRES_IN)
 
   await prisma.session.create({
-    data: { userId, token, expiresAt },
+    data: { userId, token: hashSessionToken(token), expiresAt },
   })
 
   return token
@@ -33,7 +39,7 @@ export async function validateSession(token: string | undefined | null) {
   if (!token) return null
 
   const session = await prisma.session.findUnique({
-    where: { token },
+    where: { token: hashSessionToken(token) },
     include: { user: true },
   })
 
@@ -42,12 +48,14 @@ export async function validateSession(token: string | undefined | null) {
     await prisma.session.delete({ where: { id: session.id } }).catch(() => {})
     return null
   }
+  // Suspended (or otherwise non-active) users lose access immediately.
+  if (session.user.status !== 'ACTIVE') return null
 
   return session.user
 }
 
 export async function deleteSession(token: string) {
-  await prisma.session.deleteMany({ where: { token } })
+  await prisma.session.deleteMany({ where: { token: hashSessionToken(token) } })
 }
 
 export async function deleteAllSessions(userId: string) {
@@ -74,6 +82,7 @@ export async function createUser(
     data: {
       email: normalizedEmail,
       passwordHash,
+      phone: (metadata.phone as string) || null,
       displayName: (metadata.displayName as string) || normalizedEmail.split('@')[0],
       isAdmin: Boolean(metadata.isAdmin || false),
       emailVerified: Boolean(metadata.emailVerified || false),
@@ -218,7 +227,7 @@ export async function getCurrentSession() {
   const sessionToken = cookieStore.get('session_token')?.value
   if (!sessionToken) return null
   return prisma.session.findUnique({
-    where: { token: sessionToken },
+    where: { token: hashSessionToken(sessionToken) },
     include: { user: true },
   })
 }

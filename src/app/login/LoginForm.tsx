@@ -2,14 +2,16 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useI18n } from '@/components/I18nProvider'
+import { getSafeRedirect } from '@/lib/urls'
 
 export function LoginForm() {
   const { t } = useI18n()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -27,10 +29,16 @@ export function LoginForm() {
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok) {
-        setError(data?.error || 'Login failed, please try again')
+        setError(data?.message || 'Login failed, please try again')
         return
       }
-      router.push('/profile/builder')
+      if (data?.mustChangePassword) {
+        router.push('/change-password')
+      } else if (data?.isAdmin) {
+        router.push('/admin')
+      } else {
+        router.push(getSafeRedirect(searchParams.get('redirect'), '/profile/builder'))
+      }
       router.refresh()
     } catch {
       setError('Login failed, please try again')

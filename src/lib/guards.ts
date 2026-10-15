@@ -11,6 +11,15 @@ export async function getUser() {
 export async function requireUser() {
   const user = await getUser()
   if (!user) redirect('/login')
+  if (user.mustChangePassword) redirect('/change-password')
+  return user
+}
+
+// Admin-only pages. Non-admins land back in the builder (no admin
+// surface is ever rendered for them).
+export async function requireAdmin() {
+  const user = await requireUser()
+  if (!user.isAdmin) redirect('/profile/builder')
   return user
 }
 

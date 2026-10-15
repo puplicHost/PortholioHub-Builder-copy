@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { ensurePersonalWorkspace } from '@/lib/workspaces'
+import { validateUsername } from '@/lib/portfolio'
 import { Prisma } from '@prisma/client'
 
 async function requireUserWithWorkspace() {
@@ -283,29 +284,66 @@ export async function updatePortfolio(data: {
   localized?: any,
   contactLinks?: any,
   sections?: any[],
-  projects?: any[]
+  projects?: any[],
+  expectedVersion?: number,
 }) {
   try {
     const user = await requireUserWithWorkspace()
-    
-    if (data.username) {
-      const existing = await prisma.userProfile.findUnique({ where: { username: data.username } })
-      if (existing && existing.userId !== user.id) {
-        return { success: false, error: 'Username is already taken' }
+
+    // Optimistic concurrency: reject stale writers with their conflict
+    // surfaced (full 409 modal lands in Sprint F).
+    if (data.expectedVersion !== undefined) {
+      const current = await prisma.userProfile.findUnique({
+        where: { userId: user.id },
+        select: { version: true },
+      })
+      if (current && current.version !== data.expectedVersion) {
+        return { success: false, conflict: true, currentVersion: current.version, error: 'Someone else saved changes. Reload to get the latest version.' }
       }
     }
 
-    // Update profile
-    await prisma.userProfile.update({
-      where: { userId: user.id },
-      data: {
-        username: data.username,
-        avatarUrl: data.avatarUrl,
-        appearance: data.appearance,
-        localized: data.localized,
-        contactLinks: data.contactLinks,
-      },
-    })
+    const username = data.username?.toLowerCase().trim() || undefined
+    if (username) {
+      const problem = validateUsername(username)
+      if (problem) {
+        return { success: false, error: problem }
+      }
+      const existing = await prisma.userProfile.findUnique({ where: { username } })
+      if (existing && existing.userId !== user.id) {
+        return { success: false, conflict: true, error: 'Username is already taken' }
+      }
+    }
+
+    // Global safety caps on every save (plan Phase 5 §18): 30 sections,
+    // 50 projects, 60 gallery items. Plan limits apply at publish.
+    const sectionCount = data.sections?.length || 0
+    const projectCount = Array.isArray(data.projects) ? data.projects.length : 0
+    if (sectionCount > 30 || projectCount > 50) {
+      return { success: false, error: 'Content exceeds safety caps (30 sections / 50 projects)' }
+    }
+
+    // Update profile (version bump keeps concurrent writers ordered)
+    let updated: { version: number }
+    try {
+      updated = await prisma.userProfile.update({
+        where: { userId: user.id },
+        data: {
+          username,
+          avatarUrl: data.avatarUrl,
+          appearance: data.appearance,
+          localized: data.localized,
+          contactLinks: data.contactLinks,
+          version: { increment: 1 },
+        },
+        select: { version: true },
+      })
+    } catch (err: any) {
+      // Unique-race on username between precheck and write.
+      if (err?.code === 'P2002') {
+        return { success: false, conflict: true, error: 'Username is already taken' }
+      }
+      throw err
+    }
 
     // Update sections if provided
     if (data.sections && data.sections.length > 0) {
@@ -466,10 +504,121 @@ export async function updatePortfolio(data: {
       revalidatePath(`/u/${data.username}`)
     }
     
-    return { success: true, savedProjects }
+    return { success: true, savedProjects, version: updated.version }
   } catch (error: any) {
     console.error('updatePortfolio error:', error)
     return { success: false, error: error.message || 'Failed to save portfolio' }
+  }
+}
+
+export interface PublishCheck {
+  ok: boolean
+  missing: string[]
+}
+
+// Publish preconditions (plan Phase 5 §23). Subscription check
+// (`canPublish`) joins in Sprint C; until then this validates content only.
+export async function checkPublishable(): Promise<PublishCheck> {
+  const user = await requireUserWithWorkspace()
+  const profile = await prisma.userProfile.findUnique({
+    where: { userId: user.id },
+    include: {
+      pages: { include: { sections: true } },
+    },
+  })
+  const missing: string[] = []
+  if (!profile) {
+    return { ok: false, missing: ['profile'] }
+  }
+  if (!profile.username) missing.push('username')
+  const name =
+    ((profile.localized as any)?.displayName?.en as string) ||
+    ((profile.localized as any)?.displayName?.ar as string) ||
+    profile.displayName ||
+    ''
+  if (!name.trim()) missing.push('name')
+  const home = profile.pages.find((p) => p.slug === 'home')
+  const sections = home?.sections || []
+  const visible = sections.filter((s: any) => {
+    const settings = (s.settings as any) || {}
+    return settings.isVisible !== false && (s as any).visible !== false
+  })
+  if (visible.length === 0) missing.push('visible-section')
+  return { ok: missing.length === 0, missing }
+}
+
+export async function publishProfile() {
+  try {
+    const user = await requireUserWithWorkspace()
+    const check = await checkPublishable()
+    if (!check.ok) {
+      return { success: false, error: `Cannot publish yet: missing ${check.missing.join(', ')}` }
+    }
+
+    // Subscription gate (plan Phase 5 §23): ACTIVE or GRACE only.
+    const { getSubscriptionState, canPublish, getEffectiveLimits } = await import('@/lib/subscriptions')
+    const sub = await getSubscriptionState(user.id)
+    if (!canPublish(sub.state)) {
+      return { success: false, subscriptionRequired: true, error: 'Publishing requires an active subscription' }
+    }
+
+    // Plan limits + global safety caps at publish (Phase 5 §18/§21).
+    const profile = await prisma.userProfile.findUnique({
+      where: { userId: user.id },
+      select: {
+        id: true,
+        pages: { select: { sections: { select: { id: true } } } },
+        projectPages: { select: { id: true, gallery: true } },
+      },
+    })
+    if (!profile) {
+      return { success: false, error: 'Profile not found' }
+    }
+    const sectionCount = profile.pages.reduce((n, p) => n + p.sections.length, 0)
+    const projectCount = profile.projectPages.length
+    const galleryCount = profile.projectPages.reduce((n, p) => n + (p.gallery?.length || 0), 0)
+    if (sectionCount > 30 || projectCount > 50 || galleryCount > 60) {
+      return { success: false, error: 'Content exceeds safety caps (30 sections / 50 projects / 60 gallery items)' }
+    }
+    const limits = await getEffectiveLimits(user.id)
+    if (projectCount > limits.maxProjects) {
+      return { success: false, error: `Plan allows ${limits.maxProjects} projects` }
+    }
+    if (sectionCount > limits.maxSections) {
+      return { success: false, error: `Plan allows ${limits.maxSections} sections` }
+    }
+    if (galleryCount > limits.maxGalleryItems) {
+      return { success: false, error: `Plan allows ${limits.maxGalleryItems} gallery items` }
+    }
+
+    const updated = await prisma.userProfile.update({
+      where: { userId: user.id },
+      data: { status: 'PUBLISHED', version: { increment: 1 } },
+      select: { version: true, username: true },
+    })
+    revalidatePath('/profile/builder')
+    revalidatePath(`/u/${updated.username}`)
+    return { success: true, version: updated.version }
+  } catch (error: any) {
+    console.error('publishProfile error:', error)
+    return { success: false, error: error.message || 'Failed to publish' }
+  }
+}
+
+export async function unpublishProfile() {
+  try {
+    const user = await requireUserWithWorkspace()
+    const updated = await prisma.userProfile.update({
+      where: { userId: user.id },
+      data: { status: 'DRAFT', version: { increment: 1 } },
+      select: { version: true, username: true },
+    })
+    revalidatePath('/profile/builder')
+    revalidatePath(`/u/${updated.username}`)
+    return { success: true, version: updated.version }
+  } catch (error: any) {
+    console.error('unpublishProfile error:', error)
+    return { success: false, error: error.message || 'Failed to unpublish' }
   }
 }
 
