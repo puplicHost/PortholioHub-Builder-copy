@@ -25,7 +25,7 @@ const ICON_MAP: Record<string, React.ComponentType<any>> = {
 function getIcon(name?: string, className?: string) {
   if (!name) return null
   const Icon = ICON_MAP[name.toLowerCase()]
-  return Icon ? <Icon className={className} /> : null
+  return Icon ? <Icon className={className} aria-hidden="true" /> : null
 }
 
 export function ClassicTemplate({ profile }: { profile: any }) {
@@ -56,6 +56,15 @@ export function ClassicTemplate({ profile }: { profile: any }) {
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileMenuOpen(false)
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [mobileMenuOpen])
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -227,8 +236,8 @@ export function ClassicTemplate({ profile }: { profile: any }) {
           <section id="about" key={section.id} className="py-8 sm:py-16" style={{ backgroundColor: aboutBg }}>
             <div className="max-w-[1200px] mx-auto px-4 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               
-              {/* MOBILE VIEW (< md): image on right + text on left (matches Image 1) */}
-              <div className="md:hidden grid grid-cols-12 gap-3 items-start" dir="rtl">
+              {/* MOBILE VIEW (< md): image on left + text on right */}
+              <div className="md:hidden grid grid-cols-12 gap-3 items-stretch" dir="ltr">
                 {aboutImage ? (
                   <div className="col-span-5">
                     <div className="overflow-hidden rounded-2xl shadow-sm border border-[var(--color-border)]/40 bg-[var(--color-bg)] aspect-[3/4]">
@@ -240,10 +249,12 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                     </div>
                   </div>
                 ) : null}
-                <div className={`${aboutImage ? 'col-span-7' : 'col-span-12'} flex flex-col justify-start text-right`}>
-                  <p className="text-[var(--color-text-muted)] leading-[1.65] text-[11px] font-normal text-justify whitespace-pre-wrap">
-                    {biography}
-                  </p>
+                <div className={`${aboutImage ? 'col-span-7' : 'col-span-12'} flex flex-col justify-between self-stretch text-left`}>
+                  {biography.split(/\n+/).map((para: string, i: number) => (
+                    <p key={i} className="text-[var(--color-text)]/80 leading-[1.9] text-sm font-normal whitespace-pre-wrap text-pretty">
+                      {para}
+                    </p>
+                  ))}
                 </div>
               </div>
 
@@ -1037,6 +1048,10 @@ export function ClassicTemplate({ profile }: { profile: any }) {
       <link rel="stylesheet" href={fontLink} />
       <style dangerouslySetInnerHTML={{__html: `
         html { scroll-behavior: smooth; }
+        @media (prefers-reduced-motion: reduce) {
+          html { scroll-behavior: auto; }
+          .fade-up { opacity: 1 !important; transform: none !important; transition: none !important; }
+        }
       `}} />
       
       <div className="min-h-screen w-full transition-colors duration-300" style={style}>
@@ -1049,8 +1064,9 @@ export function ClassicTemplate({ profile }: { profile: any }) {
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 rounded-lg border border-white/20 bg-white/5 text-white hover:bg-white/10 transition-colors cursor-pointer"
+                className="md:hidden p-2 rounded-lg border border-white/20 bg-white/5 text-white hover:bg-white/10 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                 aria-label="Toggle menu"
+                aria-expanded={mobileMenuOpen}
               >
                 {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
@@ -1098,13 +1114,32 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                   {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                 </button>
                 {defaultLangMode === 'both' && (
-                  <button
-                    onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-                    className="h-9 px-3 flex items-center justify-center rounded-full bg-white/10 border border-white/20 shadow-sm hover:scale-110 transition-transform text-white text-xs font-bold uppercase cursor-pointer"
-                    title="Switch language"
-                  >
-                    {lang === 'en' ? 'AR' : 'EN'}
-                  </button>
+                  <>
+                    <button
+                      onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
+                      className="h-9 px-3 hidden md:inline-flex items-center justify-center rounded-full bg-white/10 border border-white/20 shadow-sm hover:scale-110 transition-transform text-white text-xs font-bold uppercase cursor-pointer"
+                      title="Switch language"
+                    >
+                      {lang === 'en' ? 'AR' : 'EN'}
+                    </button>
+                    {/* Mobile segmented AR | EN pill (matches reference) */}
+                    <div className="md:hidden flex items-center rounded-full border border-white/20 bg-white/5 p-0.5 text-[11px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setLang('ar')}
+                        className={`rounded-full px-2.5 py-1 transition-colors cursor-pointer ${lang === 'ar' ? 'bg-[#2563eb] text-white' : 'text-slate-300'}`}
+                      >
+                        AR
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLang('en')}
+                        className={`rounded-full px-2.5 py-1 transition-colors cursor-pointer ${lang === 'en' ? 'bg-[#2563eb] text-white' : 'text-slate-300'}`}
+                      >
+                        EN
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -1208,14 +1243,14 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                     <div className="flex flex-wrap justify-center items-center gap-2.5 sm:gap-4" dir="rtl">
                       <a 
                         href="#projects" 
-                        className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-xs sm:text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-2 cursor-pointer"
+                        className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-xs sm:text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-2 cursor-pointer min-h-[44px]"
                       >
                         <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 rtl:rotate-180" />
                         <span>{lang === 'ar' ? 'شاهد أعمالي' : 'View My Work'}</span>
                       </a>
                       <a 
                         href="#contact" 
-                        className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl border-2 border-white text-white font-bold text-xs sm:text-sm hover:bg-white/10 hover:-translate-y-0.5 transition-all cursor-pointer"
+                        className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl border-2 border-white text-white font-bold text-xs sm:text-sm hover:bg-white/10 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[44px] inline-flex items-center"
                       >
                         <span>{lang === 'ar' ? 'تواصل معي' : 'Contact Me'}</span>
                       </a>
