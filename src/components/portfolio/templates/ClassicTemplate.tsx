@@ -271,7 +271,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                     </div>
                     <div className="col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {aboutStats.map((stat: any, i: number) => (
-                        <div key={i} className="bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-transform duration-300 shadow-sm">
+                        <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-all duration-500 shadow-sm">
                           <div className="flex justify-center mb-3">
                             {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]') || <Trophy className="w-7 h-7 text-[var(--color-primary)]" />}
                           </div>
@@ -291,7 +291,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
               {aboutStats.length > 0 && (
                 <div className="grid grid-cols-2 gap-4 mt-8 sm:mt-10 md:hidden">
                   {aboutStats.map((stat: any, i: number) => (
-                    <div key={i} className="bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-transform duration-300 shadow-sm">
+                    <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-all duration-500 shadow-sm">
                       <div className="flex justify-center mb-3">
                         {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]') || <Trophy className="w-7 h-7 text-[var(--color-primary)]" />}
                       </div>
@@ -341,7 +341,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-8">
                 {categories.map((cat, i) => (
-                  <div key={i} className="group relative overflow-hidden rounded-[15px] border border-[var(--color-border)] p-4 sm:p-[30px] bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                  <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group relative overflow-hidden rounded-[15px] border border-[var(--color-border)] p-4 sm:p-[30px] bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
                     <span className="absolute top-0 left-0 right-0 h-1" style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))' }} />
                     <div className="flex items-center gap-2.5 sm:gap-3 mb-4 sm:mb-6">
                       <span className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm [&>*]:!text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
@@ -469,7 +469,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                   <div className="relative ps-8 md:ps-12">
                     <div className="absolute start-3 md:start-5 top-1 bottom-1 w-[3px] rounded-full" style={{ background: 'linear-gradient(to bottom, transparent, var(--color-primary) 12%, var(--color-primary) 88%, transparent)' }} />
                     <div className="space-y-10">
-                      {expItems.map((item: any) => {
+                      {expItems.map((item: any, ei: number) => {
                         const endLabel = item.isCurrent
                           ? (lang === 'ar' ? 'الحالي' : 'Present')
                           : formatExpDate(item.endDate)
@@ -479,7 +479,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                         const duration = item.startDate ? calcDuration(item.startDate, item.endDate, item.isCurrent) : ''
                         const bullets = (item.description || '').split('\n').filter((l: string) => l.trim())
                         return (
-                          <div key={item.id} className="relative">
+                          <div key={item.id} style={{ transitionDelay: `${Math.min(ei * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative transition-all duration-500">
                             <div
                               className={`absolute -start-5 md:-start-7 top-1.5 w-3.5 h-3.5 rounded-full border-[3px] border-[var(--color-bg)] ring-2 ring-[var(--color-primary)]/20 ${
                                 item.isCurrent ? 'motion-safe:animate-pulse' : ''
@@ -586,7 +586,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
               {serviceItems.length > 0 ? (
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-8">
                   {serviceItems.map((service: any, i: number) => (
-                    <div key={i} className="group relative overflow-hidden rounded-xl border border-[var(--color-border)] p-4 sm:p-7 bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                    <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group relative overflow-hidden rounded-xl border border-[var(--color-border)] p-4 sm:p-7 bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
                       <span className="absolute top-0 left-0 right-0 h-1" style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))' }} />
                       <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center mb-4 sm:mb-5 shadow-sm [&>*]:!text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
                         {getIcon(service.icon, 'w-5 h-5 text-white') || <Code className="w-5 h-5 text-white" />}
@@ -752,8 +752,8 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-8">
-                  {projects.map((proj: any) => (
-                    <div key={proj.id} className="group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col">
+                  {projects.map((proj: any, pi: number) => (
+                    <div key={proj.id} style={{ transitionDelay: `${Math.min(pi * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col">
                       {proj.coverImage ? (
                         <div className="h-[120px] sm:h-[200px] w-full overflow-hidden bg-[var(--color-bg)] shrink-0">
                           <img src={proj.coverImage} alt={proj.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -1073,7 +1073,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
           
           {/* Navigation Bar */}
           <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${isScrolled ? 'py-2.5 sm:py-3 shadow-md' : 'py-3 sm:py-5'}`} style={{ backgroundColor: isScrolled ? (theme === 'light' ? 'var(--color-bg)' : 'color-mix(in srgb, var(--color-bg) 90%, transparent)') : 'transparent', backdropFilter: isScrolled ? 'blur(10px)' : 'none', borderBottom: isScrolled ? '1px solid var(--color-border)' : 'none' }}>
-            <div className="max-w-[1200px] mx-auto px-4 sm:px-12 flex items-center justify-between">
+            <div className="max-w-[1200px] mx-auto px-4 sm:px-12 flex items-center justify-between flex-row-reverse md:flex-row">
               {/* Mobile hamburger button on the left (matches reference) */}
               <button
                 type="button"
@@ -1234,23 +1234,23 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                         {initial}
                       </div>
                     )}
-                    <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold text-white mb-2.5 sm:mb-4 text-center leading-snug whitespace-pre-line" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-2.5 sm:mb-4 text-center leading-snug whitespace-pre-line" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
                       {displayName}
                     </h1>
-                    <p className="text-xs sm:text-sm md:text-base text-white/90 max-w-xl leading-relaxed mb-5 sm:mb-7 font-normal text-center">
+                    <p className="text-sm sm:text-sm md:text-base text-white/90 max-w-xl leading-relaxed mb-5 sm:mb-7 font-normal text-center">
                       {title || heroContent.subtitle?.[lang]}
                     </p>
                     <div className="flex flex-wrap justify-center items-center gap-2.5 sm:gap-4" dir="rtl">
                       <a 
                         href="#projects" 
-                        className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-xs sm:text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-2 cursor-pointer min-h-[44px]"
+                        className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-2 cursor-pointer min-h-[44px]"
                       >
                         <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 rtl:rotate-180" />
                         <span>{lang === 'ar' ? 'شاهد أعمالي' : 'View My Work'}</span>
                       </a>
                       <a 
                         href="#contact" 
-                        className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl border-2 border-white text-white font-bold text-xs sm:text-sm hover:bg-white/10 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[44px] inline-flex items-center"
+                        className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl border-2 border-white text-white font-bold text-sm hover:bg-white/10 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[44px] inline-flex items-center"
                       >
                         <span>{lang === 'ar' ? 'تواصل معي' : 'Contact Me'}</span>
                       </a>
