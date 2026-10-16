@@ -22,8 +22,8 @@ export async function POST(req: Request) {
 
     const ip = getClientIp(req)
     const [emailLimit, ipLimit] = await Promise.all([
-      checkRateLimit(`login:email:${email || 'empty'}`, 5, 15 * 60 * 1000),
-      checkRateLimit(`login:ip:${ip}`, 20, 15 * 60 * 1000),
+      checkRateLimit(`login:email:${email || 'empty'}`, 20, 60 * 1000),
+      checkRateLimit(`login:ip:${ip}`, 20, 60 * 1000),
     ])
     const blocked = !emailLimit.allowed ? emailLimit : ipLimit
     if (!blocked.allowed) {

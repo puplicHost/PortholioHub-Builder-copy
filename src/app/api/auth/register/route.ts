@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     }
 
     const ip = getClientIp(req)
-    const ipLimit = await checkRateLimit(`register:ip:${ip}`, 5, 60 * 60 * 1000)
+    const ipLimit = await checkRateLimit(`register:ip:${ip}`, 20, 60 * 1000)
     if (!ipLimit.allowed) {
       return Response.json(
         { code: 'RATE_LIMITED', message: 'Too many attempts, try again later' },

@@ -26,6 +26,11 @@ const lstring = (max: number) =>
     })
     .strict();
 
+// Builder inputs for experience items are flat strings (single-language
+// inputs), while legacy/imported rows may already be {ar,en} objects.
+// Accept both so saves never fail on the shape the UI actually sends.
+const lstringOrText = (max: number) => z.union([lstring(max), plainText(max)]);
+
 const url = z
   .string()
   .max(500)
@@ -33,6 +38,11 @@ const url = z
     (s) => /^(https?:\/\/|mailto:|tel:|\/)/.test(s) && !/^javascript:/i.test(s),
     'URL must be https/http/mailto/tel or site-relative',
   );
+
+// Draft rows (new gallery image, file, link, cleared background) carry an
+// empty-string URL until the user uploads or types one. The strict `url`
+// shape rejects '', so optional URL fields accept '' explicitly.
+const urlOrEmpty = z.union([z.literal(''), url]);
 
 // ---------- shared item shapes ----------
 
@@ -46,13 +56,20 @@ const skillItem = z
 const experienceItem = z
   .object({
     id: z.string().max(120).optional(),
-    jobTitle: lstring(120).optional(),
-    company: lstring(120).optional(),
-    location: lstring(120).optional(),
+    jobTitle: lstringOrText(120).optional(),
+    company: lstringOrText(120).optional(),
+    // Builder key names (ClassicTemplate renders these flat strings).
+    companyName: plainText(120).optional(),
+    companyLogo: urlOrEmpty.optional(),
+    location: lstringOrText(120).optional(),
     startDate: z.string().max(30).optional(),
     endDate: z.string().max(30).optional(),
     current: z.boolean().optional(),
-    description: lstring(1000).optional(),
+    isCurrent: z.boolean().optional(),
+    workMode: plainText(60).optional(),
+    employmentType: plainText(60).optional(),
+    icon: plainText(60).optional(),
+    description: lstringOrText(1000).optional(),
   })
   .strict();
 
@@ -66,9 +83,18 @@ const serviceItem = z
 
 const testimonialItem = z
   .object({
-    author: plainText(120),
+    id: z.string().max(120).optional(),
+    // Builder photo-card shape (TestimonialsEditor + TestimonialsSlider
+    // read name/title/photoUrl/text/rating).
+    name: plainText(120).optional(),
+    title: plainText(120).optional(),
+    photoUrl: urlOrEmpty.optional(),
+    text: lstring(1000).optional(),
+    rating: z.number().min(0).max(5).optional(),
+    // Legacy quote shape (Prisma Testimonial model rows).
+    author: plainText(120).optional(),
     role: plainText(120).optional(),
-    body: plainText(1000),
+    body: plainText(1000).optional(),
   })
   .strict();
 
@@ -94,6 +120,10 @@ const contactLink = z
   })
   .strict()
   .superRefine((link, ctx) => {
+    // Empty value = draft row (user just clicked "Add Link"); the UI
+    // allows saving drafts, so per-type format checks only apply once
+    // a value has been typed.
+    if (link.value === '') return;
     // Value rules depend on the contact type (XSS allowlist per kind).
     const fail = (message: string) =>
       ctx.addIssue({ code: 'custom', message, path: ['value'] });
@@ -117,7 +147,7 @@ const footerLink = z
     id: z.string().max(120).optional(),
     platform: plainText(60).optional(),
     label: plainText(60).optional(),
-    url: url.optional(),
+    url: urlOrEmpty.optional(),
   })
   .strict();
 
@@ -125,8 +155,8 @@ const galleryItem = z
   .object({
     id: z.string().max(120).optional(),
     mediaId: z.string().max(200).optional(),
-    imageUrl: url.optional(),
-    url: url.optional(),
+    imageUrl: urlOrEmpty.optional(),
+    url: urlOrEmpty.optional(),
     caption: plainText(200).optional(),
   })
   .strict();
@@ -136,8 +166,20 @@ const fileItem = z
     id: z.string().max(120).optional(),
     mediaId: z.string().max(200).optional(),
     label: plainText(120).optional(),
-    url: url.optional(),
-    externalUrl: url.optional(),
+    url: urlOrEmpty.optional(),
+    externalUrl: urlOrEmpty.optional(),
+  })
+  .strict();
+
+// Builder services card shape (section content `services` key — what the
+// builder writes and ClassicTemplate renders). Distinct from the legacy
+// `items` (serviceItem) shape kept below for previously stored rows.
+const builderServiceItem = z
+  .object({
+    icon: plainText(40).optional(),
+    title: plainText(120).optional(),
+    description: plainText(500).optional(),
+    features: z.array(plainText(120)).max(50).optional(),
   })
   .strict();
 
@@ -150,7 +192,7 @@ const heroContent = z
     name: lstring(120).optional(),
     jobTitle: lstring(120).optional(),
     avatarMediaId: z.string().max(200).optional(),
-    backgroundImage: url.optional(),
+    backgroundImage: urlOrEmpty.optional(),
     overlayOpacity: z.number().min(0).max(1).optional(),
     cta: z
       .array(z.object({ label: plainText(60), target: url }).strict())
@@ -162,6 +204,7 @@ const heroContent = z
 const aboutContent = z
   .object({
     title: lstring(120).optional(),
+    icon: plainText(40).optional(),
     text: lstring(2000).optional(),
     biography: lstring(2000).optional(),
     stats: z
@@ -182,6 +225,7 @@ const aboutContent = z
 const skillsContent = z
   .object({
     title: lstring(120).optional(),
+    icon: plainText(40).optional(),
     heading: lstring(120).optional(),
     skills: z.array(plainText(60)).max(50).optional(),
     groups: z
@@ -203,6 +247,8 @@ const experienceContent = z
   .object({
     heading: lstring(120).optional(),
     title: lstring(120).optional(),
+    icon: plainText(40).optional(),
+    displayMode: z.enum(['timeline', 'grid', 'list']).optional(),
     description: lstring(500).optional(),
     items: z.array(experienceItem).max(30).optional(),
   })
@@ -211,6 +257,9 @@ const experienceContent = z
 const servicesContent = z
   .object({
     title: lstring(120).optional(),
+    icon: plainText(40).optional(),
+    description: lstring(500).optional(),
+    services: z.array(builderServiceItem).max(30).optional(),
     items: z.array(serviceItem).max(20).optional(),
   })
   .strict();
@@ -218,6 +267,8 @@ const servicesContent = z
 const projectsContent = z
   .object({
     title: lstring(120).optional(),
+    icon: plainText(40).optional(),
+    displayMode: z.enum(['grid', 'list']).optional(),
     subtitle: lstring(500).optional(),
     description: lstring(500).optional(),
   })
