@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input'
 import { MediaPicker } from './MediaPicker'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 
-export function ProjectManager({ profile, updateProfile, isCardMode = false, allProjectPages = [] }: { profile: any, updateProfile: any, isCardMode?: boolean, allProjectPages?: any[] }) {
+export function ProjectManager({ profile, updateProfile, isCardMode = false, allProjectPages = [], isFree = false }: { profile: any, updateProfile: any, isCardMode?: boolean, allProjectPages?: any[], isFree?: boolean }) {
   const projects = profile.projectPages || []
   const currentPage = isCardMode ? null : (projects[0] || null)
   const displayItems = isCardMode ? projects : (currentPage?.items || [])
@@ -237,7 +237,7 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
             Project Link
           </label>
           <div className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
-            {(['none', 'external', 'page'] as const).map((type) => (
+            {(['none', 'external', ...(isFree ? [] : ['page'])] as const).map((type) => (
               <button
                 key={type}
                 type="button"
@@ -408,7 +408,7 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
             Link
           </label>
           <div className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
-            {(['none', 'external', 'page'] as const).map((type) => (
+            {(['none', 'external', ...(isFree ? [] : ['page'])] as const).map((type) => (
               <button
                 key={type}
                 type="button"

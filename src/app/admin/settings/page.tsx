@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { SETTING_KEYS, getSettings } from '@/lib/settings'
+import { getSettings } from '@/lib/settings'
 import { SettingsForm } from '@/components/admin/SettingsForm'
 import { MaintenanceToggle } from '@/components/admin/MaintenanceToggle'
 
@@ -7,27 +7,30 @@ export const metadata = {
   title: 'Settings | Admin',
 }
 
-const DESCRIPTIONS: Record<string, string> = {
-  'platform.name': 'Platform display name (shown across site and metadata)',
-  'contact.whatsapp': 'WhatsApp number in international format (e.g. +201001234567)',
-  'contact.phone': 'Public contact phone for freelancer support',
-  'subscription.graceDays': 'Grace days allowed after plan expiry before access is revoked',
-  'subscription.reminderDays': 'Days before expiry to send automated renewal alerts (e.g. 7, 3)',
-}
+const SETTING_KEYS = [
+  'contact.whatsapp',
+  'contact.email',
+  'contact.facebook',
+  'contact.instagram',
+  'contact.linkedin',
+  'contact.twitter',
+  'platform.name',
+  'subscription.graceDays',
+] as const
 
 export default async function AdminSettingsPage() {
-  const [values, maintenanceSetting] = await Promise.all([
-    getSettings(SETTING_KEYS),
+  const [values, maintenanceSetting, plans] = await Promise.all([
+    getSettings([...SETTING_KEYS]),
     prisma.systemSetting.findUnique({
       where: { key: 'platform.maintenanceMode' },
     }),
+    prisma.plan.findMany({
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, name: true, priceEgp: true, durationDays: true, isActive: true },
+    }),
   ])
 
-  const items = SETTING_KEYS.map((key) => ({
-    key,
-    value: values[key],
-    description: DESCRIPTIONS[key] || '',
-  }))
+  const items = SETTING_KEYS.map((key) => ({ key, value: values[key] }))
 
   const isMaintenance = Boolean(
     maintenanceSetting?.value === true || maintenanceSetting?.value === 'true'
@@ -37,18 +40,27 @@ export default async function AdminSettingsPage() {
     <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="text-xl font-bold tracking-tight text-[var(--color-text-primary)]">
-          System settings
+          الإعدادات
         </h1>
         <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-          Configure platform-wide branding, subscription policies, and emergency maintenance.
+          معلومات التواصل، الباقات، وإعدادات المنصة.
         </p>
       </div>
 
       {/* Emergency Platform Maintenance Switch */}
       <MaintenanceToggle initialEnabled={isMaintenance} />
 
-      {/* Configuration Setting Groups */}
-      <SettingsForm items={items} />
+      {/* Grouped settings + plans */}
+      <SettingsForm
+        items={items}
+        plans={plans.map((p) => ({
+          id: p.id,
+          name: typeof p.name === 'string' ? p.name : p.id,
+          priceEgp: p.priceEgp,
+          durationDays: p.durationDays ?? 30,
+          isActive: p.isActive,
+        }))}
+      />
     </div>
   )
 }

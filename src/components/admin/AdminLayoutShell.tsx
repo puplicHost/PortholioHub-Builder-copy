@@ -7,8 +7,6 @@ import { useTheme } from 'next-themes'
 import {
   LayoutDashboard,
   Users,
-  Globe,
-  ScrollText,
   Settings,
   ChevronsLeft,
   ChevronsRight,
@@ -22,9 +20,6 @@ import {
   ExternalLink,
   Sun,
   Moon,
-  LifeBuoy,
-  Megaphone,
-  Banknote,
 } from 'lucide-react'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 
@@ -38,16 +33,11 @@ export interface NavItemDef {
 
 export const NAV_ITEMS: NavItemDef[] = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { href: '/admin/revenue', label: 'Revenue', icon: Banknote, exact: false },
   { href: '/admin/users', label: 'Users', icon: Users, exact: false },
-  { href: '/admin/support', label: 'Support', icon: LifeBuoy, exact: false },
   { href: '/admin/requests', label: 'Requests', icon: Inbox, exact: false, badgeKey: 'requests' },
   { href: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard, exact: false },
   { href: '/admin/payments', label: 'Payments', icon: Receipt, exact: false, badgeKey: 'payments' },
   { href: '/admin/plans', label: 'Plans', icon: Tags, exact: false },
-  { href: '/admin/portfolios', label: 'Portfolios', icon: Globe, exact: false },
-  { href: '/admin/announcements', label: 'Announcements', icon: Megaphone, exact: false },
-  { href: '/admin/audit-log', label: 'Audit log', icon: ScrollText, exact: false },
   { href: '/admin/settings', label: 'Settings', icon: Settings, exact: false },
 ]
 

@@ -3,7 +3,7 @@
 
 import { ClassicTemplate } from '@/components/portfolio/templates/ClassicTemplate'
 
-export function LivePreview({ profile }: { profile: any }) {
+export function LivePreview({ profile, isFree = false }: { profile: any; isFree?: boolean }) {
   const isAr = profile?.appearance?.defaultLanguage === 'ar'
   return (
     <div
@@ -11,7 +11,7 @@ export function LivePreview({ profile }: { profile: any }) {
       style={{ transform: 'translateZ(0)', contain: 'paint' }}
     >
       <div className="w-full h-full overflow-y-auto scrollbar-thin" dir={isAr ? 'rtl' : 'ltr'}>
-        <ClassicTemplate profile={profile} />
+        <ClassicTemplate profile={profile} isFree={isFree} />
       </div>
     </div>
   )

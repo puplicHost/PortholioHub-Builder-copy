@@ -20,9 +20,38 @@ const registry = {
     default: '',
     description: 'Public contact phone',
   },
+  'contact.email': {
+    schema: z
+      .string()
+      .trim()
+      .max(160)
+      .refine((v) => v === '' || /.+@.+\..+/.test(v), 'Invalid email address'),
+    default: '',
+    description: 'Public contact email',
+  },
+  'contact.facebook': {
+    schema: z.string().trim().max(300),
+    default: '',
+    description: 'Facebook page URL',
+  },
+  'contact.instagram': {
+    schema: z.string().trim().max(300),
+    default: '',
+    description: 'Instagram profile URL',
+  },
+  'contact.linkedin': {
+    schema: z.string().trim().max(300),
+    default: '',
+    description: 'LinkedIn profile URL',
+  },
+  'contact.twitter': {
+    schema: z.string().trim().max(300),
+    default: '',
+    description: 'Twitter/X profile URL',
+  },
   'subscription.graceDays': {
     schema: z.number().int().min(1).max(60),
-    default: 15,
+    default: 7,
     description: 'Grace days after subscription expiry (snapshot per subscription)',
   },
   'subscription.reminderDays': {

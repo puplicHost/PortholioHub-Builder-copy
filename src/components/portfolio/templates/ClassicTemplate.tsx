@@ -28,7 +28,7 @@ function getIcon(name?: string, className?: string) {
   return Icon ? <Icon className={className} aria-hidden="true" /> : null
 }
 
-export function ClassicTemplate({ profile }: { profile: any }) {
+export function ClassicTemplate({ profile, isFree = false }: { profile: any; isFree?: boolean }) {
   const appearance = profile.appearance || {}
   const localized = profile.localized || {}
   const contactLinks = profile.contactLinks || []
@@ -683,7 +683,8 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                             const linkType = proj.linkType || (proj.content as any)?.linkType || 'none'
                             const linkedSlug = proj.linkedPageSlug || (proj.content as any)?.linkedPageSlug
                             const isTempSlug = !linkedSlug || String(linkedSlug).startsWith('new-') || String(linkedSlug).startsWith('project-new-')
-                            if (linkType === 'page' && !isTempSlug) {
+                            // FREE users never route to internal project pages — external URLs only.
+                            if (linkType === 'page' && !isTempSlug && !isFree) {
                               return (
                                 <Link
                                   href={`/u/${profile.username}/projects/${linkedSlug}`}
@@ -714,7 +715,8 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                             const itemSlug = item.linkedPageSlug || (item.type === 'page_link' ? item.externalUrl : null)
                             const itemLabel = item.linkLabel || item.title
                             const isItemTempSlug = !itemSlug || String(itemSlug).startsWith('new-') || String(itemSlug).startsWith('project-new-')
-                            if (itemLinkType === 'page' && !isItemTempSlug) {
+                            // FREE users never route to internal project pages — external URLs only.
+                            if (itemLinkType === 'page' && !isItemTempSlug && !isFree) {
                               return (
                                 <Link
                                   key={i}
@@ -775,12 +777,13 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                               ))}
                             </div>
                           )}
-                          <div className="mt-auto flex items-center gap-3 pt-4 border-t border-[var(--color-border)]">
+                        <div className="mt-auto flex items-center gap-3 pt-4 border-t border-[var(--color-border)]">
                           {(() => {
                             const linkType = proj.linkType || (proj.content as any)?.linkType || 'none'
                             const linkedSlug = proj.linkedPageSlug || (proj.content as any)?.linkedPageSlug
                             const isTempSlug = !linkedSlug || String(linkedSlug).startsWith('new-') || String(linkedSlug).startsWith('project-new-')
-                            if (linkType === 'page' && !isTempSlug) {
+                            // FREE users never route to internal project pages — external URLs only.
+                            if (linkType === 'page' && !isTempSlug && !isFree) {
                               return (
                                 <Link
                                   href={`/u/${profile.username}/projects/${linkedSlug}`}
@@ -811,7 +814,8 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                             const itemSlug = item.linkedPageSlug || (item.type === 'page_link' ? item.externalUrl : null)
                             const itemLabel = item.linkLabel || item.title
                             const isItemTempSlug = !itemSlug || String(itemSlug).startsWith('new-') || String(itemSlug).startsWith('project-new-')
-                            if (itemLinkType === 'page' && !isItemTempSlug) {
+                            // FREE users never route to internal project pages — external URLs only.
+                            if (itemLinkType === 'page' && !isItemTempSlug && !isFree) {
                               return (
                                 <Link
                                   key={i}
@@ -980,34 +984,51 @@ export function ClassicTemplate({ profile }: { profile: any }) {
           </section>
         )
       }
-      case 'footer':
-        const footerHeadline = c.headline?.[lang] || (typeof c.headline === 'string' ? c.headline : (lang === 'ar' ? 'تواصل معي' : 'Work with me'))
-        const footerSubheading = c.subheading?.[lang] || (typeof c.subheading === 'string' ? c.subheading : '')
+      case 'footer': {
         const footerSocialLinks = (c.links && c.links.length > 0) ? c.links : (contactLinks || [])
+        // Quick nav anchors built from the sections actually on this page.
+        const footerNav = visibleSections
+          .filter((s: any) => s.sectionType !== 'hero' && s.sectionType !== 'footer')
+          .map((s: any) => ({
+            label: s.content?.title?.[lang] || s.sectionType,
+            href: s.sectionType === 'contact' ? '#contact-info' : `#${s.sectionType}`,
+          }))
         return (
           <footer
             id="contact"
             key={section.id}
-            className="pt-[80px] pb-[48px] border-t border-[var(--color-border)] transition-colors bg-[var(--color-bg)] text-[var(--color-text)]"
+            className="pt-[56px] pb-[40px]"
+            style={{ backgroundColor: '#0D1B3E', color: 'rgba(255,255,255,0.92)' }}
           >
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 flex flex-col items-center text-center">
-              {/* 1. Large headline text */}
-              {footerHeadline && (
-                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight mb-2 break-words text-[var(--color-text)]">
-                  {footerHeadline}
-                </h2>
-              )}
-
-              {/* 2. Subheading text below it (smaller, muted) */}
-              {footerSubheading && (
-                <p className="text-sm sm:text-base text-[var(--color-text-muted)] max-w-lg mx-auto mb-7 break-words">
-                  {footerSubheading}
+              {/* 1. Name + short tagline */}
+              <p className="text-lg sm:text-xl font-bold tracking-tight text-white break-words">
+                {displayName}
+              </p>
+              {title && (
+                <p className="mt-1 text-sm text-white/70 max-w-lg mx-auto break-words">
+                  {title}
                 </p>
               )}
 
-              {/* 3. Row of social/contact icon buttons — circular, clean, consistent size (40–48px) */}
+              {/* 2. Quick nav links (anchor links to page sections) */}
+              {footerNav.length > 0 && (
+                <nav aria-label="Footer" className="mt-5 flex flex-wrap justify-center items-center gap-x-5 gap-y-2">
+                  {footerNav.map((n: { label: string; href: string }) => (
+                    <a
+                      key={n.href}
+                      href={n.href}
+                      className="text-xs font-medium text-white/70 hover:text-white transition-colors capitalize min-h-[44px] inline-flex items-center"
+                    >
+                      {n.label}
+                    </a>
+                  ))}
+                </nav>
+              )}
+
+              {/* 3. Row of social/contact icon buttons */}
               {footerSocialLinks.length > 0 && (
-                <div className="flex flex-wrap justify-center items-center gap-3 mb-8">
+                <div className="mt-5 flex flex-wrap justify-center items-center gap-3">
                   {footerSocialLinks.map((link: any, idx: number) => {
                     const platform = link.platform || link.label || 'globe'
                     const rawUrl = link.url || ''
@@ -1022,7 +1043,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                         href={href}
                         target="_blank"
                         rel="noreferrer"
-                        className="h-11 w-11 rounded-full border border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-text)] flex items-center justify-center transition-all duration-200 hover:scale-110 hover:opacity-90 hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] shadow-sm"
+                        className="h-11 w-11 rounded-full border border-white/20 bg-white/5 text-white flex items-center justify-center transition-all duration-200 hover:scale-110 hover:bg-white/10 hover:border-white/40"
                         title={link.label || link.platform || 'Link'}
                       >
                         {getSocialIcon(platform) || getContactIcon(platform)}
@@ -1031,25 +1052,10 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                   })}
                 </div>
               )}
-
-              {/* 4. Thin horizontal divider (use --border-color variable) */}
-              <div className="w-full max-w-xl mx-auto border-t border-[var(--border-color)] my-6 opacity-60" />
-
-              {/* 5. Small muted text: "© {year} · Developed with PortfolioHub" */}
-              <div className="text-center text-xs text-[var(--color-text-muted)] opacity-80">
-                © {new Date().getFullYear()} · Developed with{' '}
-                <a
-                  href="https://portholiohub.pages.dev/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-[var(--color-primary)] transition-colors underline"
-                >
-                  PortfolioHub
-                </a>
-              </div>
             </div>
           </footer>
         )
+      }
       default:
         return null
     }
@@ -1266,6 +1272,23 @@ export function ClassicTemplate({ profile }: { profile: any }) {
               return renderSection(s, i)
             })}
           </main>
+
+          {/* Permanent brand strip — ALWAYS rendered, even when the user hides their footer section */}
+          <div
+            className="w-full py-3.5 px-4 text-center text-xs"
+            style={{ backgroundColor: '#0D1B3E', color: 'rgba(255,255,255,0.65)' }}
+          >
+            © {new Date().getFullYear()} · Developed with{' '}
+            <a
+              href="https://portholiohub.pages.dev/"
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:opacity-90 transition-opacity"
+              style={{ color: '#ffffff' }}
+            >
+              PortfolioHub
+            </a>
+          </div>
         </div>
       </div>
     </>

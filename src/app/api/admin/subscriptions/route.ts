@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { requireAdminApi } from '@/lib/admin-guard'
 import { parsePagination, buildMeta } from '@/lib/pagination'
+import { getSetting } from '@/lib/settings'
 
 // GET /api/admin/subscriptions?status=&page=&pageSize= (status filters on
 // the legacy status column; effective ACTIVE/GRACE/EXPIRED is computed
@@ -62,7 +63,8 @@ export async function POST(req: Request) {
       if (!target) throw { code: 'NOT_FOUND' }
       const plan = await tx.plan.findUniqueOrThrow({ where: { id: planId } })
       const durationDays = plan.durationDays && plan.durationDays > 0 ? plan.durationDays : 30
-      const graceDaysRaw = 15
+      const graceDaysRaw = await getSetting('subscription.graceDays').catch(() => 7)
+      const graceDays = typeof graceDaysRaw === 'number' && graceDaysRaw >= 1 && graceDaysRaw <= 60 ? graceDaysRaw : 7
 
       const current = await tx.subscription.findFirst({
         where: { userId: target.id, canceledAt: null },
@@ -71,7 +73,7 @@ export async function POST(req: Request) {
       const currentEnds = current?.expiresAt ? new Date(current.expiresAt).getTime() : 0
       const startsAt = currentEnds > now.getTime() ? new Date(currentEnds) : now
       const endsAt = new Date(startsAt.getTime() + durationDays * day)
-      const graceEndsAt = new Date(endsAt.getTime() + graceDaysRaw * day)
+      const graceEndsAt = new Date(endsAt.getTime() + graceDays * day)
 
       const subscription = await tx.subscription.create({
         data: {

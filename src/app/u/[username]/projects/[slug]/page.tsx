@@ -6,6 +6,7 @@ import { ProjectPageView } from './ProjectPageView'
 import { TrackBeacon } from '@/components/portfolio/TrackBeacon'
 import { isPortfolioVisible } from '@/lib/visibility'
 import { getSubscriptionState } from '@/lib/subscriptions'
+import { canViewLockedSections } from '@/lib/free-sections'
 import { getAppUrl } from '@/lib/urls'
 
 // Shared within a single request (metadata + page, one round trip).
@@ -31,6 +32,8 @@ const getPublicProject = cache(async (username: string, slug: string) => {
   const owner = projectPage.profile as unknown as { userId: string; status?: string | null; adminHidden?: boolean | null }
   const sub = await getSubscriptionState(owner.userId)
   if (!isPortfolioVisible(owner, sub.state)) return null
+  // Project detail pages are Pro-only: free users never resolve them.
+  if (!canViewLockedSections(sub.state)) return null
   // Unlinked pages (no project card points at this slug) are not public.
   // Links live on cards: page-level content.linkedPageSlug (linkType 'page')
   // or page_link items whose externalUrl is the slug. Temp slugs can never

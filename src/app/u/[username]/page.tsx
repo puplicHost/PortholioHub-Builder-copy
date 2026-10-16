@@ -5,6 +5,7 @@ import { ClassicTemplate } from '@/components/portfolio/templates/ClassicTemplat
 import { TrackBeacon } from '@/components/portfolio/TrackBeacon'
 import { isPortfolioVisible } from '@/lib/visibility'
 import { getSubscriptionState } from '@/lib/subscriptions'
+import { stripLockedSectionsForFree } from '@/lib/free-sections'
 import { toPublicProfile } from '@/lib/public-profile'
 import { getAppUrl } from '@/lib/urls'
 import { Metadata } from 'next'
@@ -33,7 +34,14 @@ const getPublicProfile = cache(async (username: string) => {
   if (!isPortfolioVisible(row, sub.state)) return null
   const profile = toPublicProfile(row)
   if (!profile || !profile.pages || profile.pages.length === 0) return null
-  return profile
+  // FREE users never see internal links: external URLs only.
+  const isFree = sub.state !== 'ACTIVE' && sub.state !== 'GRACE'
+  // FREE users: locked sections (experience/skills/services/testimonials)
+  // are removed from the data entirely — never rendered publicly.
+  if (isFree) {
+    return { profile: stripLockedSectionsForFree(profile), isFree: true }
+  }
+  return { profile, isFree: false }
 })
 
 function contentLocale(profile: { appearance?: unknown }): 'ar' | 'en' {
@@ -43,7 +51,8 @@ function contentLocale(profile: { appearance?: unknown }): 'ar' | 'en' {
 
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }): Promise<Metadata> {
   const { username } = await params
-  const profile = await getPublicProfile(username)
+  const data = await getPublicProfile(username)
+  const profile = data?.profile
   const base = getAppUrl()
 
   if (!profile) return { title: 'Not Found', robots: { index: false, follow: false } }
@@ -82,11 +91,12 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
 export default async function PublicProfilePage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params
 
-  const profile = await getPublicProfile(username)
-  if (!profile) {
+  const data = await getPublicProfile(username)
+
+  if (!data) {
     notFound()
   }
-
+  const { profile, isFree } = data
   const personLd = JSON.stringify({
     '@context': 'https://schema.org',
     '@type': 'Person',
@@ -99,7 +109,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: personLd }} />
       <TrackBeacon username={profile.username} eventType="page_view" />
-      <ClassicTemplate profile={profile} />
+      <ClassicTemplate profile={profile} isFree={isFree} />
     </>
   )
 }

@@ -39,8 +39,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       })
       const plan = await tx.plan.findUniqueOrThrow({ where: { id: request.planId } })
       const durationDays = plan.durationDays && plan.durationDays > 0 ? plan.durationDays : 30
-      const graceDaysRaw = await getSetting('subscription.graceDays').catch(() => 15)
-      const graceDays = typeof graceDaysRaw === 'number' && graceDaysRaw >= 1 && graceDaysRaw <= 60 ? graceDaysRaw : 15
+      const graceDaysRaw = await getSetting('subscription.graceDays').catch(() => 7)
+      const graceDays = typeof graceDaysRaw === 'number' && graceDaysRaw >= 1 && graceDaysRaw <= 60 ? graceDaysRaw : 7
 
       // A4: renewal during an ACTIVE period continues from endsAt, else now.
       const current = await tx.subscription.findFirst({

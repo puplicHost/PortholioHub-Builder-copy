@@ -9,7 +9,7 @@ import {
   Palette, Layout, FileText, Menu, X, Sliders, Plus, Trash2,
   Trophy, Star, Users, Briefcase, Heart, Zap, Target, Award,
   Clock, TrendingUp, Code, Layers, Rocket, PenTool, Sun, Moon,
-  ArrowUp, BarChart3, LogOut, Languages, User, AlertTriangle
+  ArrowUp, BarChart3, LogOut, Languages, User, AlertTriangle, Lock, RefreshCw
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -34,6 +34,7 @@ import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
 import { useI18n } from '@/components/I18nProvider'
 import { getFriendlyErrorMessage } from '@/lib/validations/error-messages'
+import { isSectionLockedForFree, stripLockedSectionsForFree } from '@/lib/free-sections'
 import { useRouter } from 'next/navigation'
 import { updatePortfolio, createProjectPage, updateProjectPage, deleteProjectPage, publishProfile, unpublishProfile, getOrCreateProfile } from '@/lib/actions/portfolio'
 import { uploadToCloudinary } from '@/lib/cloudinary'
@@ -352,12 +353,14 @@ function SortableSectionItem({
   sec,
   isSelected,
   isVisible,
+  locked,
   onSelect,
   onToggleVisibility,
 }: {
   sec: any
   isSelected: boolean
   isVisible: boolean
+  locked?: boolean
   onSelect: () => void
   onToggleVisibility: (e: React.MouseEvent) => void
 }) {
@@ -381,43 +384,68 @@ function SortableSectionItem({
       ref={setNodeRef}
       style={style}
       onClick={onSelect}
-      className={`group flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer ${
-        isSelected
+      aria-disabled={locked || undefined}
+      title={locked ? '🔒 ميزة للمشتركين فقط' : undefined}
+      className={`group flex items-center justify-between p-2.5 rounded-lg border transition-all ${
+        locked
+          ? 'opacity-50 cursor-not-allowed border-transparent bg-white/40 dark:bg-white/[0.03]'
+          : 'cursor-pointer'
+      } ${
+        isSelected && !locked
           ? 'bg-[var(--color-surface)] border-[var(--color-primary)] shadow-sm text-[var(--color-primary)] font-semibold'
-          : 'border-transparent bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 hover:border-[var(--color-border)] text-[var(--color-text-primary)]'
+          : locked
+            ? 'text-[var(--color-text-muted)]'
+            : 'border-transparent bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 hover:border-[var(--color-border)] text-[var(--color-text-primary)]'
       } ${isDragging ? 'z-50 shadow-md' : ''}`}
     >
       <div className="flex items-center gap-2 truncate">
-        <div
-          {...attributes}
-          {...listeners}
-          onClick={(e) => e.stopPropagation()}
-          className="cursor-grab active:cursor-grabbing p-1 -ml-1 rounded hover:bg-black/5 dark:hover:bg-white/10 touch-none flex items-center justify-center shrink-0"
-          title="Drag to reorder"
-        >
-          <GripVertical className="h-3.5 w-3.5 text-[var(--color-text-muted)] opacity-60 group-hover:opacity-100 shrink-0" />
-        </div>
+        {locked ? (
+          <span className="p-1 -ml-1 rounded flex items-center justify-center shrink-0" aria-hidden="true">
+            <Lock className="h-3.5 w-3.5 text-[var(--color-text-muted)] shrink-0" />
+          </span>
+        ) : (
+          <div
+            {...attributes}
+            {...listeners}
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-grab active:cursor-grabbing p-1 -ml-1 rounded hover:bg-black/5 dark:hover:bg-white/10 touch-none flex items-center justify-center shrink-0"
+            title="Drag to reorder"
+          >
+            <GripVertical className="h-3.5 w-3.5 text-[var(--color-text-muted)] opacity-60 group-hover:opacity-100 shrink-0" />
+          </div>
+        )}
         <span className="text-xs capitalize truncate">{sec.sectionType}</span>
+        {locked && (
+          <span className="rounded-full bg-[#D4A017]/15 px-1.5 py-0.5 text-[9px] font-bold text-[#8a6d0b] dark:text-[#e8c547] shrink-0">
+            Pro
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
-        {/* Eye visibility toggle */}
-        <button
-          onClick={onToggleVisibility}
-          className={`p-1 rounded hover:bg-[var(--color-surface-hover)] transition-colors cursor-pointer ${
-            isVisible ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-muted)] opacity-50'
-          }`}
-          title={isVisible ? 'Hide Section' : 'Show Section'}
-        >
-          {isVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-        </button>
+        {locked ? (
+          <Lock className="h-3.5 w-3.5 text-[var(--color-text-muted)]" aria-hidden="true" />
+        ) : (
+          <>
+            {/* Eye visibility toggle */}
+            <button
+              onClick={onToggleVisibility}
+              className={`p-1 rounded hover:bg-[var(--color-surface-hover)] transition-colors cursor-pointer ${
+                isVisible ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-muted)] opacity-50'
+              }`}
+              title={isVisible ? 'Hide Section' : 'Show Section'}
+            >
+              {isVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            </button>
 
-        {/* Chevron */}
-        <ChevronRight
-          className={`h-3.5 w-3.5 text-[var(--color-text-muted)] transition-transform ${
-            isSelected ? 'rotate-90 text-[var(--color-primary)]' : ''
-          }`}
-        />
+            {/* Chevron */}
+            <ChevronRight
+              className={`h-3.5 w-3.5 text-[var(--color-text-muted)] transition-transform ${
+                isSelected ? 'rotate-90 text-[var(--color-primary)]' : ''
+              }`}
+            />
+          </>
+        )}
       </div>
     </div>
   )
@@ -431,6 +459,13 @@ const VALID_PROJECT_ITEM_TYPES = [
   'external_text',
   'external_image',
 ]
+
+// Sections locked behind a paid subscription (FREE plan). Free users can
+// view/edit: hero, about, projects (section), footer (+ contact/gallery/files/custom).
+// Locked: experience, skills, services, testimonials (+ project pages & analytics).
+// Single source of truth lives in @/lib/free-sections (also used to strip
+// locked sections from preview + public output).
+const FREE_LOCK_TOAST = '🔒 هذه الميزة متاحة للمشتركين فقط · تواصل معنا للترقية'
 
 function ensureValidProjectItemTypes(projectPages: any[]) {
   if (!projectPages) return []
@@ -492,13 +527,14 @@ function ProfileMenu({
   }, [open])
 
   const rowClass =
-    'w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)] transition-colors cursor-pointer text-left'
+    'w-full flex items-center gap-2.5 px-3 py-2 min-h-[44px] text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)] transition-colors cursor-pointer text-left'
 
   return (
     <div ref={rootRef} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="h-8 w-8 rounded-full overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-secondary)] flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] transition-colors cursor-pointer"
+        aria-haspopup="menu"
+        className="flex h-11 min-h-[44px] w-11 min-w-[44px] rounded-full overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-secondary)] items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] transition-colors cursor-pointer"
         title={displayName}
         aria-label="Profile menu"
         aria-expanded={open}
@@ -506,7 +542,10 @@ function ProfileMenu({
         <User className="h-4 w-4" />
       </button>
       {open && (
-        <div className="absolute right-0 top-10 z-50 w-52 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl overflow-hidden">
+        <div
+          role="menu"
+          className="absolute right-0 top-12 z-50 w-52 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl overflow-hidden"
+        >
           <div className="px-3 py-2.5 border-b border-[var(--color-border)]">
             <p className="text-xs font-bold truncate">{displayName}</p>
           </div>
@@ -553,10 +592,28 @@ function ProfileMenu({
   )
 }
 
-export function BuilderClient({ initialProfile }: { initialProfile: any }) {
+export function BuilderClient({
+  initialProfile,
+  initialSubscriptionState = 'NONE',
+  whatsappNumber = '',
+}: {
+  initialProfile: any
+  initialSubscriptionState?: string
+  whatsappNumber?: string
+}) {
   const { toast } = useToast()
   const { lang, setLang } = useI18n()
   const router = useRouter()
+
+  // FREE plan = anything that is not an active/paid state. Locked features
+  // (experience/skills/services/testimonials/project pages/analytics) show a
+  // lock + upgrade toast instead of opening.
+  const isFreePlan = initialSubscriptionState !== 'ACTIVE' && initialSubscriptionState !== 'GRACE'
+  const whatsappDigits = (whatsappNumber || '').replace(/\D/g, '')
+  const upgradeHref = whatsappDigits ? `https://wa.me/${whatsappDigits}` : '/profile/subscription'
+  const showLockedToast = useCallback(() => {
+    toast('warning', FREE_LOCK_TOAST)
+  }, [toast])
 
   const handleLogout = async () => {
     try {
@@ -611,6 +668,9 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [activePage, setActivePage] = useState<'home' | string>('home')
   const [creatingProjectPage, setCreatingProjectPage] = useState(false)
+  // Mobile iframe preview reload key: bumped on save + via the manual
+  // refresh button so the true-390px render stays in sync with edits.
+  const [mobileRefreshKey, setMobileRefreshKey] = useState(0)
 
   const [savedSnapshot, setSavedSnapshot] = useState(() => getProfileSnapshot(profile))
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -813,6 +873,13 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
     if (!selectedSectionId) return null
     return sections.find((s: any) => s.id === selectedSectionId) || null
   }, [sections, selectedSectionId])
+
+  // Builder preview profile: FREE users never see locked sections in the
+  // preview — they are stripped from the data before render (not CSS-hidden).
+  const previewProfile = useMemo(() => {
+    if (!isFreePlan) return profile
+    return stripLockedSectionsForFree(profile)
+  }, [profile, isFreePlan])
 
   // Click on a section in the left panel
   const handleSelectSection = (section: any) => {
@@ -2373,7 +2440,7 @@ case 'skills':
             </FormCard>
 
             <FormCard title="Project Cards" subtitle="Manage portfolio projects">
-              <ProjectManager profile={profile} updateProfile={updateProfile} isCardMode={true} allProjectPages={projectPages} />
+              <ProjectManager profile={profile} updateProfile={updateProfile} isCardMode={true} allProjectPages={projectPages} isFree={isFreePlan} />
             </FormCard>
           </div>
         )
@@ -2554,6 +2621,26 @@ case 'skills':
 
   return (
     <div className={`builder-root flex h-screen w-full max-w-[100vw] flex-col overflow-hidden overflow-x-hidden bg-[var(--color-page)] select-none ${builderDarkMode ? 'dark' : ''}`} data-theme={builderDarkMode ? 'dark' : 'light'}>
+      {/* FREE plan upgrade banner — sticky at the very top for free users */}
+      {isFreePlan && (
+        <div
+          className="flex shrink-0 items-center justify-center gap-2 px-3 py-2 text-center text-xs font-bold sticky top-0 z-40"
+          style={{ backgroundColor: '#D4A017', color: '#0D1B3E' }}
+          role="note"
+          aria-label="ترقية للخطة المدفوعة"
+        >
+          <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="truncate">🔒 أنت على الخطة المجانية · بعض المزايا غير متاحة</span>
+          <a
+            href={upgradeHref}
+            target={whatsappDigits ? '_blank' : undefined}
+            rel={whatsappDigits ? 'noreferrer' : undefined}
+            className="shrink-0 rounded-full bg-[#0D1B3E] px-3 py-1 text-[11px] font-bold text-white hover:opacity-90 transition-opacity min-h-[32px] inline-flex items-center"
+          >
+            ترقية الآن عبر واتساب
+          </a>
+        </div>
+      )}
       {conflict && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-[var(--color-surface)] rounded-xl w-full max-w-md shadow-2xl overflow-hidden">
@@ -2581,7 +2668,7 @@ case 'skills':
       {/* ─────────────────────────────────────────────────────────────
           1. TOP BAR (Height: 52px, border-b, bg white / dark card)
       ────────────────────────────────────────────────────────────── */}
-      <header className="flex h-[52px] shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 sm:px-4 z-30 max-w-[100vw] overflow-x-hidden">
+      <header className="flex h-[52px] shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 sm:px-4 z-30 max-w-[100vw] overflow-visible">
         {/* Left: Back Link & Title */}
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
@@ -2789,13 +2876,36 @@ case 'skills':
                 <div className="h-3 w-20 bg-black/60 rounded-full" />
               </div>
             )}
-            <div className="flex-1 w-full min-h-0 overflow-hidden relative">
-              {activePage !== 'home' && editingProjectPage && !selectedSection ? (
-                <ProjectPagePreview profile={profile} projectPage={editingProjectPage} />
-              ) : (
-                <LivePreview profile={profile} />
-              )}
-            </div>
+            {previewMode === 'mobile' ? (
+              <div className="flex-1 w-full min-h-0 relative overflow-hidden">
+                {/* True 390px viewport simulation: the iframe's own viewport
+                    is 390px wide, so all responsive breakpoints render exactly
+                    as on a real phone. Reloads on every save + manual refresh. */}
+                <iframe
+                  key={`mobile-preview-${lastSaved?.getTime() ?? 0}-${mobileRefreshKey}`}
+                  src="/profile/builder/preview"
+                  title="Mobile portfolio preview"
+                  className="w-[390px] max-w-full h-full mx-auto block border-0 bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setMobileRefreshKey((k) => k + 1)}
+                  title="Reload mobile preview"
+                  aria-label="Reload mobile preview"
+                  className="absolute bottom-4 end-4 z-10 flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)] shadow-lg hover:text-[var(--color-primary)] transition-colors cursor-pointer"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 w-full min-h-0 overflow-hidden relative">
+                {activePage !== 'home' && editingProjectPage && !selectedSection ? (
+                  <ProjectPagePreview profile={profile} projectPage={editingProjectPage} />
+                ) : (
+                  <LivePreview profile={previewProfile} isFree={isFreePlan} />
+                )}
+              </div>
+            )}
           </div>
         </main>
 
@@ -2899,13 +3009,25 @@ case 'skills':
                 Sections
               </button>
               <button
-                onClick={() => setLeftTab('pages')}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-full transition-all text-center cursor-pointer ${
-                  leftTab === 'pages'
+                onClick={() => {
+                  if (isFreePlan) {
+                    toast('warning', 'صفحات المشاريع متاحة للمشتركين فقط · تواصل معنا للترقية')
+                    return
+                  }
+                  setLeftTab('pages')
+                }}
+                title={isFreePlan ? '🔒 صفحات المشاريع للمشتركين فقط' : undefined}
+                className={`flex-1 py-1.5 min-h-[44px] text-xs font-semibold rounded-full transition-all text-center flex items-center justify-center gap-1 ${
+                  isFreePlan
+                    ? 'cursor-not-allowed opacity-50 text-[var(--color-text-muted)]'
+                    : 'cursor-pointer'
+                } ${
+                  leftTab === 'pages' && !isFreePlan
                     ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm'
                     : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                 }`}
               >
+                {isFreePlan && <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />}
                 Pages
               </button>
             </div>
@@ -2966,6 +3088,7 @@ case 'skills':
                   <div className="space-y-1">
                     {sections.map((sec: any) => {
                       const isSelected = selectedSectionId === sec.id
+                      const isLocked = isFreePlan && isSectionLockedForFree(sec.sectionType)
                       let isVisible = true
                       if (sec.visible === false) {
                         isVisible = false
@@ -2985,7 +3108,14 @@ case 'skills':
                           sec={sec}
                           isSelected={isSelected}
                           isVisible={isVisible}
-                          onSelect={() => handleSelectSection(sec)}
+                          locked={isLocked}
+                          onSelect={() => {
+                            if (isLocked) {
+                              showLockedToast()
+                              return
+                            }
+                            handleSelectSection(sec)
+                          }}
                           onToggleVisibility={(e) => toggleSectionVisibility(sec.id, e)}
                         />
                       )
@@ -3031,21 +3161,36 @@ case 'skills':
                 </div>
               </div>
 
-              {/* Project Pages */}
+              {/* Project Pages — locked behind subscription for FREE users */}
               {projectPages.map((pp: any) => {
                 const isSelected = activePage === pp.id
                 return (
                   <div
                     key={pp.id}
-                    onClick={() => handleSelectProjectPage(pp)}
-                    className={`group flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer ${
-                      isSelected
+                    onClick={() => {
+                      if (isFreePlan) {
+                        showLockedToast()
+                        return
+                      }
+                      handleSelectProjectPage(pp)
+                    }}
+                    title={isFreePlan ? '🔒 ميزة للمشتركين فقط' : undefined}
+                    className={`group flex items-center justify-between p-2.5 rounded-lg border transition-all ${
+                      isFreePlan
+                        ? 'opacity-50 cursor-not-allowed border-transparent'
+                        : 'cursor-pointer'
+                    } ${
+                      isSelected && !isFreePlan
                         ? 'bg-[var(--color-surface)] border-[var(--color-primary)] shadow-sm text-[var(--color-primary)] font-semibold'
                         : 'border-transparent bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 hover:border-[var(--color-border)] text-[var(--color-text-primary)]'
                     }`}
                   >
                     <div className="flex items-center gap-2 truncate">
-                      <FileText className="h-3.5 w-3.5 text-[var(--color-text-muted)] opacity-60 group-hover:opacity-100 shrink-0" />
+                      {isFreePlan ? (
+                        <Lock className="h-3.5 w-3.5 text-[var(--color-text-muted)] shrink-0" aria-hidden="true" />
+                      ) : (
+                        <FileText className="h-3.5 w-3.5 text-[var(--color-text-muted)] opacity-60 group-hover:opacity-100 shrink-0" />
+                      )}
                       <div className="truncate">
                         <span className="text-xs truncate block">{pp.title || 'Untitled'}</span>
                         <span className="text-[10px] text-[var(--color-text-muted)] font-mono">/projects/{pp.slug}</span>
@@ -3081,11 +3226,18 @@ case 'skills':
                 )
               })}
 
-              {/* New Project Page Button */}
+              {/* New Project Page Button — locked for FREE users */}
               <button
-                onClick={handleCreateProjectPage}
+                onClick={() => {
+                  if (isFreePlan) {
+                    showLockedToast()
+                    return
+                  }
+                  handleCreateProjectPage()
+                }}
                 disabled={creatingProjectPage}
-                className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold text-[var(--color-primary)] border border-dashed border-[var(--color-primary)]/40 rounded-lg hover:bg-[var(--color-primary)]/5 transition-colors cursor-pointer disabled:opacity-50"
+                title={isFreePlan ? '🔒 ميزة للمشتركين فقط' : undefined}
+                className="w-full flex items-center justify-center gap-1.5 py-2 min-h-[44px] text-[11px] font-semibold text-[var(--color-primary)] border border-dashed border-[var(--color-primary)]/40 rounded-lg hover:bg-[var(--color-primary)]/5 transition-colors cursor-pointer disabled:opacity-50"
               >
                 {creatingProjectPage ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -3110,13 +3262,25 @@ case 'skills':
               </span>
               <div className="h-px flex-1 bg-[var(--color-border)]" />
             </div>
-            <Link
-              href="/profile/builder/analytics"
-              className="w-full flex min-h-[44px] items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-primary)]"
-            >
-              <BarChart3 className="h-3.5 w-3.5" />
-              <span>{(profile?.appearance as any)?.defaultLanguage === 'ar' ? 'الإحصائيات' : 'Analytics'}</span>
-            </Link>
+            {isFreePlan ? (
+              <button
+                type="button"
+                onClick={showLockedToast}
+                title="🔒 ميزة للمشتركين فقط"
+                className="w-full flex min-h-[44px] items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-not-allowed opacity-50 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)]"
+              >
+                <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>{(profile?.appearance as any)?.defaultLanguage === 'ar' ? 'الإحصائيات' : 'Analytics'}</span>
+              </button>
+            ) : (
+              <Link
+                href="/profile/builder/analytics"
+                className="w-full flex min-h-[44px] items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-primary)]"
+              >
+                <BarChart3 className="h-3.5 w-3.5" />
+                <span>{(profile?.appearance as any)?.defaultLanguage === 'ar' ? 'الإحصائيات' : 'Analytics'}</span>
+              </Link>
+            )}
             <button
               onClick={() => {
                 setSelectedSectionId(null)

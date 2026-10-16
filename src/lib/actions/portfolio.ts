@@ -583,14 +583,10 @@ export async function publishProfile() {
       return { success: false, error: `Cannot publish yet: missing ${check.missing.join(', ')}` }
     }
 
-    // Subscription gate (plan Phase 5 §23): ACTIVE or GRACE only.
-    const { getSubscriptionState, canPublish, getEffectiveLimits } = await import('@/lib/subscriptions')
-    const sub = await getSubscriptionState(user.id)
-    if (!canPublish(sub.state)) {
-      return { success: false, subscriptionRequired: true, error: 'Publishing requires an active subscription' }
-    }
+    // Publishing is free for everyone — no subscription gate.
 
     // Plan limits + global safety caps at publish (Phase 5 §18/§21).
+    const { getEffectiveLimits } = await import('@/lib/subscriptions')
     const profile = await prisma.userProfile.findUnique({
       where: { userId: user.id },
       select: {
