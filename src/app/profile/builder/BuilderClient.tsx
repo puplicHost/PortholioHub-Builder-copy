@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
 import { useI18n } from '@/components/I18nProvider'
+import { getFriendlyErrorMessage } from '@/lib/validations/error-messages'
 import { useRouter } from 'next/navigation'
 import { updatePortfolio, createProjectPage, updateProjectPage, deleteProjectPage, publishProfile, unpublishProfile, getOrCreateProfile } from '@/lib/actions/portfolio'
 import { uploadToCloudinary } from '@/lib/cloudinary'
@@ -289,7 +290,7 @@ function adjustColor(color: string, amount: number) {
 
 function FormCard({ children, title, subtitle, action }: { children: React.ReactNode, title?: string, subtitle?: string, action?: React.ReactNode }) {
   return (
-    <div className="bg-white dark:bg-[#1f2937] border border-[var(--color-border)] rounded-xl p-5 shadow-sm space-y-4">
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 shadow-sm space-y-4">
       {(title || action) && (
         <div className="flex items-center justify-between mb-1">
           <div>
@@ -321,7 +322,7 @@ function AddActionCard({ onClick, label, icon: Icon = Plus }: { onClick: () => v
 
 function ItemCard({ children, title, subtitle, onRemove, onEdit }: { children: React.ReactNode, title?: string, subtitle?: string, onRemove?: () => void, onEdit?: () => void }) {
   return (
-    <div className="p-4 rounded-xl border border-[var(--color-border)] bg-gray-50/50 dark:bg-gray-800/30 space-y-3 relative group">
+    <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] space-y-3 relative group">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           {title && <h4 className="text-[13px] font-semibold text-[var(--color-text-primary)] truncate">{title}</h4>}
@@ -382,7 +383,7 @@ function SortableSectionItem({
       onClick={onSelect}
       className={`group flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer ${
         isSelected
-          ? 'bg-white dark:bg-[#262f45] border-[var(--color-primary)] shadow-sm text-[var(--color-primary)] font-semibold'
+          ? 'bg-[var(--color-surface)] border-[var(--color-primary)] shadow-sm text-[var(--color-primary)] font-semibold'
           : 'border-transparent bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 hover:border-[var(--color-border)] text-[var(--color-text-primary)]'
       } ${isDragging ? 'z-50 shadow-md' : ''}`}
     >
@@ -618,6 +619,25 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
   const [conflict, setConflict] = useState<{ serverVersion: number } | null>(null)
   const backoffRef = useRef(0)
 
+  // Sync builder dark mode to <html> so CSS vars (`:root` / `.dark` /
+  // `[data-theme="dark"]`) and Tailwind `dark:` variants resolve from the
+  // correct element on both localhost and Vercel (production). The wrapper
+  // div keeps its own `dark` class for scoped preview styling.
+  useEffect(() => {
+    try {
+      const root = document.documentElement
+      if (builderDarkMode) {
+        root.classList.add('dark')
+        root.setAttribute('data-theme', 'dark')
+      } else {
+        root.classList.remove('dark')
+        root.setAttribute('data-theme', 'light')
+      }
+    } catch {
+      // SSR / no DOM — ignore
+    }
+  }, [builderDarkMode])
+
   const isDirty = useMemo(() => {
     return getProfileSnapshot(profile) !== savedSnapshot
   }, [profile, savedSnapshot])
@@ -707,13 +727,13 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
         return false
       } else {
         setSaveStatus('error')
-        toast('error', res.error || 'Failed to save changes')
+        toast('error', getFriendlyErrorMessage((res as any)?.code ?? res.error ?? 'SAVE_FAILED', lang))
         return false
       }
     } catch (err: any) {
       console.error('Failed to save changes', err)
       setSaveStatus('error')
-      toast('error', 'An unexpected error occurred')
+      toast('error', getFriendlyErrorMessage('NETWORK_ERROR', lang))
       return false
     }
   }
@@ -726,7 +746,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
         setProfile((p: any) => ({ ...p, status: 'DRAFT', version: (res as any).version ?? p.version }))
         toast('success', 'Unpublished. Your public page is now hidden.')
       } else {
-        toast('error', (res as any).error || 'Failed to unpublish')
+        toast('error', getFriendlyErrorMessage((res as any)?.code ?? (res as any).error ?? 'UNPUBLISH_FAILED', lang))
       }
       return
     }
@@ -737,7 +757,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
       setProfile((p: any) => ({ ...p, status: 'PUBLISHED', version: (res as any).version ?? p.version }))
       toast('success', 'Published! Your portfolio is now live.')
     } else {
-      toast('error', (res as any).error || 'Failed to publish')
+      toast('error', getFriendlyErrorMessage((res as any)?.code ?? (res as any).error ?? 'PUBLISH_FAILED', lang))
     }
   }
 
@@ -756,7 +776,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
     } catch (err: any) {
       console.error('Failed to reload profile', err)
       setSaveStatus('error')
-      toast('error', 'Reload failed, please try again')
+      toast('error', getFriendlyErrorMessage('RELOAD_FAILED', lang))
     }
   }
 
@@ -810,7 +830,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
     // On mobile, auto-open the right sheet to edit properties
-    if (window.innerWidth < 1024) {
+    if (window.innerWidth < 768) {
       setLeftDrawerOpen(false)
       setRightSheetOpen(true)
     }
@@ -1106,7 +1126,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
         setActivePage(realPage.id)
         setSelectedSectionId(null)
         setSelectedSectionType(null)
-        if (window.innerWidth < 1024) {
+        if (window.innerWidth < 768) {
           setLeftDrawerOpen(false)
           setRightSheetOpen(true)
         }
@@ -1114,11 +1134,11 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
         toast('warning', 'Link this page to a project so it appears in your portfolio')
       } else {
         console.error('createProjectPage failed:', res.error)
-        toast('error', res.error || 'Failed to create project page')
+        toast('error', getFriendlyErrorMessage((res as any)?.code ?? res.error ?? 'CREATE_PAGE_FAILED', lang))
       }
     } catch (err) {
       console.error('Failed to create project page', err)
-      toast('error', 'Failed to create project page')
+      toast('error', getFriendlyErrorMessage('CREATE_PAGE_FAILED', lang))
     } finally {
       setCreatingProjectPage(false)
     }
@@ -1129,7 +1149,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
     // Clear section selection
     setSelectedSectionId(null)
     setSelectedSectionType(null)
-    if (window.innerWidth < 1024) {
+    if (window.innerWidth < 768) {
       setLeftDrawerOpen(false)
       setRightSheetOpen(true)
     }
@@ -1184,11 +1204,11 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
         toast('success', 'Project page deleted')
       } else {
         console.error('deleteProjectPage failed:', res.error)
-        toast('error', res.error || 'Failed to delete project page')
+        toast('error', getFriendlyErrorMessage((res as any)?.code ?? res.error ?? 'DELETE_PAGE_FAILED', lang))
       }
     } catch (err) {
       console.error('Failed to delete project page', err)
-      toast('error', 'Failed to delete project page')
+      toast('error', getFriendlyErrorMessage('DELETE_PAGE_FAILED', lang))
     }
   }
 
@@ -1217,7 +1237,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
               <div>
                 <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">URL Slug</label>
                 <div className="flex">
-                  <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-[var(--color-border)] bg-gray-50 dark:bg-gray-800 text-[var(--color-text-muted)] text-xs">
+                  <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-[var(--color-text-muted)] text-xs">
                     /u/{profile.username}/projects/
                   </span>
                   <Input
@@ -1326,7 +1346,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
                     onClick={() => updateProjectPageField(pp.id, 'displayMode', 'grid')}
                     className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-all cursor-pointer ${
                       (pp.displayMode || 'grid') === 'grid'
-                        ? 'bg-white dark:bg-[#374151] text-[var(--color-primary)] shadow-sm'
+                        ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
                         : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                     }`}
                   >
@@ -1337,7 +1357,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
                     onClick={() => updateProjectPageField(pp.id, 'displayMode', 'list')}
                     className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-all cursor-pointer ${
                       pp.displayMode === 'list'
-                        ? 'bg-white dark:bg-[#374151] text-[var(--color-primary)] shadow-sm'
+                        ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
                         : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                     }`}
                   >
@@ -1436,7 +1456,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
                 ))}
                 
                 {(pp.items || []).length === 0 && (
-                  <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                  <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-surface-secondary)]">
                     <p className="text-xs text-[var(--color-text-muted)] font-medium">No items in this project page.</p>
                   </div>
                 )}
@@ -1728,7 +1748,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
                   </ItemCard>
                 ))}
                 {aboutStats.length === 0 && (
-                  <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                  <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-surface-secondary)]">
                     <p className="text-xs text-[var(--color-text-muted)] font-medium">No stats added yet.</p>
                   </div>
                 )}
@@ -1850,7 +1870,7 @@ case 'skills':
                           </div>
                         ))}
                         {(!group.skills || group.skills.length === 0) && (
-                          <div className="text-center py-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-xs text-[var(--color-text-muted)]">No skills in this group</div>
+                          <div className="text-center py-3 bg-[var(--color-surface-secondary)] rounded-lg text-xs text-[var(--color-text-muted)]">No skills in this group</div>
                         )}
                       </div>
                     </div>
@@ -1860,7 +1880,7 @@ case 'skills':
                     Your profile has legacy skills format. Click &quot;Add Skill Group&quot; to migrate to the new structure.
                   </div>
                 ) : (
-                  <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                  <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-surface-secondary)]">
                     <p className="text-xs text-[var(--color-text-muted)] font-medium">No skill groups added yet.</p>
                   </div>
                 )}
@@ -1896,7 +1916,7 @@ case 'skills':
                         onClick={() => updateSectionContentRaw(selectedSection.id, 'displayMode', mode)}
                         className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-all cursor-pointer ${
                           expDisplayMode === mode
-                            ? 'bg-white dark:bg-[#374151] text-[var(--color-primary)] shadow-sm'
+                            ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
                             : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                         }`}
                       >
@@ -2110,7 +2130,7 @@ case 'skills':
                 ))}
                 
                 {experienceItems.length === 0 && (
-                  <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                  <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-surface-secondary)]">
                     <p className="text-xs text-[var(--color-text-muted)] font-medium">No experience added yet.</p>
                   </div>
                 )}
@@ -2275,7 +2295,7 @@ case 'skills':
                 ))}
                 
                 {services.length === 0 && (
-                  <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                  <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-surface-secondary)]">
                     <p className="text-xs text-[var(--color-text-muted)] font-medium">No services added yet.</p>
                   </div>
                 )}
@@ -2309,7 +2329,7 @@ case 'skills':
                       onClick={() => updateSectionContentRaw(selectedSection.id, 'displayMode', 'grid')}
                       className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-all cursor-pointer ${
                         displayMode === 'grid'
-                          ? 'bg-white dark:bg-[#374151] text-[var(--color-primary)] shadow-sm'
+                          ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
                           : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                       }`}
                     >
@@ -2320,7 +2340,7 @@ case 'skills':
                       onClick={() => updateSectionContentRaw(selectedSection.id, 'displayMode', 'list')}
                       className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-all cursor-pointer ${
                         displayMode === 'list'
-                          ? 'bg-white dark:bg-[#374151] text-[var(--color-primary)] shadow-sm'
+                          ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
                           : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                       }`}
                     >
@@ -2389,7 +2409,7 @@ case 'skills':
             <FormCard title="Social / Contact Links" subtitle="Add, edit, or remove your links">
               <div className="space-y-3">
                 {footerLinks.map((link: any, idx: number) => (
-                  <div key={idx} className="flex items-center gap-2 p-3 rounded-lg border border-[var(--color-border)] bg-gray-50/50 dark:bg-gray-800/30">
+                  <div key={idx} className="flex items-center gap-2 p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
                     <select
                       value={link.label || link.platform || 'LinkedIn'}
                       onChange={(e) => {
@@ -2533,7 +2553,7 @@ case 'skills':
   }
 
   return (
-    <div className={`flex h-screen w-full flex-col overflow-hidden bg-[var(--color-page)] select-none ${builderDarkMode ? 'dark' : ''}`}>
+    <div className={`builder-root flex h-screen w-full max-w-[100vw] flex-col overflow-hidden overflow-x-hidden bg-[var(--color-page)] select-none ${builderDarkMode ? 'dark' : ''}`} data-theme={builderDarkMode ? 'dark' : 'light'}>
       {conflict && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-[var(--color-surface)] rounded-xl w-full max-w-md shadow-2xl overflow-hidden">
@@ -2561,26 +2581,27 @@ case 'skills':
       {/* ─────────────────────────────────────────────────────────────
           1. TOP BAR (Height: 52px, border-b, bg white / dark card)
       ────────────────────────────────────────────────────────────── */}
-      <header className="flex h-[52px] shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-white dark:bg-[#1f2937] px-3 sm:px-4 z-30">
+      <header className="flex h-[52px] shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 sm:px-4 z-30 max-w-[100vw] overflow-x-hidden">
         {/* Left: Back Link & Title */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
             onClick={() => setLeftDrawerOpen(true)}
-            className="lg:hidden p-1.5 rounded-md text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
+            className="md:hidden flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
             aria-label="Open navigation"
           >
-            <Menu className="h-4 w-4" />
+            <Menu className="h-5 w-5" />
           </button>
           <Link
             href={`/u/${profile.username}`}
-            className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+            aria-label="View live portfolio"
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
+            <ArrowLeft className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">View Live Portfolio</span>
           </Link>
-          <div className="h-3.5 w-px bg-[var(--color-border)]" />
-          <div className="flex items-center gap-1.5">
-            <h1 className="text-xs sm:text-sm font-semibold text-[var(--color-text-primary)] tracking-tight">
+          <div className="h-3.5 w-px shrink-0 bg-[var(--color-border)]" />
+          <div className="flex min-w-0 items-center gap-1.5">
+            <h1 className="truncate text-xs sm:text-sm font-semibold text-[var(--color-text-primary)] tracking-tight">
               Portfolio Builder
             </h1>
           </div>
@@ -2630,8 +2651,8 @@ case 'skills':
           </div>
         </div>
 
-        {/* Right: Device Switcher & Action Buttons */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        {/* Right: Device Switcher & Action Buttons — icons only on mobile */}
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
           <ProfileMenu
             displayName={profile.displayName || profile.username || 'User'}
             lang={lang}
@@ -2640,28 +2661,32 @@ case 'skills':
             onToggleDark={() => setBuilderDarkMode(!builderDarkMode)}
             onLogout={handleLogout}
           />
-          <div className="flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
+          <div className="hidden sm:flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5" aria-label="Preview mode">
             <button
               onClick={() => setPreviewMode('desktop')}
-              className={`rounded p-1.5 transition-colors cursor-pointer ${
+              className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-1.5 transition-colors cursor-pointer ${
                 previewMode === 'desktop'
-                  ? 'bg-white dark:bg-[#374151] text-[var(--color-primary)] shadow-sm'
+                  ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
               }`}
               title="Desktop View"
+              aria-label="Desktop preview"
+              aria-pressed={previewMode === 'desktop'}
             >
-              <Monitor className="h-3.5 w-3.5" />
+              <Monitor className="h-4 w-4" />
             </button>
             <button
               onClick={() => setPreviewMode('mobile')}
-              className={`rounded p-1.5 transition-colors cursor-pointer ${
+              className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-1.5 transition-colors cursor-pointer ${
                 previewMode === 'mobile'
-                  ? 'bg-white dark:bg-[#374151] text-[var(--color-primary)] shadow-sm'
+                  ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
               }`}
               title="Mobile View"
+              aria-label="Mobile preview"
+              aria-pressed={previewMode === 'mobile'}
             >
-              <Smartphone className="h-3.5 w-3.5" />
+              <Smartphone className="h-4 w-4" />
             </button>
           </div>
 
@@ -2699,19 +2724,20 @@ case 'skills':
           <Button
             variant="primary"
             size="sm"
-            className="h-8 px-3 text-xs gap-1.5 font-medium"
+            className="h-[44px] min-h-[44px] min-w-[44px] px-3 text-xs gap-1.5 font-medium"
             onClick={handlePublish}
+            aria-label={profile.status === 'PUBLISHED' ? 'Unpublish portfolio' : 'Publish portfolio'}
           >
-            <Globe className="h-3.5 w-3.5" />
-            <span>{profile.status === 'PUBLISHED' ? 'Unpublish' : 'Publish'}</span>
+            <Globe className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{profile.status === 'PUBLISHED' ? 'Unpublish' : 'Publish'}</span>
           </Button>
 
           <button
             onClick={() => setRightSheetOpen(true)}
-            className="lg:hidden p-1.5 rounded-md border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
+            className="md:hidden flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
             aria-label="Open settings"
           >
-            <Sliders className="h-4 w-4" />
+            <Sliders className="h-5 w-5" />
           </button>
         </div>
       </header>
@@ -2719,24 +2745,25 @@ case 'skills':
       {/* ─────────────────────────────────────────────────────────────
           MAIN 3-PANEL BODY
       ────────────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 min-w-0 overflow-hidden overflow-x-hidden relative">
         {/* ─────────────────────────────────────────────────────────────
             2. LEFT PANEL (~200px, pill tabs: Sections / Pages)
+            Desktop on md+ (≥768px). Slide-over drawer on mobile.
         ────────────────────────────────────────────────────────────── */}
         {/* Desktop sidebar */}
-        <aside className="hidden lg:flex w-[200px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[#F8F9FA] dark:bg-[#1a1f2e] overflow-hidden">
+        <aside className="hidden md:flex w-[200px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface-secondary)] overflow-hidden">
           {renderLeftPanelContent()}
         </aside>
 
         {/* Mobile slide-over drawer */}
         {leftDrawerOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden flex">
+          <div className="fixed inset-0 z-50 md:hidden flex">
             <div className="fixed inset-0 bg-black/50" onClick={() => setLeftDrawerOpen(false)} />
-            <div className="relative w-72 max-w-[80vw] bg-[#F8F9FA] dark:bg-[#1a1f2e] shadow-2xl flex flex-col h-full z-10">
+            <div className="relative w-72 max-w-[80vw] bg-[var(--color-surface-secondary)] shadow-2xl flex flex-col h-full z-10" role="dialog" aria-modal="true" aria-label="Sections and pages">
               <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)]">
                 <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Navigation</span>
-                <button onClick={() => setLeftDrawerOpen(false)} className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]">
-                  <X className="h-4 w-4" />
+                <button onClick={() => setLeftDrawerOpen(false)} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]" aria-label="Close navigation">
+                  <X className="h-5 w-5" />
                 </button>
               </div>
               <div className="flex-1 overflow-hidden flex flex-col">
@@ -2747,18 +2774,18 @@ case 'skills':
         )}
 
         {/* ─────────────────────────────────────────────────────────────
-            3. CENTER CANVAS (Canvas area bg #F1F3F5 / #0f1117)
+            3. CENTER CANVAS (full width on mobile, framed on md+)
         ────────────────────────────────────────────────────────────── */}
-        <main className="flex-1 bg-[#F1F3F5] dark:bg-[#0f1117] relative overflow-hidden flex items-center justify-center p-3 lg:p-4">
+        <main className="flex-1 min-w-0 max-w-[100vw] bg-[var(--color-page)] relative overflow-hidden overflow-x-hidden flex items-center justify-center p-2 pb-20 md:p-4 md:pb-4">
           <div
-            className={`transition-all duration-300 ease-in-out bg-white dark:bg-[#121212] overflow-hidden flex flex-col ${
+            className={`transition-all duration-300 ease-in-out bg-[var(--color-surface)] overflow-hidden flex flex-col max-w-full ${
               previewMode === 'mobile'
-                ? 'w-[390px] h-[780px] max-h-full rounded-[36px] shadow-2xl border-[8px] border-[#1e293b] dark:border-[#334155] relative shrink-0'
-                : 'w-full h-full max-w-[1080px] rounded-[12px] shadow-md border border-black/5 dark:border-white/10'
+                ? 'w-[390px] max-w-[calc(100vw-1rem)] h-[780px] max-h-full rounded-[36px] shadow-2xl border-[8px] border-[var(--color-border)] relative shrink-0'
+                : 'w-full h-full max-w-[1080px] min-w-0 rounded-[12px] shadow-md border border-black/5 dark:border-white/10'
             }`}
           >
             {previewMode === 'mobile' && (
-              <div className="h-5 w-full bg-[#1e293b] dark:bg-[#334155] flex items-center justify-center shrink-0 z-20">
+              <div className="h-5 w-full bg-[var(--color-border)] flex items-center justify-center shrink-0 z-20">
                 <div className="h-3 w-20 bg-black/60 rounded-full" />
               </div>
             )}
@@ -2773,26 +2800,83 @@ case 'skills':
         </main>
 
         {/* ─────────────────────────────────────────────────────────────
-            4. RIGHT PANEL (~470px, Edit | [Section Name], Save button)
+            4. RIGHT PANEL (~470px on md+, bottom sheet on mobile)
         ────────────────────────────────────────────────────────────── */}
         {/* Desktop sidebar */}
-        <aside className="hidden lg:flex w-[470px] min-w-[470px] shrink-0 flex-col border-l border-[var(--color-border)] bg-white dark:bg-[#1f2937] overflow-hidden">
+        <aside className="hidden md:flex w-[320px] lg:w-[470px] lg:min-w-[470px] min-w-0 shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
           {renderRightPanelWrapper()}
         </aside>
 
         {/* Mobile bottom sheet */}
         {rightSheetOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden flex flex-col justify-end">
+          <div className="fixed inset-0 z-50 md:hidden flex flex-col justify-end">
             <div className="fixed inset-0 bg-black/50" onClick={() => setRightSheetOpen(false)} />
-            <div className="relative w-full max-h-[85vh] bg-white dark:bg-[#1f2937] rounded-t-2xl shadow-2xl flex flex-col z-10 overflow-hidden">
+            <div className="relative w-full max-w-[100vw] max-h-[85dvh] bg-[var(--color-surface)] rounded-t-2xl shadow-2xl flex flex-col z-10 overflow-hidden overflow-x-hidden" role="dialog" aria-modal="true" aria-label="Edit panel">
               <div className="h-1.5 w-10 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto my-2 shrink-0" />
-              <div className="flex-1 overflow-hidden flex flex-col">
+              <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
                 {renderRightPanelWrapper(() => setRightSheetOpen(false))}
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* ─────────────────────────────────────────────────────────────
+          5. MOBILE BOTTOM TAB BAR (<md only): Sections / Edit / Preview / Publish
+      ────────────────────────────────────────────────────────────── */}
+      <nav
+        className="md:hidden shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-2 z-30"
+        style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+        aria-label="Builder navigation"
+      >
+        <div className="grid grid-cols-4 gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              setRightSheetOpen(false)
+              setLeftDrawerOpen(true)
+            }}
+            className="flex min-h-[56px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
+            aria-label="Open sections"
+          >
+            <Layout className="h-5 w-5 shrink-0" />
+            <span>Sections</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setLeftDrawerOpen(false)
+              setRightSheetOpen(true)
+            }}
+            className="flex min-h-[56px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
+            aria-label="Open editor"
+          >
+            <Sliders className="h-5 w-5 shrink-0" />
+            <span>Edit</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setLeftDrawerOpen(false)
+              setRightSheetOpen(false)
+            }}
+            className="flex min-h-[56px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
+            aria-label="View preview"
+          >
+            <Eye className="h-5 w-5 shrink-0" />
+            <span>Preview</span>
+          </button>
+          <button
+            type="button"
+            onClick={handlePublish}
+            className="flex min-h-[56px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors cursor-pointer"
+            aria-label={profile.status === 'PUBLISHED' ? 'Unpublish portfolio' : 'Publish portfolio'}
+          >
+            <Globe className="h-5 w-5 shrink-0" />
+            <span>{profile.status === 'PUBLISHED' ? 'Unpublish' : 'Publish'}</span>
+          </button>
+        </div>
+      </nav>
     </div>
   )
 
@@ -2808,7 +2892,7 @@ case 'skills':
                 onClick={() => setLeftTab('sections')}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-full transition-all text-center cursor-pointer ${
                   leftTab === 'sections'
-                    ? 'bg-white dark:bg-[#374151] text-[var(--color-text-primary)] shadow-sm'
+                    ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm'
                     : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                 }`}
               >
@@ -2818,7 +2902,7 @@ case 'skills':
                 onClick={() => setLeftTab('pages')}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-full transition-all text-center cursor-pointer ${
                   leftTab === 'pages'
-                    ? 'bg-white dark:bg-[#374151] text-[var(--color-text-primary)] shadow-sm'
+                    ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm'
                     : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                 }`}
               >
@@ -2847,8 +2931,8 @@ case 'skills':
 
               {/* Active page card (highlighted) */}
               {editingProjectPage && (
-                <div className="rounded-xl border border-[var(--color-primary)] bg-white dark:bg-[#262f45] p-3 shadow-sm space-y-2">
-                  <div className="aspect-[16/9] w-full rounded-md border border-[var(--color-border)] bg-[#F1F3F5] dark:bg-[#111827] flex items-center justify-center">
+                <div className="rounded-xl border border-[var(--color-primary)] bg-[var(--color-surface)] p-3 shadow-sm space-y-2">
+                  <div className="aspect-[16/9] w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-secondary)] flex items-center justify-center">
                     <FileText className="h-8 w-8 text-[var(--color-primary)] opacity-60" />
                   </div>
                   <div className="flex items-center justify-between pt-1">
@@ -2924,11 +3008,11 @@ case 'skills':
                 }}
                 className={`rounded-xl border p-3 shadow-sm space-y-2 cursor-pointer transition-all ${
                   activePage === 'home' && !selectedSectionId
-                    ? 'border-[var(--color-primary)] bg-white dark:bg-[#262f45]'
+                    ? 'border-[var(--color-primary)] bg-[var(--color-surface)]'
                     : 'border-[var(--color-border)] bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10'
                 }`}
               >
-                <div className="aspect-[16/9] w-full rounded-md border border-[var(--color-border)] bg-[#F1F3F5] dark:bg-[#111827] flex flex-col p-1.5 overflow-hidden">
+                <div className="aspect-[16/9] w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-secondary)] flex flex-col p-1.5 overflow-hidden">
                   <div className="h-1.5 w-full bg-[var(--color-border)] rounded-full mb-1" />
                   <div className="h-5 w-full rounded bg-gradient-to-r from-blue-400 to-indigo-500 mb-1 opacity-70" />
                   <div className="grid grid-cols-2 gap-1 flex-1">
@@ -2956,7 +3040,7 @@ case 'skills':
                     onClick={() => handleSelectProjectPage(pp)}
                     className={`group flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-white dark:bg-[#262f45] border-[var(--color-primary)] shadow-sm text-[var(--color-primary)] font-semibold'
+                        ? 'bg-[var(--color-surface)] border-[var(--color-primary)] shadow-sm text-[var(--color-primary)] font-semibold'
                         : 'border-transparent bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 hover:border-[var(--color-border)] text-[var(--color-text-primary)]'
                     }`}
                   >
@@ -3028,7 +3112,7 @@ case 'skills':
             </div>
             <Link
               href="/profile/builder/analytics"
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer bg-white dark:bg-[#2d3748] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-primary)]"
+              className="w-full flex min-h-[44px] items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-primary)]"
             >
               <BarChart3 className="h-3.5 w-3.5" />
               <span>{(profile?.appearance as any)?.defaultLanguage === 'ar' ? 'الإحصائيات' : 'Analytics'}</span>
@@ -3037,12 +3121,12 @@ case 'skills':
               onClick={() => {
                 setSelectedSectionId(null)
                 setSelectedSectionType(null)
-                if (window.innerWidth < 1024) setRightSheetOpen(true)
+                if (window.innerWidth < 768) setRightSheetOpen(true)
               }}
               className={`w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 selectedSectionId === null
                   ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                  : 'bg-white dark:bg-[#2d3748] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-primary)]'
+                  : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-primary)]'
               }`}
             >
               <Palette className="h-3.5 w-3.5" />
@@ -3063,9 +3147,9 @@ case 'skills':
         : 'Theme & Bio'
 
     return (
-      <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 dark:bg-[#111827]">
+      <div className="flex flex-col h-full overflow-hidden bg-[var(--color-surface-secondary)]">
         {/* Panel Header: "Edit | [Section Name]" */}
-        <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-[var(--color-border)] px-5 bg-white dark:bg-[#1f2937]">
+        <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-[var(--color-border)] px-5 bg-[var(--color-surface)]">
           <div className="flex items-center gap-2 truncate">
             <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
               Edit

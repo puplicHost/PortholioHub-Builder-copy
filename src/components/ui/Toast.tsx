@@ -45,18 +45,31 @@ const iconMap = {
   warning: AlertTriangle,
 }
 
-const colorMap = {
-  success: 'text-[var(--color-success)]',
-  error: 'text-[var(--color-danger)]',
-  info: 'text-[var(--color-info)]',
-  warning: 'text-[var(--color-warning)]',
-}
-
-const bgMap = {
-  success: 'bg-[var(--color-success)]/10 border-[var(--color-success)]/20',
-  error: 'bg-[var(--color-danger)]/10 border-[var(--color-danger)]/20',
-  info: 'bg-[var(--color-info)]/10 border-[var(--color-info)]/20',
-  warning: 'bg-[var(--color-warning)]/10 border-[var(--color-warning)]/20',
+const toastStyles: Record<ToastType, { container: string; icon: string; text: string; close: string }> = {
+  success: {
+    container: 'bg-[#16a34a] border-[#16a34a] dark:border-[rgba(255,255,255,0.1)] shadow-[var(--shadow-md)]',
+    icon: 'text-white',
+    text: 'text-white',
+    close: 'text-white/80 hover:text-white',
+  },
+  error: {
+    container: 'bg-[#dc2626] border-[#dc2626] dark:border-[rgba(255,255,255,0.1)] shadow-[var(--shadow-md)]',
+    icon: 'text-white',
+    text: 'text-white',
+    close: 'text-white/80 hover:text-white',
+  },
+  info: {
+    container: 'bg-[var(--color-surface)] border-[var(--color-border)] dark:border-[rgba(255,255,255,0.1)] shadow-[var(--shadow-md)]',
+    icon: 'text-[var(--color-info)]',
+    text: 'text-[var(--color-text-primary)]',
+    close: 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]',
+  },
+  warning: {
+    container: 'bg-[#d97706] border-[#d97706] dark:border-[rgba(255,255,255,0.1)] shadow-[var(--shadow-md)]',
+    icon: 'text-white',
+    text: 'text-white',
+    close: 'text-white/80 hover:text-white',
+  },
 }
 
 const positionClasses: Record<ToastPosition, string> = {
@@ -137,14 +150,18 @@ export function ToastProvider({
       >
         {toasts.map((t) => {
           const Icon = iconMap[t.type]
+          const s = toastStyles[t.type]
+          const isSolid = t.type === 'success' || t.type === 'error' || t.type === 'warning'
           return (
             <div
               key={t.id}
-              className={`pointer-events-auto flex items-start gap-3 rounded-[var(--radius-md)] border p-4 shadow-[var(--shadow-md)] w-full ${bgMap[t.type]}`}
+              role={t.type === 'error' ? 'alert' : 'status'}
+              className={`pointer-events-auto flex items-start gap-3 rounded-[var(--radius-md)] border border-solid p-4 w-full ${s.container}`}
+              style={{ backgroundColor: t.type === 'success' ? '#16a34a' : t.type === 'error' ? '#dc2626' : t.type === 'warning' ? '#d97706' : undefined }}
             >
-              <Icon className={`h-5 w-5 mt-0.5 shrink-0 ${colorMap[t.type]}`} />
+              <Icon className={`h-5 w-5 mt-0.5 shrink-0 ${s.icon}`} aria-hidden="true" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-[var(--color-text-primary)]">
+                <p className={`text-sm font-medium ${s.text}`}>
                   {t.message}
                 </p>
                 {t.action && (
@@ -153,7 +170,7 @@ export function ToastProvider({
                       t.action!.onClick()
                       removeToast(t.id)
                     }}
-                    className="mt-1.5 text-xs font-medium text-[var(--color-primary)] hover:underline cursor-pointer"
+                    className={`mt-1.5 min-h-[44px] text-xs font-medium hover:underline cursor-pointer ${isSolid ? 'text-white underline-offset-2' : 'text-[var(--color-primary)]'}`}
                   >
                     {t.action.label}
                   </button>
@@ -161,7 +178,8 @@ export function ToastProvider({
               </div>
               <button
                 onClick={() => removeToast(t.id)}
-                className="cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors shrink-0"
+                aria-label="Dismiss notification"
+                className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md cursor-pointer transition-colors shrink-0 ${s.close}`}
               >
                 <X className="h-4 w-4" />
               </button>

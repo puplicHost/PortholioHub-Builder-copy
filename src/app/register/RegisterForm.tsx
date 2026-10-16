@@ -6,10 +6,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useI18n } from '@/components/I18nProvider'
+import { getFriendlyErrorMessage } from '@/lib/validations/error-messages'
 import { getSafeRedirect } from '@/lib/urls'
 
 export function RegisterForm() {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [displayName, setDisplayName] = useState('')
@@ -31,13 +32,13 @@ export function RegisterForm() {
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok) {
-        setError(data?.message || 'Registration failed, please try again')
+        setError(getFriendlyErrorMessage(data?.code ?? data?.message ?? 'REGISTER_FAILED', lang))
         return
       }
       router.push(getSafeRedirect(searchParams.get('redirect'), '/profile/builder'))
       router.refresh()
     } catch {
-      setError('Registration failed, please try again')
+      setError(getFriendlyErrorMessage('NETWORK_ERROR', lang))
     } finally {
       setLoading(false)
     }
