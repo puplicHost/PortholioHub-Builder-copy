@@ -236,8 +236,8 @@ export function ClassicTemplate({ profile }: { profile: any }) {
           <section id="about" key={section.id} className="py-8 sm:py-16" style={{ backgroundColor: aboutBg }}>
             <div className="max-w-[1200px] mx-auto px-4 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               
-              {/* MOBILE VIEW (< md): image on left + text on right */}
-              <div className="md:hidden grid grid-cols-12 gap-3 items-stretch" dir="ltr">
+              {/* MOBILE VIEW (< md): image + text same row; margin below pushes cards below the fold */}
+              <div className="md:hidden grid grid-cols-12 gap-3 items-start mb-12" dir="ltr">
                 {aboutImage ? (
                   <div className="col-span-5">
                     <div className="overflow-hidden rounded-2xl shadow-sm border border-[var(--color-border)]/40 bg-[var(--color-bg)] aspect-[3/4]">
@@ -249,7 +249,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                     </div>
                   </div>
                 ) : null}
-                <div className={`${aboutImage ? 'col-span-7' : 'col-span-12'} flex flex-col justify-between self-stretch text-left`}>
+                <div className={`${aboutImage ? 'col-span-7' : 'col-span-12'} flex flex-col justify-start text-left`}>
                   {biography.split(/\n+/).map((para: string, i: number) => (
                     <p key={i} className="text-[var(--color-text)]/80 leading-[1.9] text-sm font-normal whitespace-pre-wrap text-pretty">
                       {para}
@@ -260,16 +260,16 @@ export function ClassicTemplate({ profile }: { profile: any }) {
 
               {/* DESKTOP VIEW (>= md): heading + text left, stat cards right */}
               <div className="hidden md:block">
-                <h2 className="text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+                <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <UserIcon className="text-[var(--color-primary)]" />}
                   {c.title?.[lang] || (lang === 'ar' ? 'نبذة عني' : 'About Me')}
                 </h2>
                 {aboutStats.length > 0 ? (
                   <div className="grid grid-cols-5 gap-8 items-start" dir="ltr">
-                    <div className="col-span-3 text-[var(--color-text-muted)] leading-[1.75] whitespace-pre-wrap text-lg break-words">
+                    <div className="col-span-3 text-[var(--color-text-muted)] leading-[1.75] whitespace-pre-wrap text-lg break-words text-left">
                       {biography}
                     </div>
-                    <div className="col-span-2 grid grid-cols-2 gap-4">
+                    <div className="col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {aboutStats.map((stat: any, i: number) => (
                         <div key={i} className="bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-transform duration-300 shadow-sm">
                           <div className="flex justify-center mb-3">
@@ -333,9 +333,9 @@ export function ClassicTemplate({ profile }: { profile: any }) {
         }
 
         return (
-          <section id="skills" key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
+          <section id="skills" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+              <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
                 {c.heading?.[lang] || c.title?.[lang] || (lang === 'ar' ? 'المهارات' : 'Skills & Expertise')}
               </h2>
@@ -391,8 +391,11 @@ export function ClassicTemplate({ profile }: { profile: any }) {
           return `${yrs} ${lang === 'ar' ? 'سنوات' : 'yrs'} ${lang === 'ar' ? 'و' : ''} ${mos} ${lang === 'ar' ? 'أشهر' : 'mos'}`
         }
         const renderExpItem = (item: any) => {
+          const endLabel = item.isCurrent
+            ? (lang === 'ar' ? 'الحالي' : 'Present')
+            : formatExpDate(item.endDate)
           const dateLabel = item.startDate
-            ? `${formatExpDate(item.startDate)} - ${item.isCurrent ? (lang === 'ar' ? 'الحالي' : 'Present') : formatExpDate(item.endDate)}`
+            ? `${formatExpDate(item.startDate)}${endLabel ? ` - ${endLabel}` : ''}`
             : ''
           const duration = item.startDate ? calcDuration(item.startDate, item.endDate, item.isCurrent) : ''
           const bullets = (item.description || '').split('\n').filter((l: string) => l.trim())
@@ -420,15 +423,9 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                   </p>
                 </div>
               </div>
-              {(dateLabel || item.location || item.workMode) && (
-                <div className="flex items-center gap-3 text-[13px] text-[var(--color-text-muted)] font-medium mb-3 flex-wrap">
-                  {dateLabel && (
-                    <span className="flex items-start gap-1 max-w-full">
-                      <Clock className="w-3.5 h-3.5 shrink-0 mt-[2px]" />
-                      <span className="break-words min-w-0 flex-1">{dateLabel}{duration && ` · ${duration}`}</span>
-                    </span>
-                  )}
-                  {item.location && (
+                              {(item.location || item.workMode) && (
+                                <div className="flex items-center gap-3 text-[13px] text-[var(--color-text-muted)] font-medium mb-3 flex-wrap">
+                                  {item.location && (
                     <span className="flex items-start gap-1 max-w-full">
                       <MapPin className="w-3.5 h-3.5 shrink-0 mt-[2px]" />
                       <span className="break-words min-w-0 flex-1">{item.location}</span>
@@ -453,9 +450,9 @@ export function ClassicTemplate({ profile }: { profile: any }) {
           )
         }
         return (
-          <section id="experience" key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
+          <section id="experience" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
+              <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Briefcase className="text-[var(--color-primary)]" />}
                 {c.heading?.[lang] || (lang === 'ar' ? 'الخبرات العملية' : 'Work Experience')}
               </h2>
@@ -465,22 +462,31 @@ export function ClassicTemplate({ profile }: { profile: any }) {
               {expItems.length > 0 ? (
                 expDisplayMode === 'timeline' ? (
                   <div className="relative ps-8 md:ps-12">
-                    <div className="absolute start-3 md:start-5 top-0 bottom-0 w-0.5" style={{ backgroundColor: 'var(--color-primary)' }} />
+                    <div className="absolute start-3 md:start-5 top-1 bottom-1 w-[3px] rounded-full" style={{ background: 'linear-gradient(to bottom, transparent, var(--color-primary) 12%, var(--color-primary) 88%, transparent)' }} />
                     <div className="space-y-10">
                       {expItems.map((item: any) => {
+                        const endLabel = item.isCurrent
+                          ? (lang === 'ar' ? 'الحالي' : 'Present')
+                          : formatExpDate(item.endDate)
                         const dateLabel = item.startDate
-                          ? `${formatExpDate(item.startDate)} - ${item.isCurrent ? (lang === 'ar' ? 'الحالي' : 'Present') : formatExpDate(item.endDate)}`
+                          ? `${formatExpDate(item.startDate)}${endLabel ? ` - ${endLabel}` : ''}`
                           : ''
                         const duration = item.startDate ? calcDuration(item.startDate, item.endDate, item.isCurrent) : ''
                         const bullets = (item.description || '').split('\n').filter((l: string) => l.trim())
                         return (
                           <div key={item.id} className="relative">
                             <div
-                              className={`absolute -start-5 md:-start-7 top-1.5 w-3.5 h-3.5 rounded-full border-[3px] border-[var(--color-bg)] ${
-                                item.isCurrent ? 'animate-pulse' : ''
+                              className={`absolute -start-5 md:-start-7 top-1.5 w-3.5 h-3.5 rounded-full border-[3px] border-[var(--color-bg)] ring-2 ring-[var(--color-primary)]/20 ${
+                                item.isCurrent ? 'motion-safe:animate-pulse' : ''
                               }`}
                               style={{ backgroundColor: item.isCurrent ? '#22c55e' : 'var(--color-primary)' }}
                             />
+                            {(dateLabel || duration) && (
+                              <div className="mb-3 inline-flex max-w-full items-center gap-1.5 rounded-full bg-[var(--color-primary)]/10 px-3 py-1 text-xs font-bold" style={{ color: 'var(--color-primary)' }}>
+                                <Clock className="h-3.5 w-3.5 shrink-0" />
+                                <span className="break-words">{dateLabel}{duration && ` · ${duration}`}</span>
+                              </div>
+                            )}
                             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm">
                               <div className="flex items-start gap-4 mb-3">
                                 {item.companyLogo ? (
@@ -559,10 +565,10 @@ export function ClassicTemplate({ profile }: { profile: any }) {
       case 'services':
         const serviceItems = c.services || []
         return (
-          <section id="services" key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
+          <section id="services" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <div className="mb-16">
-                <h2 className="text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
+                <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Briefcase className="text-[var(--color-primary)]" />}
                   {c.heading?.[lang] || c.title?.[lang] || (lang === 'ar' ? 'الخدمات' : 'Services')}
                 </h2>
@@ -608,10 +614,10 @@ export function ClassicTemplate({ profile }: { profile: any }) {
       case 'testimonials':
         const testimonialItems = c.items || []
         return (
-          <section id="testimonials" key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
+          <section id="testimonials" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <div className="mb-12 text-center">
-                <h2 className="text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center justify-center gap-3">
+                <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center justify-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <MessageCircle className="text-[var(--color-primary)]" />}
                   {c.title?.[lang] || (lang === 'ar' ? 'آراء العملاء' : 'Testimonials')}
                 </h2>
@@ -633,9 +639,9 @@ export function ClassicTemplate({ profile }: { profile: any }) {
         const projects = profile.projectPages || []
         const displayMode = c.displayMode || 'grid'
         return (
-          <section id="projects" key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
+          <section id="projects" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+              <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Palette className="text-[var(--color-primary)]" />}
                 {c.title?.[lang] || (lang === 'ar' ? 'المشاريع' : 'Featured Projects')}
               </h2>
@@ -841,9 +847,9 @@ export function ClassicTemplate({ profile }: { profile: any }) {
         const galleryItems = Array.isArray(c.items) ? c.items : []
         if (galleryItems.length === 0) return null
         return (
-          <section id="gallery" key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
+          <section id="gallery" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+              <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
                 {c.title?.[lang] || (lang === 'ar' ? 'معرض الأعمال' : 'Gallery')}
               </h2>
@@ -869,9 +875,9 @@ export function ClassicTemplate({ profile }: { profile: any }) {
         const fileItems = Array.isArray(c.items) ? c.items.filter((f: any) => f && (f.url || f.externalUrl)) : []
         if (fileItems.length === 0) return null
         return (
-          <section id="files" key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
+          <section id="files" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+              <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <FileText className="h-7 w-7 text-[var(--color-primary)]" />}
                 {c.title?.[lang] || (lang === 'ar' ? 'ملفات للتحميل' : 'Downloads')}
               </h2>
@@ -907,9 +913,9 @@ export function ClassicTemplate({ profile }: { profile: any }) {
         const contactLinks = Array.isArray(c.links) ? c.links : []
         if (contactLinks.length === 0 && !c.title?.[lang] && !c.headline?.[lang]) return null
         return (
-          <section id="contact-info" key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
+          <section id="contact-info" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+              <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Mail className="h-7 w-7 text-[var(--color-primary)]" />}
                 {c.title?.[lang] || c.headline?.[lang] || (lang === 'ar' ? 'تواصل معي' : 'Contact')}
               </h2>
@@ -949,10 +955,10 @@ export function ClassicTemplate({ profile }: { profile: any }) {
         const paragraphs = Array.isArray(c.paragraphs) ? c.paragraphs.filter((p: any) => typeof p === 'string' && p.trim() !== '') : []
         if (!c.title?.[lang] && paragraphs.length === 0) return null
         return (
-          <section id={`custom-${section.id}`} key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
+          <section id={`custom-${section.id}`} key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               {c.title?.[lang] ? (
-                <h2 className="text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+                <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
                   {c.title[lang]}
                 </h2>
@@ -1058,26 +1064,19 @@ export function ClassicTemplate({ profile }: { profile: any }) {
         <div className="w-full min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] relative" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
           
           {/* Navigation Bar */}
-          <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${isScrolled ? 'py-2.5 sm:py-3 shadow-md' : 'py-3 sm:py-5'}`} style={{ backgroundColor: isScrolled ? 'color-mix(in srgb, var(--color-bg) 90%, transparent)' : 'transparent', backdropFilter: isScrolled ? 'blur(10px)' : 'none' }}>
+          <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${isScrolled ? 'py-2.5 sm:py-3 shadow-md' : 'py-3 sm:py-5'}`} style={{ backgroundColor: isScrolled ? (theme === 'light' ? 'var(--color-bg)' : 'color-mix(in srgb, var(--color-bg) 90%, transparent)') : 'transparent', backdropFilter: isScrolled ? 'blur(10px)' : 'none', borderBottom: isScrolled ? '1px solid var(--color-border)' : 'none' }}>
             <div className="max-w-[1200px] mx-auto px-4 sm:px-12 flex items-center justify-between">
               {/* Mobile hamburger button on the left (matches reference) */}
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 rounded-lg border border-white/20 bg-white/5 text-white hover:bg-white/10 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+                className={`md:hidden p-2 rounded-lg border transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center ${isScrolled && theme === 'light' ? 'border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-text)] hover:opacity-80' : 'border-white/20 bg-white/5 text-white hover:bg-white/10'}`}
                 aria-label="Toggle menu"
                 aria-expanded={mobileMenuOpen}
               >
                 {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
 
-              <a href="#" className="flex items-center gap-3">
-                {appearance.logoUrl ? (
-                  <img src={appearance.logoUrl} alt="Logo" className="h-8 sm:h-9 w-auto object-contain" />
-                ) : (
-                  <span className="text-xl sm:text-2xl font-black text-white tracking-tight">{initial}</span>
-                )}
-              </a>
               <div className="flex items-center gap-6">
                 <ul className="hidden md:flex items-center gap-8 font-medium">
                   {visibleSections.map((s: any) => {
@@ -1098,21 +1097,14 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                         : s.sectionType
                     return (
                       <li key={s.id}>
-                        <a href={`#${targetId}`} className="capitalize text-white/90 hover:text-white transition-colors relative group font-medium">
+                        <a href={`#${targetId}`} className={`capitalize transition-colors relative group font-medium ${isScrolled && theme === 'light' ? 'text-[var(--color-text-muted)] hover:text-[var(--color-primary)]' : 'text-white/90 hover:text-white'}`}>
                           {label}
-                          <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-white transition-all duration-300 group-hover:w-full"></span>
+                          <span className={`absolute -bottom-1 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${isScrolled && theme === 'light' ? 'bg-[var(--color-primary)]' : 'bg-white'}`}></span>
                         </a>
                       </li>
                     )
                   })}
                 </ul>
-                <button
-                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                  className="h-9 w-9 flex items-center justify-center rounded-full bg-white/10 border border-white/20 shadow-sm hover:scale-110 transition-transform text-white cursor-pointer"
-                  title="Toggle theme"
-                >
-                  {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                </button>
                 {defaultLangMode === 'both' && (
                   <>
                     <button
@@ -1123,18 +1115,18 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                       {lang === 'en' ? 'AR' : 'EN'}
                     </button>
                     {/* Mobile segmented AR | EN pill (matches reference) */}
-                    <div className="md:hidden flex items-center rounded-full border border-white/20 bg-white/5 p-0.5 text-[11px] font-bold">
+                    <div className={`md:hidden flex items-center rounded-full border p-0.5 text-[11px] font-bold ${isScrolled && theme === 'light' ? 'border-[var(--color-border)] bg-[var(--color-card)]' : 'border-white/20 bg-white/5'}`}>
                       <button
                         type="button"
                         onClick={() => setLang('ar')}
-                        className={`rounded-full px-2.5 py-1 transition-colors cursor-pointer ${lang === 'ar' ? 'bg-[#2563eb] text-white' : 'text-slate-300'}`}
+                        className={`rounded-full px-2.5 py-1 transition-colors cursor-pointer ${lang === 'ar' ? 'bg-[#2563eb] text-white' : (isScrolled && theme === 'light' ? 'text-[var(--color-text-muted)]' : 'text-slate-300')}`}
                       >
                         AR
                       </button>
                       <button
                         type="button"
                         onClick={() => setLang('en')}
-                        className={`rounded-full px-2.5 py-1 transition-colors cursor-pointer ${lang === 'en' ? 'bg-[#2563eb] text-white' : 'text-slate-300'}`}
+                        className={`rounded-full px-2.5 py-1 transition-colors cursor-pointer ${lang === 'en' ? 'bg-[#2563eb] text-white' : (theme === 'light' ? 'text-[var(--color-text-muted)]' : 'text-slate-300')}`}
                       >
                         EN
                       </button>
@@ -1162,7 +1154,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                       key={s.id}
                       href={`#${targetId}`}
                       onClick={() => setMobileMenuOpen(false)}
-                      className="block py-2 text-sm text-[var(--color-text)] hover:text-[var(--color-primary)] font-medium"
+                      className="block py-3 text-sm text-[var(--color-text)] hover:text-[var(--color-primary)] font-medium"
                     >
                       {label}
                     </a>
@@ -1173,7 +1165,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
           </nav>
 
           {/* Floating Action Buttons */}
-          <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+          <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start gap-3">
             {showWhatsapp && (
               <a
                 href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`}
