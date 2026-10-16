@@ -226,9 +226,11 @@ export function ClassicTemplate({ profile }: { profile: any }) {
         return (
           <section id="about" key={section.id} className="py-8 sm:py-16" style={{ backgroundColor: aboutBg }}>
             <div className="max-w-[1200px] mx-auto px-4 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <div className="grid grid-cols-12 gap-3 sm:gap-8 items-start" dir="rtl">
+              
+              {/* MOBILE VIEW (< md): image on right + text on left (matches Image 1) */}
+              <div className="md:hidden grid grid-cols-12 gap-3 items-start" dir="rtl">
                 {aboutImage ? (
-                  <div className="col-span-5 sm:col-span-5">
+                  <div className="col-span-5">
                     <div className="overflow-hidden rounded-2xl shadow-sm border border-[var(--color-border)]/40 bg-[var(--color-bg)] aspect-[3/4]">
                       <img
                         src={aboutImage}
@@ -238,22 +240,45 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                     </div>
                   </div>
                 ) : null}
-                <div className={`${aboutImage ? 'col-span-7 sm:col-span-7' : 'col-span-12'} flex flex-col justify-start text-right`}>
-                  <div className="flex items-center gap-1.5 mb-1.5 sm:mb-2 text-[#8c533c] dark:text-[#d48b70] text-[11px] sm:text-xs font-bold">
-                    <span className="w-3 sm:w-6 h-[1.5px] bg-current opacity-60 inline-block" />
-                    <span>{c.subtitle?.[lang] || (lang === 'ar' ? 'من نحن؟' : 'About Us')}</span>
-                    <span className="w-3 sm:w-6 h-[1.5px] bg-current opacity-60 inline-block" />
-                  </div>
-                  <h2 className="text-base sm:text-2xl md:text-3xl font-extrabold text-[var(--color-text)] tracking-tight mb-2 sm:mb-3 leading-tight sm:leading-snug">
-                    {c.heading?.[lang] || c.title?.[lang] || (lang === 'ar' ? 'نبذة عني' : 'About Me')}
-                  </h2>
-                  <p className="text-[var(--color-text-muted)] leading-[1.65] sm:leading-[1.8] text-[11px] sm:text-sm md:text-base font-normal text-justify whitespace-pre-wrap">
+                <div className={`${aboutImage ? 'col-span-7' : 'col-span-12'} flex flex-col justify-start text-right`}>
+                  <p className="text-[var(--color-text-muted)] leading-[1.65] text-[11px] font-normal text-justify whitespace-pre-wrap">
                     {biography}
                   </p>
                 </div>
               </div>
+
+              {/* DESKTOP VIEW (>= md): heading + text left, stat cards right */}
+              <div className="hidden md:block">
+                <h2 className="text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+                  {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <UserIcon className="text-[var(--color-primary)]" />}
+                  {c.title?.[lang] || (lang === 'ar' ? 'نبذة عني' : 'About Me')}
+                </h2>
+                {aboutStats.length > 0 ? (
+                  <div className="grid grid-cols-5 gap-8 items-start" dir="ltr">
+                    <div className="col-span-3 text-[var(--color-text-muted)] leading-[1.75] whitespace-pre-wrap text-lg break-words">
+                      {biography}
+                    </div>
+                    <div className="col-span-2 grid grid-cols-2 gap-4">
+                      {aboutStats.map((stat: any, i: number) => (
+                        <div key={i} className="bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-transform duration-300 shadow-sm">
+                          <div className="flex justify-center mb-3">
+                            {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]') || <Trophy className="w-7 h-7 text-[var(--color-primary)]" />}
+                          </div>
+                          <div className="text-3xl font-bold text-[var(--color-primary)] mb-2">{stat.value}</div>
+                          <div className="text-sm text-[var(--color-text-muted)] font-medium">{stat.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[var(--color-text-muted)] leading-[1.75] whitespace-pre-wrap text-lg break-words">
+                    {biography}
+                  </div>
+                )}
+              </div>
+
               {aboutStats.length > 0 && (
-                <div className="grid grid-cols-2 gap-4 mt-8 sm:mt-10">
+                <div className="grid grid-cols-2 gap-4 mt-8 sm:mt-10 md:hidden">
                   {aboutStats.map((stat: any, i: number) => (
                     <div key={i} className="bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-transform duration-300 shadow-sm">
                       <div className="flex justify-center mb-3">
@@ -1148,7 +1173,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
               return (
                 <section 
                   id="hero" 
-                  className="relative flex items-center justify-center min-h-[50vh] sm:min-h-[55vh] overflow-hidden"
+                  className="relative flex items-center justify-center min-h-[50vh] md:min-h-[62vh] overflow-hidden"
                   style={{ 
                     background: bgImage
                       ? `url("${bgImage}") center/cover no-repeat`
@@ -1164,6 +1189,16 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                     />
                   )}
                   <div className="max-w-[1200px] mx-auto px-5 sm:px-12 flex flex-col items-center text-center z-10 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative">
+                    {/* Avatar image — desktop only (hidden on mobile) */}
+                    {profile.avatarUrl ? (
+                      <div className="hidden md:block w-36 h-36 lg:w-44 lg:h-44 rounded-full overflow-hidden border-4 border-white shadow-2xl mb-6 hover:scale-105 transition-transform duration-500 bg-white shrink-0">
+                        <img src={profile.avatarUrl} alt={displayName} className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="hidden md:flex w-36 h-36 lg:w-44 lg:h-44 rounded-full overflow-hidden border-4 border-white shadow-2xl mb-6 hover:scale-105 transition-transform duration-500 bg-white/20 backdrop-blur-md items-center justify-center text-white text-4xl lg:text-5xl font-black select-none shrink-0">
+                        {initial}
+                      </div>
+                    )}
                     <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold text-white mb-2.5 sm:mb-4 text-center leading-snug whitespace-pre-line" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
                       {displayName}
                     </h1>
