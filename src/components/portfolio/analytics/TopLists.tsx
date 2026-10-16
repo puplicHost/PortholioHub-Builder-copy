@@ -1,6 +1,7 @@
 'use client'
 
 import { useI18n } from '@/components/I18nProvider'
+import { Globe } from 'lucide-react'
 import type { PortfolioAnalyticsCountry } from '@/lib/actions/portfolio'
 
 // Top ~24 ISO codes with English + Arabic names. Unmapped codes fall
@@ -48,8 +49,11 @@ export function TopCountries({ items }: { items: PortfolioAnalyticsCountry[] }) 
 
   if (items.length === 0) {
     return (
-      <div className="py-8 text-center text-xs text-[var(--color-text-muted)]">
-        {t('No country data yet')}
+      <div className="flex min-h-[160px] flex-col items-center justify-center px-4 py-8 text-center">
+        <div className="mx-auto mb-3 flex h-12 w-12 max-w-[200px] items-center justify-center rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800">
+          <Globe className="h-6 w-6 max-w-[200px] opacity-60" />
+        </div>
+        <p className="text-center text-sm text-[var(--color-text-muted)]">{t('No country data yet')}</p>
       </div>
     )
   }
@@ -58,7 +62,7 @@ export function TopCountries({ items }: { items: PortfolioAnalyticsCountry[] }) 
   const max = Math.max(1, ...items.map((i) => i.views))
 
   return (
-    <ul className="space-y-3">
+    <ul className="w-full min-w-0 max-w-full space-y-3 overflow-x-hidden">
       {items.map((item, idx) => {
         const isUnknown = item.country === 'unknown'
         const name = isUnknown ? t('Unknown visitor') : COUNTRY_NAMES[item.country]?.[lang] || item.country

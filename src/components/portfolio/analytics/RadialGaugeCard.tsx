@@ -51,27 +51,28 @@ export function RadialGaugeCard({ percentage, label, metric1, metric2 }: RadialG
   })
 
   return (
-    <div className="flex flex-col justify-between rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] dark:border-slate-800 dark:bg-[#161b26]">
+    <div className="flex min-w-0 flex-col justify-between rounded-[28px] border border-slate-200/80 bg-white p-4 sm:p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] dark:border-slate-800 dark:bg-[#161b26]">
       {/* Card Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold tracking-tight text-[#0f172a] dark:text-white">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <h3 className="min-w-0 truncate text-base font-bold tracking-tight text-[#0f172a] dark:text-white">
           {t('Visitor Engagement')}
         </h3>
         <button
           type="button"
           onClick={() => setShowInfo(!showInfo)}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors dark:hover:bg-slate-800"
+          aria-label="Engagement options"
           title="Options"
+          className="flex h-11 max-h-[44px] min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors md:h-8 md:min-h-[32px] md:w-8 md:min-w-[32px] dark:hover:bg-slate-800"
         >
           <MoreHorizontal className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Semicircular Radial Gauge Display */}
-      <div className="relative my-2 flex flex-col items-center justify-center">
+      {/* Semicircular Radial Gauge Display — smaller on mobile */}
+      <div className="relative my-2 flex min-w-0 flex-col items-center justify-center">
         <svg
           viewBox="0 0 280 155"
-          className="w-full max-w-[260px] overflow-visible select-none"
+          className="w-full max-w-[200px] overflow-visible select-none md:max-w-[260px]"
           role="img"
           aria-label={`Gauge: ${displayPct}%`}
         >
@@ -83,7 +84,7 @@ export function RadialGaugeCard({ percentage, label, metric1, metric2 }: RadialG
               x2={seg.x2}
               y2={seg.y2}
               stroke={seg.isFilled ? '#2563eb' : 'currentColor'}
-              className={seg.isFilled ? 'transition-all duration-300' : 'text-slate-100 dark:text-slate-800'}
+              className={seg.isFilled ? 'md:transition-all md:duration-300' : 'text-slate-100 dark:text-slate-800'}
               strokeWidth={7}
               strokeLinecap="round"
             />
@@ -91,21 +92,21 @@ export function RadialGaugeCard({ percentage, label, metric1, metric2 }: RadialG
         </svg>
 
         {/* Center Text inside the Arc */}
-        <div className="absolute bottom-2 text-center">
-          <p className="font-mono text-3xl font-extrabold tracking-tight text-[#0f172a] dark:text-white">
+        <div className="absolute bottom-2 max-w-full text-center">
+          <p className="font-mono font-extrabold tracking-tight text-[#0f172a] text-[clamp(1.5rem,5vw,2rem)] leading-none dark:text-white">
             {displayPct}%
           </p>
           <p className="mt-0.5 text-xs font-medium text-slate-400">{label}</p>
         </div>
       </div>
 
-      {/* Bottom Dual Metric Sub-Cards */}
-      <div className="mt-4 grid grid-cols-2 gap-3 pt-2">
-        <div className="rounded-2xl border border-slate-100 bg-[#f8fafc] p-3 dark:border-slate-800/80 dark:bg-slate-900/50">
+      {/* Bottom Dual Metric Sub-Cards — legend below the gauge */}
+      <div className="mt-4 grid min-w-0 grid-cols-2 gap-3 pt-2">
+        <div className="min-w-0 rounded-2xl border border-slate-100 bg-[#f8fafc] p-3 dark:border-slate-800/80 dark:bg-slate-900/50">
           <p className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
             {metric1.label}
           </p>
-          <div className="mt-1 flex items-baseline gap-1.5">
+          <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-1.5">
             <span className="font-mono text-lg font-bold text-[#0f172a] dark:text-white">
               {metric1.value}
             </span>
@@ -117,11 +118,11 @@ export function RadialGaugeCard({ percentage, label, metric1, metric2 }: RadialG
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-[#f8fafc] p-3 dark:border-slate-800/80 dark:bg-slate-900/50">
+        <div className="min-w-0 rounded-2xl border border-slate-100 bg-[#f8fafc] p-3 dark:border-slate-800/80 dark:bg-slate-900/50">
           <p className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
             {metric2.label}
           </p>
-          <div className="mt-1 flex items-baseline gap-1.5">
+          <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-1.5">
             <span className="font-mono text-lg font-bold text-[#0f172a] dark:text-white">
               {metric2.value}
             </span>
