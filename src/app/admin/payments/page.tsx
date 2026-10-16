@@ -1,8 +1,13 @@
+import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { parsePagination, buildMeta } from '@/lib/pagination'
 import { DataTable } from '@/components/admin/DataTable'
+import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { RotateCcw } from 'lucide-react'
+import { PaymentActions } from '@/components/admin/PaymentActions'
+import { CsvExportButton } from '@/components/admin/CsvExportButton'
 
 export const metadata = {
   title: 'Payments | Admin',
@@ -56,43 +61,129 @@ export default async function AdminPaymentsPage({ searchParams }: PaymentsPagePr
         amountEgp: true,
         status: true,
         createdAt: true,
-        user: { select: { email: true, displayName: true } },
+        user: { select: { id: true, email: true, displayName: true } },
       },
     }),
   ])
   const meta = buildMeta(page, pageSize, total)
+  const hasFilters = Boolean(user || from || to)
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">Payments</h1>
-      <form method="get" className="flex flex-wrap gap-2">
-        <Input name="user" defaultValue={user} placeholder="Search user…" className="max-w-xs" />
-        <Input name="from" type="date" defaultValue={from} className="max-w-[180px]" />
-        <Input name="to" type="date" defaultValue={to} className="max-w-[180px]" />
-        <Button type="submit" variant="secondary">
-          Filter
-        </Button>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-[var(--color-text-primary)]">Payments</h1>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            {total} recorded payments
+          </p>
+        </div>
+        <CsvExportButton
+          filename={`payments-export-${new Date().toISOString().split('T')[0]}.csv`}
+          headers={['Date', 'User Email', 'User Name', 'Amount EGP', 'Provider', 'Status']}
+          rows={items.map((p) => [
+            new Date(p.createdAt).toISOString(),
+            p.user.email,
+            p.user.displayName || '',
+            p.amountEgp,
+            p.provider,
+            p.status,
+          ])}
+          size="sm"
+        />
+      </div>
+
+      <form method="get" className="flex flex-wrap items-end gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <div className="flex-1 min-w-[200px]">
+          <Input
+            id="payment-user"
+            name="user"
+            label="Search user"
+            defaultValue={user}
+            placeholder="Search email or name…"
+          />
+        </div>
+        <div className="w-auto min-w-[150px]">
+          <Input
+            id="payment-from"
+            name="from"
+            label="From date"
+            type="date"
+            defaultValue={from}
+          />
+        </div>
+        <div className="w-auto min-w-[150px]">
+          <Input
+            id="payment-to"
+            name="to"
+            label="To date"
+            type="date"
+            defaultValue={to}
+          />
+        </div>
+        <div className="flex items-center gap-2 h-12">
+          <Button type="submit" variant="secondary" size="md">
+            Filter
+          </Button>
+          {hasFilters && (
+            <Link
+              href="/admin/payments"
+              className="inline-flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] px-3 py-2 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-surface-secondary)] transition-colors h-[42px]"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset
+            </Link>
+          )}
+        </div>
       </form>
+
       <DataTable
         columns={[
-          { key: 'when', header: 'When' },
+          { key: 'when', header: 'Date' },
           { key: 'user', header: 'User' },
           { key: 'amount', header: 'Amount' },
           { key: 'provider', header: 'Provider' },
           { key: 'status', header: 'Status' },
+          { key: 'actions', header: 'Actions' },
         ]}
         rows={items.map((p) => ({
-          when: new Date(p.createdAt).toLocaleString(),
-          user: `${p.user.displayName || p.user.email} (${p.user.email})`,
-          amount: `${p.amountEgp} EGP`,
-          provider: p.provider,
-          status: p.status,
+          when: (
+            <span className="text-xs">
+              {new Date(p.createdAt).toLocaleDateString()}
+              <span className="block text-[10px] text-[var(--color-text-muted)]">
+                {new Date(p.createdAt).toLocaleTimeString()}
+              </span>
+            </span>
+          ),
+          user: (
+            <span>
+              <Link href={`/admin/users/${p.user.id}`} className="font-medium text-[var(--color-primary)] hover:underline">
+                {p.user.displayName || p.user.email}
+              </Link>
+              <span className="block text-xs text-[var(--color-text-muted)]">{p.user.email}</span>
+            </span>
+          ),
+          amount: <span className="font-semibold">{p.amountEgp} EGP</span>,
+          provider: (
+            <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-[var(--color-surface-secondary)] border border-[var(--color-border)]">
+              {p.provider}
+            </span>
+          ),
+          status: <StatusBadge status={p.status} />,
+          actions: (
+            <PaymentActions
+              paymentId={p.id}
+              status={p.status}
+              userId={p.user.id}
+              amountEgp={p.amountEgp}
+              provider={p.provider}
+            />
+          ),
         }))}
         rowKeys={items.map((p) => p.id)}
         meta={meta}
         basePath="/admin/payments"
         params={{ user, from, to }}
-        emptyText="No payments yet."
+        emptyText="No payments found with these filters."
       />
     </div>
   )

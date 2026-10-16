@@ -20,3 +20,5 @@ yarn-error.log*
 # OS / editor
 .DS_Store
 *.pem
+.vercel
+.env*

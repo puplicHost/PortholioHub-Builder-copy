@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { ensurePersonalWorkspace } from '@/lib/workspaces'
 import { validateUsername } from '@/lib/portfolio'
+import { validateSections, validateProjects } from '@/lib/portfolio-schema'
 import { Prisma } from '@prisma/client'
 
 async function requireUserWithWorkspace() {
@@ -90,30 +91,11 @@ export async function getOrCreateProfile() {
       migrated = true
     }
 
-    // — Footer: migrate legacy contact section, or append —
-    const contactSec = sections.find((s: any) => s.sectionType === 'contact')
+    // — Footer: ensure one exists (contact is a first-class section type
+    // since Sprint F3 and is never converted or deleted here) —
     const footerSec = sections.find((s: any) => s.sectionType === 'footer')
 
-    if (contactSec && !footerSec) {
-      const existingContent = (contactSec.content as any) || {}
-      const updated = await prisma.pageSection.update({
-        where: { id: contactSec.id },
-        data: {
-          sectionType: 'footer',
-          content: {
-            headline: existingContent.heading || existingContent.title || { en: 'Work with me', ar: 'تواصل معي' },
-            subheading: existingContent.description || { en: "Let's build something great together.", ar: 'دعنا نبني شيئاً رائعاً معاً.' },
-            links: (profile.contactLinks as any) || [],
-          } as Prisma.InputJsonValue,
-        },
-      })
-      Object.assign(contactSec, updated)
-      migrated = true
-    } else if (contactSec && footerSec) {
-      await prisma.pageSection.delete({ where: { id: contactSec.id } })
-      sections = sections.filter((s: any) => s.id !== contactSec.id)
-      migrated = true
-    } else if (!footerSec && sections.length > 0) {
+    if (!footerSec && sections.length > 0) {
       const maxOrder = sections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0)
       const created = await prisma.pageSection.create({
         data: {
@@ -224,8 +206,7 @@ export async function getOrCreateProfile() {
       counter++
     }
 
-    profile = await prisma.userProfile.create({
-      data: {
+    const profileData: Prisma.UserProfileUncheckedCreateInput = {
         userId: user.id,
         username,
         displayName: user.displayName || '',
@@ -259,18 +240,33 @@ export async function getOrCreateProfile() {
             }
           }
         }
+      }
+    const profileInclude = {
+      pages: {
+        include: { sections: { orderBy: { sectionOrder: 'asc' as const } } },
+        orderBy: { pageOrder: 'asc' as const },
       },
-      include: {
-        pages: {
-          include: { sections: { orderBy: { sectionOrder: 'asc' } } },
-          orderBy: { pageOrder: 'asc' },
-        },
-        projectPages: {
-          include: { items: { orderBy: { sortOrder: 'asc' } } },
-          orderBy: { sortOrder: 'asc' }
-        }
-      },
-    })
+      projectPages: {
+        include: { items: { orderBy: { sortOrder: 'asc' as const } } },
+        orderBy: { sortOrder: 'asc' as const }
+      }
+    }
+    try {
+      profile = await prisma.userProfile.create({ data: profileData, include: profileInclude })
+    } catch (err: any) {
+      if (err?.code !== 'P2002') throw err
+      // Lost a creation race (two tabs opened at once) or a username race:
+      // whoever won owns this user's row — otherwise retry once suffixed.
+      const raced = await prisma.userProfile.findUnique({ where: { userId: user.id }, include: profileInclude })
+      if (raced) {
+        profile = raced
+      } else {
+        profile = await prisma.userProfile.create({
+          data: { ...profileData, username: `${username}-${Math.floor(1000 + Math.random() * 9000)}` },
+          include: profileInclude,
+        })
+      }
+    }
   }
 
   return profile
@@ -302,6 +298,17 @@ export async function updatePortfolio(data: {
       }
     }
 
+    // Content validation (Sprint F1): strict per-type schemas with field
+    // paths; rejects unknown keys, bad URLs, oversize text, overfull arrays.
+    const sectionsCheck = validateSections(data.sections)
+    if (!sectionsCheck.ok) {
+      return { success: false, error: sectionsCheck.error || 'Invalid sections' }
+    }
+    const projectsCheck = validateProjects(data.projects)
+    if (!projectsCheck.ok) {
+      return { success: false, error: projectsCheck.error || 'Invalid projects' }
+    }
+
     const username = data.username?.toLowerCase().trim() || undefined
     if (username) {
       const problem = validateUsername(username)
@@ -310,7 +317,7 @@ export async function updatePortfolio(data: {
       }
       const existing = await prisma.userProfile.findUnique({ where: { username } })
       if (existing && existing.userId !== user.id) {
-        return { success: false, conflict: true, error: 'Username is already taken' }
+        return { success: false, error: 'Username is already taken' }
       }
     }
 
@@ -338,22 +345,43 @@ export async function updatePortfolio(data: {
         select: { version: true },
       })
     } catch (err: any) {
-      // Unique-race on username between precheck and write.
+      // Unique-race on username between precheck and write (NOT a version
+      // conflict — no modal, just an error toast).
       if (err?.code === 'P2002') {
-        return { success: false, conflict: true, error: 'Username is already taken' }
+        return { success: false, error: 'Username is already taken' }
       }
       throw err
     }
 
     // Update sections if provided
+    // (home page only for now). Client temp ids (`new-…`, same convention
+    // as project pages) are CREATED; everything else is updated in place.
+    // The id mapping is returned so the client swaps temp ids for real ones
+    // (otherwise every save would duplicate the new sections).
+    const savedSections: { id: string; tempId?: string }[] = []
     if (data.sections && data.sections.length > 0) {
-      // Assuming we only update existing sections of the 'home' page for now
+      const homePage = await prisma.profilePage.findFirst({
+        where: { profileId: data.id, slug: 'home' },
+        select: { id: true },
+      })
       for (const sec of data.sections) {
-        if (sec.id) {
-          const secSettings = (sec.settings as any) || {}
-          if (sec.visible !== undefined) {
-            secSettings.isVisible = sec.visible
-          }
+        if (!sec.id) continue
+        const secSettings = (sec.settings as any) || {}
+        if (sec.visible !== undefined) {
+          secSettings.isVisible = sec.visible
+        }
+        if (typeof sec.id === 'string' && sec.id.startsWith('new-') && homePage) {
+          const created = await prisma.pageSection.create({
+            data: {
+              pageId: homePage.id,
+              sectionType: sec.sectionType || 'custom',
+              sectionOrder: sec.sectionOrder ?? 0,
+              content: sec.content ?? {},
+              settings: secSettings,
+            },
+          })
+          savedSections.push({ id: created.id, tempId: sec.id })
+        } else if (!(typeof sec.id === 'string' && sec.id.startsWith('new-'))) {
           await prisma.pageSection.update({
             where: { id: sec.id },
             data: {
@@ -504,7 +532,7 @@ export async function updatePortfolio(data: {
       revalidatePath(`/u/${data.username}`)
     }
     
-    return { success: true, savedProjects, version: updated.version }
+    return { success: true, savedProjects, savedSections, version: updated.version }
   } catch (error: any) {
     console.error('updatePortfolio error:', error)
     return { success: false, error: error.message || 'Failed to save portfolio' }

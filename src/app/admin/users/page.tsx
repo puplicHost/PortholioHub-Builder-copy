@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { parsePagination, buildMeta } from '@/lib/pagination'
-import { DataTable } from '@/components/admin/DataTable'
+import { UserTableClient } from '@/components/admin/UserTableClient'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { RotateCcw } from 'lucide-react'
 
 export const metadata = {
   title: 'Users | Admin',
@@ -13,7 +14,7 @@ interface UsersPageProps {
   searchParams: Promise<{ search?: string; status?: string; page?: string; pageSize?: string }>
 }
 
-// Server-rendered list (search + status filter + server pagination).
+// Server-rendered list with bulk multi-select, CSV export, and filtering.
 export default async function AdminUsersPage({ searchParams }: UsersPageProps) {
   const sp = await searchParams
   const search = (sp.search || '').trim()
@@ -55,52 +56,63 @@ export default async function AdminUsersPage({ searchParams }: UsersPageProps) {
     }),
   ])
   const meta = buildMeta(page, pageSize, total)
+  const hasFilters = Boolean(search || status)
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">Users</h1>
-      <form method="get" className="flex flex-wrap gap-2">
-        <Input name="search" defaultValue={search} placeholder="Search email or name…" className="max-w-xs" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <h1 className="text-xl font-bold tracking-tight text-[var(--color-text-primary)]">Users</h1>
+        <p className="text-xs text-[var(--color-text-muted)]">
+          Showing {users.length} of {total} registered users
+        </p>
+      </div>
+
+      <form method="get" className="flex flex-wrap items-center gap-2">
+        <Input
+          name="search"
+          defaultValue={search}
+          placeholder="Search email or name…"
+          aria-label="Search users by email or name"
+          className="max-w-xs"
+        />
         <select
           name="status"
           defaultValue={status}
-          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
+          aria-label="Filter by account status"
+          className="h-12 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
         >
           <option value="">All statuses</option>
           <option value="ACTIVE">Active</option>
           <option value="SUSPENDED">Suspended</option>
         </select>
-        <Button type="submit" variant="secondary">
+        <Button type="submit" variant="secondary" size="md">
           Search
         </Button>
+        {hasFilters && (
+          <Link
+            href="/admin/users"
+            className="inline-flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] px-3 py-2 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-surface-secondary)] transition-colors"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Reset
+          </Link>
+        )}
       </form>
-      <DataTable
-        columns={[
-          { key: 'email', header: 'Email' },
-          { key: 'name', header: 'Name' },
-          { key: 'status', header: 'Status' },
-          { key: 'lastLogin', header: 'Last login' },
-        ]}
-        rows={users.map((u) => ({
-          email: (
-            <Link href={`/admin/users/${u.id}`} className="font-medium text-[var(--color-primary)] hover:underline">
-              {u.email}
-            </Link>
-          ),
-          name: (
-            <span>
-              {u.displayName || '—'}
-              {u.isAdmin ? ' (admin)' : ''}
-            </span>
-          ),
+
+      <UserTableClient
+        users={users.map((u) => ({
+          id: u.id,
+          email: u.email,
+          displayName: u.displayName,
+          phone: u.phone,
+          isAdmin: u.isAdmin,
           status: u.status,
-          lastLogin: u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : '—',
+          lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
+          createdAt: u.createdAt.toISOString(),
         }))}
-        rowKeys={users.map((u) => u.id)}
         meta={meta}
         basePath="/admin/users"
         params={{ search, status }}
-        emptyText="No users found."
       />
     </div>
   )

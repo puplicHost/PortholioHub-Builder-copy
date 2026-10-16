@@ -1,3 +1,13 @@
+/**
+ * ⚠️  VERCEL INCOMPATIBLE — Local filesystem uploads
+ * This module writes to public/uploads which is ephemeral on Vercel.
+ * Files will be lost on every deployment or serverless function cold start.
+ * Before going to production on Vercel, migrate to:
+ *   - Cloudinary (CLOUDINARY_API_SECRET already in .env.example)
+ *   - Supabase Storage (NEXT_PUBLIC_SUPABASE_URL already configured)
+ *   - Vercel Blob (@vercel/blob)
+ * Track: https://vercel.com/docs/storage
+ */
 import path from 'path'
 import fs from 'fs/promises'
 import { randomUUID } from 'crypto'

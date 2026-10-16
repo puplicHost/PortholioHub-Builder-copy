@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   ArrowLeft, Monitor, Smartphone, ExternalLink, Globe,
   Undo2, Redo2, CheckCircle, Check, Loader2, AlertCircle,
@@ -9,7 +9,7 @@ import {
   Palette, Layout, FileText, Menu, X, Sliders, Plus, Trash2,
   Trophy, Star, Users, Briefcase, Heart, Zap, Target, Award,
   Clock, TrendingUp, Code, Layers, Rocket, PenTool, Sun, Moon,
-  ArrowUp, BarChart3
+  ArrowUp, BarChart3, LogOut, Languages, User
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -32,13 +32,19 @@ import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
-import { updatePortfolio, createProjectPage, updateProjectPage, deleteProjectPage, publishProfile, unpublishProfile } from '@/lib/actions/portfolio'
+import { useI18n } from '@/components/I18nProvider'
+import { useRouter } from 'next/navigation'
+import { updatePortfolio, createProjectPage, updateProjectPage, deleteProjectPage, publishProfile, unpublishProfile, getOrCreateProfile } from '@/lib/actions/portfolio'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { LivePreview } from './LivePreview'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { ThemeSettings } from './ThemeSettings'
 import { ProjectManager } from './ProjectManager'
 import { TestimonialsEditor } from './TestimonialsEditor'
+import { GalleryEditor } from './GalleryEditor'
+import { FilesEditor } from './FilesEditor'
+import { ContactEditor } from './ContactEditor'
+import { CustomEditor } from './CustomEditor'
 
 const ICON_OPTIONS = [
   { key: 'trophy', icon: Trophy },
@@ -450,48 +456,137 @@ function getProfileSnapshot(p: any): string {
   })
 }
 
+function ProfileMenu({
+  displayName,
+  lang,
+  onToggleLang,
+  dark,
+  onToggleDark,
+  onLogout,
+}: {
+  displayName: string
+  lang: 'ar' | 'en'
+  onToggleLang: () => void
+  dark: boolean
+  onToggleDark: () => void
+  onLogout: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const rowClass =
+    'w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)] transition-colors cursor-pointer text-left'
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="h-8 w-8 rounded-full overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-secondary)] flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] transition-colors cursor-pointer"
+        title={displayName}
+        aria-label="Profile menu"
+        aria-expanded={open}
+      >
+        <User className="h-4 w-4" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-10 z-50 w-52 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl overflow-hidden">
+          <div className="px-3 py-2.5 border-b border-[var(--color-border)]">
+            <p className="text-xs font-bold truncate">{displayName}</p>
+          </div>
+          <button
+            onClick={() => {
+              onToggleLang()
+              setOpen(false)
+            }}
+            className={rowClass}
+          >
+            <Languages className="h-4 w-4 text-[var(--color-text-muted)]" />
+            <span className="flex-1">{lang === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}</span>
+            <span className="text-[10px] font-bold uppercase text-[var(--color-text-muted)]">
+              {lang === 'ar' ? 'EN' : 'عربي'}
+            </span>
+          </button>
+          <button
+            onClick={() => {
+              onToggleDark()
+              setOpen(false)
+            }}
+            className={rowClass}
+          >
+            {dark ? (
+              <Sun className="h-4 w-4 text-[var(--color-text-muted)]" />
+            ) : (
+              <Moon className="h-4 w-4 text-[var(--color-text-muted)]" />
+            )}
+            <span className="flex-1">{dark ? 'Light mode' : 'Dark mode'}</span>
+          </button>
+          <button
+            onClick={() => {
+              setOpen(false)
+              onLogout()
+            }}
+            className={`${rowClass} border-t border-[var(--color-border)]`}
+          >
+            <LogOut className="h-4 w-4 text-[var(--color-text-muted)]" />
+            <span className="flex-1">Log out</span>
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function BuilderClient({ initialProfile }: { initialProfile: any }) {
   const { toast } = useToast()
+  const { lang, setLang } = useI18n()
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch {
+      // cookie cleared server-side anyway on next load; proceed to login
+    }
+    router.push('/login')
+    router.refresh()
+  }
   const [profile, setProfile] = useState(() => {
     if (!initialProfile?.pages?.[0]?.sections) return initialProfile
     const sections = [...(initialProfile.pages[0].sections || [])]
     const hasFooter = sections.some((s: any) => s.sectionType === 'footer')
-    const hasContact = sections.some((s: any) => s.sectionType === 'contact')
 
-    if (hasContact || !hasFooter) {
-      let migrated = sections.map((s: any) => {
-        if (s.sectionType === 'contact') {
-          return {
-            ...s,
-            sectionType: 'footer',
-            content: {
-              headline: s.content?.headline || s.content?.heading || s.content?.title || { en: 'Work with me', ar: 'تواصل معي' },
-              subheading: s.content?.subheading || s.content?.description || { en: "Let's build something great together.", ar: 'دعنا نبني شيئاً رائعاً معاً.' },
-              links: s.content?.links || initialProfile.contactLinks || [],
-            },
-          }
-        }
-        return s
+    // Contact is a first-class section type (Sprint F3): never converted
+    // or removed here. Only ensure a footer exists for old profiles.
+    if (!hasFooter) {
+      const migrated = [...sections]
+      const maxOrder = migrated.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0)
+      migrated.push({
+        id: `new-footer-${Date.now()}`,
+        sectionType: 'footer',
+        sectionOrder: maxOrder + 1,
+        content: {
+          headline: { en: 'Work with me', ar: 'تواصل معي' },
+          subheading: { en: "Let's build something great together.", ar: 'دعنا نبني شيئاً رائعاً معاً.' },
+          links: initialProfile.contactLinks || [],
+        },
+        settings: { isVisible: true },
       })
-
-      if (!hasFooter && !hasContact) {
-        const maxOrder = migrated.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0)
-        migrated.push({
-          id: 'footer-default-section',
-          sectionType: 'footer',
-          sectionOrder: maxOrder + 1,
-          content: {
-            headline: { en: 'Work with me', ar: 'تواصل معي' },
-            subheading: { en: "Let's build something great together.", ar: 'دعنا نبني شيئاً رائعاً معاً.' },
-            links: initialProfile.contactLinks || [],
-          },
-          settings: { isVisible: true },
-        })
-      }
-
-      if (hasContact && hasFooter) {
-        migrated = migrated.filter((s: any) => s.sectionType !== 'contact')
-      }
 
       return {
         ...initialProfile,
@@ -518,12 +613,16 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
 
   const [savedSnapshot, setSavedSnapshot] = useState(() => getProfileSnapshot(profile))
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  // Version conflict (another tab saved first): blocks saves until the
+  // user picks Reload or Overwrite in the modal (Sprint F4).
+  const [conflict, setConflict] = useState<{ serverVersion: number } | null>(null)
+  const backoffRef = useRef(0)
 
   const isDirty = useMemo(() => {
     return getProfileSnapshot(profile) !== savedSnapshot
   }, [profile, savedSnapshot])
 
-  const handleSaveChanges = async (): Promise<boolean> => {
+  const handleSaveChanges = async (forceVersion?: number): Promise<boolean> => {
     if (saveStatus === 'saving') return false
     setSaveStatus('saving')
     try {
@@ -536,7 +635,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
         contactLinks: profile.contactLinks,
         sections: profile.pages[0]?.sections,
         projects: ensureValidProjectItemTypes(profile.projectPages),
-        expectedVersion: profile.version,
+        expectedVersion: forceVersion ?? profile.version,
       })
       if (res.success) {
         setLastSaved(new Date())
@@ -583,10 +682,29 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
             return matched ? matched.id : curr
           })
         }
+        if ((res as any).savedSections && (res as any).savedSections.length > 0) {
+          const byTemp = new Map((res as any).savedSections.map((s: any) => [s.tempId, s.id]))
+          const remap = (sections: any[]) =>
+            (sections || []).map((sec: any) =>
+              sec.id && byTemp.has(sec.id) ? { ...sec, id: byTemp.get(sec.id) } : sec,
+            )
+          nextProfile = {
+            ...nextProfile,
+            pages: (nextProfile.pages || []).map((pg: any, i: number) =>
+              i === 0 ? { ...pg, sections: remap(pg.sections) } : pg,
+            ),
+          }
+          setProfile(nextProfile)
+        }
         setSavedSnapshot(getProfileSnapshot(nextProfile))
         setSaveStatus('saved')
+        backoffRef.current = 0
         toast('success', 'Changes saved successfully!')
         return true
+      } else if ((res as any).conflict) {
+        setSaveStatus('error')
+        setConflict({ serverVersion: (res as any).currentVersion ?? profile.version })
+        return false
       } else {
         setSaveStatus('error')
         toast('error', res.error || 'Failed to save changes')
@@ -623,15 +741,51 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
     }
   }
 
+  // Conflict resolution (Sprint F4): Reload discards local edits for the
+  // server version; Overwrite re-saves local edits on top of it.
+  const handleConflictReload = async () => {
+    setConflict(null)
+    setSaveStatus('saving')
+    try {
+      const fresh = await getOrCreateProfile()
+      setProfile(fresh)
+      setSavedSnapshot(getProfileSnapshot(fresh))
+      backoffRef.current = 0
+      setSaveStatus('saved')
+      toast('success', 'Reloaded the latest saved version.')
+    } catch (err: any) {
+      console.error('Failed to reload profile', err)
+      setSaveStatus('error')
+      toast('error', 'Reload failed, please try again')
+    }
+  }
+
+  const handleConflictOverwrite = async () => {
+    if (!conflict) return
+    const serverVersion = conflict.serverVersion
+    setProfile((p: any) => ({ ...p, version: serverVersion }))
+    setConflict(null)
+    await handleSaveChanges(serverVersion)
+  }
+
+  // Warn before leaving with unsaved changes.
+  useEffect(() => {
+    if (!isDirty) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isDirty])
+
   // State updater
   const updateProfile = useCallback((updater: (prev: any) => any) => {
     setProfile(updater)
   }, [])
 
-  // Sections from profile (excluding obsolete contact section)
+  // Sections from profile, sorted for display.
   const sections = useMemo(() => {
     return [...(profile.pages?.[0]?.sections || [])]
-      .filter((s: any) => s.sectionType !== 'contact')
       .sort((a, b) => a.sectionOrder - b.sectionOrder)
   }, [profile.pages])
 
@@ -645,7 +799,12 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
     setSelectedSectionId(section.id)
     setSelectedSectionType(section.sectionType)
     // Scroll preview to section element
-    const targetId = section.sectionType === 'footer' ? 'contact' : section.sectionType
+    const targetId =
+      section.sectionType === 'footer'
+        ? 'contact'
+        : section.sectionType === 'contact'
+          ? 'contact-info'
+          : section.sectionType
     const el = document.getElementById(targetId)
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -2230,6 +2389,62 @@ case 'skills':
           />
         )
 
+      case 'gallery':
+        return (
+          <GalleryEditor
+            sectionId={selectedSection.id}
+            content={c}
+            updateSectionContent={updateSectionContent}
+            updateSectionContentRaw={updateSectionContentRaw}
+            FormCard={FormCard}
+            ItemCard={ItemCard}
+            AddActionCard={AddActionCard}
+            IconPicker={IconPicker}
+          />
+        )
+
+      case 'files':
+        return (
+          <FilesEditor
+            sectionId={selectedSection.id}
+            content={c}
+            updateSectionContent={updateSectionContent}
+            updateSectionContentRaw={updateSectionContentRaw}
+            FormCard={FormCard}
+            ItemCard={ItemCard}
+            AddActionCard={AddActionCard}
+            IconPicker={IconPicker}
+          />
+        )
+
+      case 'contact':
+        return (
+          <ContactEditor
+            sectionId={selectedSection.id}
+            content={c}
+            updateSectionContent={updateSectionContent}
+            updateSectionContentRaw={updateSectionContentRaw}
+            FormCard={FormCard}
+            ItemCard={ItemCard}
+            AddActionCard={AddActionCard}
+            IconPicker={IconPicker}
+          />
+        )
+
+      case 'custom':
+        return (
+          <CustomEditor
+            sectionId={selectedSection.id}
+            content={c}
+            updateSectionContent={updateSectionContent}
+            updateSectionContentRaw={updateSectionContentRaw}
+            FormCard={FormCard}
+            ItemCard={ItemCard}
+            AddActionCard={AddActionCard}
+            IconPicker={IconPicker}
+          />
+        )
+
       default:
         return (
           <div className="text-xs text-[var(--color-text-muted)]">
@@ -2241,6 +2456,30 @@ case 'skills':
 
   return (
     <div className={`flex h-screen w-full flex-col overflow-hidden bg-[var(--color-page)] select-none ${builderDarkMode ? 'dark' : ''}`}>
+      {conflict && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-[var(--color-surface)] rounded-xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="p-5 space-y-3">
+              <h2 className="text-base font-bold text-[var(--color-text-primary)]">
+                Newer changes found
+              </h2>
+              <p className="text-sm text-[var(--color-text-secondary)]">
+                This portfolio was saved elsewhere (another tab or device) after you started
+                editing. Reloading discards your unsaved edits; overwriting keeps them and
+                saves on top of the latest version.
+              </p>
+              <div className="flex gap-2 pt-1">
+                <Button variant="secondary" className="flex-1" onClick={handleConflictReload}>
+                  Reload latest
+                </Button>
+                <Button variant="primary" className="flex-1" onClick={handleConflictOverwrite}>
+                  Overwrite with mine
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ─────────────────────────────────────────────────────────────
           1. TOP BAR (Height: 52px, border-b, bg white / dark card)
       ────────────────────────────────────────────────────────────── */}
@@ -2315,13 +2554,14 @@ case 'skills':
 
         {/* Right: Device Switcher & Action Buttons */}
         <div className="flex items-center gap-2 sm:gap-2.5">
-          <button
-            onClick={() => setBuilderDarkMode(!builderDarkMode)}
-            className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors cursor-pointer"
-            title={builderDarkMode ? 'Light Mode' : 'Dark Mode'}
-          >
-            {builderDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
+          <ProfileMenu
+            displayName={profile.displayName || profile.username || 'User'}
+            lang={lang}
+            onToggleLang={() => setLang(lang === 'ar' ? 'en' : 'ar')}
+            dark={builderDarkMode}
+            onToggleDark={() => setBuilderDarkMode(!builderDarkMode)}
+            onLogout={handleLogout}
+          />
           <div className="flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
             <button
               onClick={() => setPreviewMode('desktop')}
@@ -2798,7 +3038,7 @@ case 'skills':
           <Button
             variant="primary"
             className="w-full h-10 gap-2 text-xs font-semibold shadow-sm cursor-pointer"
-            onClick={handleSaveChanges}
+            onClick={() => handleSaveChanges()}
             disabled={saveStatus === 'saving'}
           >
             {saveStatus === 'saving' ? (

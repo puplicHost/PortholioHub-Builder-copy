@@ -3,16 +3,35 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Globe, ScrollText, Settings, ChevronsLeft, ChevronsRight, Hammer, Inbox, CreditCard, Receipt, Tags } from 'lucide-react'
+import {
+  LayoutDashboard,
+  Users,
+  Globe,
+  ScrollText,
+  Settings,
+  ChevronsLeft,
+  ChevronsRight,
+  Hammer,
+  Inbox,
+  CreditCard,
+  Receipt,
+  Tags,
+  LifeBuoy,
+  Megaphone,
+  Banknote,
+} from 'lucide-react'
 
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { href: '/admin/revenue', label: 'Revenue', icon: Banknote, exact: false },
   { href: '/admin/users', label: 'Users', icon: Users, exact: false },
+  { href: '/admin/support', label: 'Support', icon: LifeBuoy, exact: false },
   { href: '/admin/requests', label: 'Requests', icon: Inbox, exact: false },
   { href: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard, exact: false },
   { href: '/admin/payments', label: 'Payments', icon: Receipt, exact: false },
   { href: '/admin/plans', label: 'Plans', icon: Tags, exact: false },
   { href: '/admin/portfolios', label: 'Portfolios', icon: Globe, exact: false },
+  { href: '/admin/announcements', label: 'Announcements', icon: Megaphone, exact: false },
   { href: '/admin/audit-log', label: 'Audit log', icon: ScrollText, exact: false },
   { href: '/admin/settings', label: 'Settings', icon: Settings, exact: false },
 ]
@@ -47,12 +66,12 @@ export function AdminSidebar() {
   return (
     <aside
       suppressHydrationWarning
-      className={`shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col transition-all ${
-        collapsed ? 'w-14' : 'w-52'
+      className={`hidden md:flex shrink-0 border-r rtl:border-r-0 rtl:border-l border-[var(--color-border)] bg-[var(--color-surface)] flex-col transition-all duration-200 ease-in-out ${
+        collapsed ? 'w-16' : 'w-56'
       }`}
     >
-      <div className="flex items-center gap-2 p-3 border-b border-[var(--color-border)]">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary)] text-white">
+      <div className="flex items-center gap-2.5 p-3.5 border-b border-[var(--color-border)]">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary)] text-white shadow-xs">
           <Hammer className="h-4 w-4" />
         </span>
         {!collapsed && <span className="text-sm font-bold truncate">Admin</span>}
@@ -66,9 +85,9 @@ export function AdminSidebar() {
               key={item.href}
               href={item.href}
               title={collapsed ? item.label : undefined}
-              className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors ${
+              className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors ${
                 active
-                  ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-medium'
+                  ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-semibold'
                   : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)]'
               }`}
             >
@@ -80,10 +99,14 @@ export function AdminSidebar() {
       </nav>
       <button
         onClick={toggle}
-        className="m-2 flex items-center justify-center gap-1 rounded-lg border border-[var(--color-border)] p-2 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)]"
+        className="m-2 flex items-center justify-center gap-1 rounded-lg border border-[var(--color-border)] p-2 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] cursor-pointer"
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
-        {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+        {collapsed ? (
+          <ChevronsRight className="h-4 w-4 rtl:rotate-180" />
+        ) : (
+          <ChevronsLeft className="h-4 w-4 rtl:rotate-180" />
+        )}
       </button>
     </aside>
   )

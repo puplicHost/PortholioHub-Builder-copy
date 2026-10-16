@@ -2,7 +2,7 @@
 'use client'
 
 import { useState } from 'react'
-import { GripVertical, Eye, EyeOff, ChevronDown, ChevronRight } from 'lucide-react'
+import { GripVertical, Eye, EyeOff, ChevronDown, ChevronRight, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 
 export function SectionManager({ profile, updateProfile }: { profile: any, updateProfile: any }) {
@@ -24,8 +24,31 @@ export function SectionManager({ profile, updateProfile }: { profile: any, updat
     })
   }
 
-  const moveSection = (index: number, direction: -1 | 1) => {
-    if (index + direction < 0 || index + direction >= sections.length) return
+  const addSection = (sectionType: 'gallery' | 'files' | 'contact' | 'custom') => {
+    updateProfile((p: any) => {
+      const newPages = [...p.pages]
+      const sections = [...(newPages[0]?.sections || [])]
+      const maxOrder = sections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0)
+      // Content shape matches its Zod schema (strict objects reject extras).
+      const content =
+        sectionType === 'custom'
+          ? { title: { en: '', ar: '' }, paragraphs: [] }
+          : sectionType === 'contact'
+            ? { title: { en: '', ar: '' }, links: [] }
+            : { title: { en: '', ar: '' }, items: [] };
+      sections.push({
+        id: `new-${Date.now()}`,
+        sectionType,
+        sectionOrder: maxOrder + 1,
+        content,
+        settings: { isVisible: true },
+      })
+      newPages[0] = { ...newPages[0], sections }
+      return { ...p, pages: newPages }
+    })
+  }
+
+  const moveSection = (index: number, direction: -1 | 1) => {    if (index + direction < 0 || index + direction >= sections.length) return
     updateProfile((p: any) => {
       const newPages = [...p.pages]
       const newSections = [...newPages[0].sections]
@@ -109,7 +132,7 @@ export function SectionManager({ profile, updateProfile }: { profile: any, updat
           </>
         )}
 
-        {(section.sectionType === 'projects' || section.sectionType === 'contact' || section.sectionType === 'skills' || section.sectionType === 'services' || section.sectionType === 'testimonials') && (
+        {(section.sectionType === 'projects' || section.sectionType === 'contact' || section.sectionType === 'skills' || section.sectionType === 'services' || section.sectionType === 'testimonials' || section.sectionType === 'gallery' || section.sectionType === 'files') && (
           <>
             {showEn && <div>
               <label className="text-[var(--color-text-secondary)]">Section Title (EN)</label>
@@ -170,6 +193,35 @@ export function SectionManager({ profile, updateProfile }: { profile: any, updat
             {expandedSection === section.id && renderContentFields(section)}
           </div>
         ))}
+      </div>
+
+      <div className="flex gap-2 pt-1">
+        <button
+          onClick={() => addSection('gallery')}
+          className="flex-1 flex items-center justify-center gap-1 rounded-lg border border-dashed border-[var(--color-border)] p-2 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] transition-colors cursor-pointer"
+        >
+          <Plus className="h-3.5 w-3.5" /> Gallery
+        </button>
+        <button
+          onClick={() => addSection('files')}
+          className="flex-1 flex items-center justify-center gap-1 rounded-lg border border-dashed border-[var(--color-border)] p-2 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] transition-colors cursor-pointer"
+        >
+          <Plus className="h-3.5 w-3.5" /> Files
+        </button>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => addSection('contact')}
+          className="flex-1 flex items-center justify-center gap-1 rounded-lg border border-dashed border-[var(--color-border)] p-2 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] transition-colors cursor-pointer"
+        >
+          <Plus className="h-3.5 w-3.5" /> Contact
+        </button>
+        <button
+          onClick={() => addSection('custom')}
+          className="flex-1 flex items-center justify-center gap-1 rounded-lg border border-dashed border-[var(--color-border)] p-2 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] transition-colors cursor-pointer"
+        >
+          <Plus className="h-3.5 w-3.5" /> Custom
+        </button>
       </div>
     </div>
   )

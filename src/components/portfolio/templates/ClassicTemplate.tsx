@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { trackPortfolioEvent } from '@/components/portfolio/TrackBeacon'
 import { TestimonialsSlider } from '@/components/portfolio/TestimonialsSlider'
-import { Moon, Sun, Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin } from 'lucide-react'
+import { Moon, Sun, Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin, FileText } from 'lucide-react'
 
 // Helper to lighten/darken a hex color
 function adjustColor(color: string, amount: number) {
@@ -781,6 +781,135 @@ export function ClassicTemplate({ profile }: { profile: any }) {
             </div>
           </section>
         )
+      case 'gallery': {
+        const galleryItems = Array.isArray(c.items) ? c.items : []
+        if (galleryItems.length === 0) return null
+        return (
+          <section id="gallery" key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+              <h2 className="text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+                {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
+                {c.title?.[lang] || (lang === 'ar' ? 'معرض الأعمال' : 'Gallery')}
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {galleryItems.map((item: any, i: number) => {
+                  const src = item.imageUrl || item.url || ''
+                  if (!src) return null
+                  return (
+                    <figure key={item.id || i} className="group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm">
+                      <img src={src} alt={item.caption || ''} loading="lazy" className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500" />
+                      {item.caption ? (
+                        <figcaption className="px-4 py-3 text-sm text-[var(--color-text-muted)] break-words">{item.caption}</figcaption>
+                      ) : null}
+                    </figure>
+                  )
+                })}
+              </div>
+            </div>
+          </section>
+        )
+      }
+      case 'files': {
+        const fileItems = Array.isArray(c.items) ? c.items.filter((f: any) => f && (f.url || f.externalUrl)) : []
+        if (fileItems.length === 0) return null
+        return (
+          <section id="files" key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+              <h2 className="text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+                {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <FileText className="h-7 w-7 text-[var(--color-primary)]" />}
+                {c.title?.[lang] || (lang === 'ar' ? 'ملفات للتحميل' : 'Downloads')}
+              </h2>
+              <div className="flex flex-col gap-3 max-w-[800px]">
+                {fileItems.map((file: any, i: number) => {
+                  const href = file.url || file.externalUrl
+                  return (
+                    <a
+                      key={file.id || i}
+                      href={href}
+                      download
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between gap-4 rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-4 shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <span className="text-sm font-medium text-[var(--color-text)] break-words">
+                        {file.label || file.title || href}
+                      </span>
+                      <span className="shrink-0 rounded-full bg-[var(--color-primary)]/10 px-4 py-1.5 text-xs font-bold text-[var(--color-primary)]">
+                        {lang === 'ar' ? 'تحميل' : 'Download'}
+                      </span>
+                    </a>
+                  )
+                })}
+              </div>
+            </div>
+          </section>
+        )
+      }
+      case 'contact': {
+        // Own anchor (footer keeps #contact for back-compat); nav maps
+        // contact-type sections here, footer stays untouched.
+        const contactLinks = Array.isArray(c.links) ? c.links : []
+        if (contactLinks.length === 0 && !c.title?.[lang] && !c.headline?.[lang]) return null
+        return (
+          <section id="contact-info" key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+              <h2 className="text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+                {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Mail className="h-7 w-7 text-[var(--color-primary)]" />}
+                {c.title?.[lang] || c.headline?.[lang] || (lang === 'ar' ? 'تواصل معي' : 'Contact')}
+              </h2>
+              <div className="flex flex-col gap-3 max-w-[800px]">
+                {contactLinks.map((link: any, i: number) => {
+                  const platform = link.platform || link.type || link.label || 'globe'
+                  const rawUrl = link.url || link.value || ''
+                  if (!rawUrl) return null
+                  const href = rawUrl.startsWith('http') || rawUrl.startsWith('mailto:') || rawUrl.startsWith('tel:')
+                    ? rawUrl
+                    : rawUrl.includes('@')
+                      ? `mailto:${rawUrl}`
+                      : `https://${rawUrl}`
+                  return (
+                    <a
+                      key={link.id || i}
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-4 rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-4 shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <span className="h-10 w-10 shrink-0 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] flex items-center justify-center">
+                        {getSocialIcon(platform) || getContactIcon(platform)}
+                      </span>
+                      <span className="text-sm font-medium text-[var(--color-text)] break-words">
+                        {link.label || link.value || href}
+                      </span>
+                    </a>
+                  )
+                })}
+              </div>
+            </div>
+          </section>
+        )
+      }
+      case 'custom': {
+        const paragraphs = Array.isArray(c.paragraphs) ? c.paragraphs.filter((p: any) => typeof p === 'string' && p.trim() !== '') : []
+        if (!c.title?.[lang] && paragraphs.length === 0) return null
+        return (
+          <section id={`custom-${section.id}`} key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+              {c.title?.[lang] ? (
+                <h2 className="text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+                  {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
+                  {c.title[lang]}
+                </h2>
+              ) : null}
+              <div className="max-w-[800px] space-y-4 text-[var(--color-text-muted)] leading-[1.75] text-lg break-words">
+                {paragraphs.map((p: string, i: number) => (
+                  <p key={i} className="whitespace-pre-wrap">{p}</p>
+                ))}
+              </div>
+            </div>
+          </section>
+        )
+      }
       case 'footer':
         const footerHeadline = c.headline?.[lang] || (typeof c.headline === 'string' ? c.headline : (lang === 'ar' ? 'تواصل معي' : 'Work with me'))
         const footerSubheading = c.subheading?.[lang] || (typeof c.subheading === 'string' ? c.subheading : '')
@@ -891,7 +1020,11 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                     const label = s.sectionType === 'footer'
                       ? (lang === 'ar' ? 'تواصل معي' : 'Contact')
                       : (s.content?.title?.[lang] || s.sectionType)
-                    const targetId = s.sectionType === 'footer' ? 'contact' : s.sectionType
+                    const targetId = s.sectionType === 'footer'
+                      ? 'contact'
+                      : s.sectionType === 'contact'
+                        ? 'contact-info'
+                        : s.sectionType
                     return (
                       <li key={s.id}>
                         <a href={`#${targetId}`} className="capitalize text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors relative group font-medium">
