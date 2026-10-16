@@ -31,6 +31,25 @@ const getPublicProject = cache(async (username: string, slug: string) => {
   const owner = projectPage.profile as unknown as { userId: string; status?: string | null; adminHidden?: boolean | null }
   const sub = await getSubscriptionState(owner.userId)
   if (!isPortfolioVisible(owner, sub.state)) return null
+  // Unlinked pages (no project card points at this slug) are not public.
+  // Links live on cards: page-level content.linkedPageSlug (linkType 'page')
+  // or page_link items whose externalUrl is the slug. Temp slugs can never
+  // resolve publicly, so they never count as links.
+  const isRealSlug = (s: unknown) =>
+    typeof s === 'string' && s !== '' && !s.startsWith('new-') && !s.startsWith('project-new-')
+  const siblings = await prisma.projectPage.findMany({
+    where: { profile: { username } },
+    select: {
+      content: true,
+      items: { select: { type: true, externalUrl: true } },
+    },
+  })
+  const referenced = siblings.some((pg) => {
+    const content = (pg.content as any) || {}
+    if (content.linkType === 'page' && content.linkedPageSlug === slug && isRealSlug(slug)) return true
+    return (pg.items || []).some((item) => item.type === 'page_link' && item.externalUrl === slug)
+  })
+  if (!referenced) return null
   return projectPage
 })
 

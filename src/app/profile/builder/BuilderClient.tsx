@@ -9,7 +9,7 @@ import {
   Palette, Layout, FileText, Menu, X, Sliders, Plus, Trash2,
   Trophy, Star, Users, Briefcase, Heart, Zap, Target, Award,
   Clock, TrendingUp, Code, Layers, Rocket, PenTool, Sun, Moon,
-  ArrowUp, BarChart3, LogOut, Languages, User
+  ArrowUp, BarChart3, LogOut, Languages, User, AlertTriangle
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -1006,6 +1006,26 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
     return projectPages.find((p: any) => p.id === activePage) || null
   }, [projectPages, activePage])
 
+  // Slugs referenced by some project card (page-level linkType='page' or a
+  // page_link item). A page no card points at is "unlinked": it stays
+  // editable here but is hidden from public navigation until linked.
+  const isRealSlug = (s: any) =>
+    typeof s === 'string' && s !== '' && !s.startsWith('new-') && !s.startsWith('project-new-')
+  const linkedPageSlugs = useMemo(() => {
+    const refs = new Set<string>()
+    for (const pg of profile.projectPages || []) {
+      const linkType = (pg as any).linkType || (pg as any).content?.linkType
+      const linked = (pg as any).linkedPageSlug || (pg as any).content?.linkedPageSlug
+      if (linkType === 'page' && isRealSlug(linked)) refs.add(linked)
+      for (const item of (pg as any).items || []) {
+        const itemLinkType = item.linkType || (item.type === 'page_link' ? 'page' : 'none')
+        const itemSlug = item.linkedPageSlug || (item.type === 'page_link' ? item.externalUrl : null)
+        if (itemLinkType === 'page' && isRealSlug(itemSlug)) refs.add(itemSlug)
+      }
+    }
+    return refs
+  }, [profile.projectPages])
+
   const handleCreateProjectPage = async () => {
     setCreatingProjectPage(true)
     try {
@@ -1091,6 +1111,7 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
           setRightSheetOpen(true)
         }
         toast('success', 'Project page created')
+        toast('warning', 'Link this page to a project so it appears in your portfolio')
       } else {
         console.error('createProjectPage failed:', res.error)
         toast('error', res.error || 'Failed to create project page')
@@ -1120,6 +1141,32 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
       projectPages: p.projectPages.map((pp: any) =>
         pp.id === pageId ? { ...pp, [field]: value } : pp
       )
+    }))
+  }
+
+  // Point a project card at a page (card → page by slug). Client state only
+  // — persisted on the next manual save like every other builder edit.
+  const linkCardToPage = (cardId: string, pageSlug: string) => {
+    updateProfile((p: any) => ({
+      ...p,
+      projectPages: (p.projectPages || []).map((proj: any) => {
+        if (proj.id !== cardId) return proj
+        const content = { ...((proj as any).content || {}), linkType: 'page', linkedPageSlug: pageSlug }
+        return { ...proj, linkType: 'page', linkedPageSlug: pageSlug, content }
+      }),
+    }))
+  }
+
+  // Remove every card link pointing at the given page slug.
+  const unlinkPageFromCards = (pageSlug: string) => {
+    updateProfile((p: any) => ({
+      ...p,
+      projectPages: (p.projectPages || []).map((proj: any) => {
+        const linked = (proj as any).linkedPageSlug || (proj as any).content?.linkedPageSlug
+        if (linked !== pageSlug) return proj
+        const content = { ...((proj as any).content || {}), linkType: 'none', linkedPageSlug: '' }
+        return { ...proj, linkType: 'none', linkedPageSlug: '', content }
+      }),
     }))
   }
 
@@ -1179,6 +1226,37 @@ export function BuilderClient({ initialProfile }: { initialProfile: any }) {
                     className="h-[44px] min-h-[44px] text-[15px] px-[12px] py-[10px] rounded-l-none flex-1"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Link to Project</label>
+                {(() => {
+                  const linkingCard = (projectPages || []).find((proj: any) => {
+                    const linked = (proj as any).linkedPageSlug || (proj as any).content?.linkedPageSlug
+                    return linked === pp.slug
+                  })
+                  return (
+                    <>
+                      <select
+                        value={linkingCard ? linkingCard.id : ''}
+                        onChange={(e) => {
+                          if (e.target.value) linkCardToPage(e.target.value, pp.slug)
+                          else unlinkPageFromCards(pp.slug)
+                        }}
+                        className="w-full min-h-[44px] h-[44px] rounded-lg border border-[var(--color-border)] bg-transparent px-[12px] text-[15px] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                      >
+                        <option value="">Not linked to a project</option>
+                        {(projectPages || []).map((proj: any) => (
+                          <option key={proj.id} value={proj.id}>
+                            {proj.title || proj.slug || 'Untitled'}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-[var(--color-text-muted)] mt-1.5">
+                        Pages with no linked project are hidden from public navigation until linked.
+                      </p>
+                    </>
+                  )
+                })()}
               </div>
               <div>
                 <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Back Button Label</label>
@@ -2893,6 +2971,15 @@ case 'skills':
                       {pp.isPublished && (
                         <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 mr-1">
                           Live
+                        </span>
+                      )}
+                      {!linkedPageSlugs.has(pp.slug) && (
+                        <span
+                          title="Not linked to a project — hidden from public navigation until linked"
+                          className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-400 mr-1"
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          Not linked
                         </span>
                       )}
                       <button

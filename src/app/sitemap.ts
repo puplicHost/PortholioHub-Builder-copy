@@ -38,10 +38,36 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       },
       orderBy: { updatedAt: 'desc' },
       take: 500,
-      select: { slug: true, updatedAt: true, profile: { select: { username: true } } },
+      select: {
+        slug: true,
+        updatedAt: true,
+        content: true,
+        profile: { select: { username: true } },
+        items: { select: { type: true, externalUrl: true } },
+      },
     })
 
+    // Only pages some project card links to (same rule as the public
+    // project route: page-level linkType 'page' or a page_link item).
+    // Sibling rows of other profiles are not loaded here, so linkedness is
+    // decided per profile below.
+    const byProfile = new Map<string, typeof projects>()
     for (const project of projects) {
+      const list = byProfile.get(project.profile.username) || []
+      list.push(project)
+      byProfile.set(project.profile.username, list)
+    }
+    const isRealSlug = (s: unknown) =>
+      typeof s === 'string' && s !== '' && !s.startsWith('new-') && !s.startsWith('project-new-')
+    const isReferenced = (pages: typeof projects, slug: string) =>
+      pages.some((pg) => {
+        const content = (pg.content as any) || {}
+        if (content.linkType === 'page' && content.linkedPageSlug === slug && isRealSlug(slug)) return true
+        return (pg.items || []).some((item) => item.type === 'page_link' && item.externalUrl === slug)
+      })
+
+    for (const project of projects) {
+      if (!isReferenced(byProfile.get(project.profile.username) || [], project.slug)) continue
       entries.push({
         url: `${baseUrl}/u/${project.profile.username}/projects/${project.slug}`,
         changeFrequency: 'weekly',
