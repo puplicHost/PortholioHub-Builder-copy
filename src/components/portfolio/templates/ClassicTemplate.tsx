@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { trackPortfolioEvent } from '@/components/portfolio/TrackBeacon'
 import { TestimonialsSlider } from '@/components/portfolio/TestimonialsSlider'
-import { Moon, Sun, Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin, FileText } from 'lucide-react'
+import { Moon, Sun, Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin, FileText, Menu, X } from 'lucide-react'
 
 // Helper to lighten/darken a hex color
 function adjustColor(color: string, amount: number) {
@@ -47,6 +47,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
     setTheme(defaultColorMode)
   }
   const [isScrolled, setIsScrolled] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -220,31 +221,50 @@ export function ClassicTemplate({ profile }: { profile: any }) {
         const aboutStats = c.stats || []
         const bioVal = c.biography?.[lang] !== undefined ? c.biography[lang] : c.text?.[lang]
         const biography = bioVal !== undefined ? bioVal : (lang === 'ar' ? 'لا يوجد نص' : 'No about text provided.')
+        const aboutBg = theme === 'dark' ? 'var(--color-card)' : '#FAF7F2'
+        const aboutImage = profile.avatarUrl || c.imageUrl
         return (
-          <section id="about" key={section.id} className="py-[100px]" style={{ backgroundColor: sectionBg }}>
-            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <UserIcon className="text-[var(--color-primary)]" />}
-                {c.title?.[lang] || (lang === 'ar' ? 'نبذة عني' : 'About Me')}
-              </h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                <div className="text-[var(--color-text-muted)] leading-[1.75] whitespace-pre-wrap text-lg break-words">
-                  {biography}
-                </div>
-                {aboutStats.length > 0 && (
-                  <div className="grid grid-cols-2 gap-4">
-                    {aboutStats.map((stat: any, i: number) => (
-                      <div key={i} className="bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-transform duration-300 shadow-sm">
-                        <div className="flex justify-center mb-3">
-                          {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]') || <Trophy className="w-7 h-7 text-[var(--color-primary)]" />}
-                        </div>
-                        <div className="text-3xl font-bold text-[var(--color-primary)] mb-2">{stat.value}</div>
-                        <div className="text-sm text-[var(--color-text-muted)] font-medium">{stat.label}</div>
-                      </div>
-                    ))}
+          <section id="about" key={section.id} className="py-8 sm:py-16" style={{ backgroundColor: aboutBg }}>
+            <div className="max-w-[1200px] mx-auto px-4 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+              <div className="grid grid-cols-12 gap-3 sm:gap-8 items-start" dir="rtl">
+                {aboutImage ? (
+                  <div className="col-span-5 sm:col-span-5">
+                    <div className="overflow-hidden rounded-2xl shadow-sm border border-[var(--color-border)]/40 bg-[var(--color-bg)] aspect-[3/4]">
+                      <img
+                        src={aboutImage}
+                        alt={displayName}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
                   </div>
-                )}
+                ) : null}
+                <div className={`${aboutImage ? 'col-span-7 sm:col-span-7' : 'col-span-12'} flex flex-col justify-start text-right`}>
+                  <div className="flex items-center gap-1.5 mb-1.5 sm:mb-2 text-[#8c533c] dark:text-[#d48b70] text-[11px] sm:text-xs font-bold">
+                    <span className="w-3 sm:w-6 h-[1.5px] bg-current opacity-60 inline-block" />
+                    <span>{c.subtitle?.[lang] || (lang === 'ar' ? 'من نحن؟' : 'About Us')}</span>
+                    <span className="w-3 sm:w-6 h-[1.5px] bg-current opacity-60 inline-block" />
+                  </div>
+                  <h2 className="text-base sm:text-2xl md:text-3xl font-extrabold text-[var(--color-text)] tracking-tight mb-2 sm:mb-3 leading-tight sm:leading-snug">
+                    {c.heading?.[lang] || c.title?.[lang] || (lang === 'ar' ? 'نبذة عني' : 'About Me')}
+                  </h2>
+                  <p className="text-[var(--color-text-muted)] leading-[1.65] sm:leading-[1.8] text-[11px] sm:text-sm md:text-base font-normal text-justify whitespace-pre-wrap">
+                    {biography}
+                  </p>
+                </div>
               </div>
+              {aboutStats.length > 0 && (
+                <div className="grid grid-cols-2 gap-4 mt-8 sm:mt-10">
+                  {aboutStats.map((stat: any, i: number) => (
+                    <div key={i} className="bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-transform duration-300 shadow-sm">
+                      <div className="flex justify-center mb-3">
+                        {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]') || <Trophy className="w-7 h-7 text-[var(--color-primary)]" />}
+                      </div>
+                      <div className="text-3xl font-bold text-[var(--color-primary)] mb-2">{stat.value}</div>
+                      <div className="text-sm text-[var(--color-text-muted)] font-medium">{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
         )
@@ -998,13 +1018,23 @@ export function ClassicTemplate({ profile }: { profile: any }) {
         <div className="w-full min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] relative" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
           
           {/* Navigation Bar */}
-          <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${isScrolled ? 'py-3 shadow-sm' : 'py-5'}`} style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 85%, transparent)', backdropFilter: 'blur(10px)' }}>
-            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 flex items-center justify-between">
-              <a href="#" className="flex items-center">
+          <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${isScrolled ? 'py-2.5 sm:py-3 shadow-md' : 'py-3 sm:py-5'}`} style={{ backgroundColor: isScrolled ? 'color-mix(in srgb, var(--color-bg) 90%, transparent)' : 'transparent', backdropFilter: isScrolled ? 'blur(10px)' : 'none' }}>
+            <div className="max-w-[1200px] mx-auto px-4 sm:px-12 flex items-center justify-between">
+              {/* Mobile hamburger button on the left (matches reference) */}
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden p-2 rounded-lg border border-white/20 bg-white/5 text-white hover:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Toggle menu"
+              >
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
+
+              <a href="#" className="flex items-center gap-3">
                 {appearance.logoUrl ? (
-                  <img src={appearance.logoUrl} alt="Logo" className="h-9 w-auto object-contain" />
+                  <img src={appearance.logoUrl} alt="Logo" className="h-8 sm:h-9 w-auto object-contain" />
                 ) : (
-                  <span className="text-2xl font-black text-[var(--color-primary)] tracking-tight">{initial}</span>
+                  <span className="text-xl sm:text-2xl font-black text-white tracking-tight">{initial}</span>
                 )}
               </a>
               <div className="flex items-center gap-6">
@@ -1027,9 +1057,9 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                         : s.sectionType
                     return (
                       <li key={s.id}>
-                        <a href={`#${targetId}`} className="capitalize text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors relative group font-medium">
+                        <a href={`#${targetId}`} className="capitalize text-white/90 hover:text-white transition-colors relative group font-medium">
                           {label}
-                          <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--color-primary)] transition-all duration-300 group-hover:w-full"></span>
+                          <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-white transition-all duration-300 group-hover:w-full"></span>
                         </a>
                       </li>
                     )
@@ -1037,7 +1067,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                 </ul>
                 <button
                   onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                  className="h-9 w-9 flex items-center justify-center rounded-full bg-[var(--color-card)] border border-[var(--color-border)] shadow-sm hover:scale-110 transition-transform text-[var(--color-text)] cursor-pointer"
+                  className="h-9 w-9 flex items-center justify-center rounded-full bg-white/10 border border-white/20 shadow-sm hover:scale-110 transition-transform text-white cursor-pointer"
                   title="Toggle theme"
                 >
                   {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -1045,7 +1075,7 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                 {defaultLangMode === 'both' && (
                   <button
                     onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-                    className="h-9 px-3 flex items-center justify-center rounded-full bg-[var(--color-card)] border border-[var(--color-border)] shadow-sm hover:scale-110 transition-transform text-[var(--color-text)] text-xs font-bold uppercase cursor-pointer"
+                    className="h-9 px-3 flex items-center justify-center rounded-full bg-white/10 border border-white/20 shadow-sm hover:scale-110 transition-transform text-white text-xs font-bold uppercase cursor-pointer"
                     title="Switch language"
                   >
                     {lang === 'en' ? 'AR' : 'EN'}
@@ -1053,6 +1083,33 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                 )}
               </div>
             </div>
+
+            {/* Mobile Dropdown Menu */}
+            {mobileMenuOpen && (
+              <div className="md:hidden border-t border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md px-6 py-4 shadow-xl space-y-2">
+                {visibleSections.map((s: any) => {
+                  if (s.sectionType === 'hero') return null
+                  const label = s.sectionType === 'footer'
+                    ? (lang === 'ar' ? 'تواصل معي' : 'Contact')
+                    : (s.content?.title?.[lang] || s.sectionType)
+                  const targetId = s.sectionType === 'footer'
+                    ? 'contact'
+                    : s.sectionType === 'contact'
+                      ? 'contact-info'
+                      : s.sectionType
+                  return (
+                    <a
+                      key={s.id}
+                      href={`#${targetId}`}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="block py-2 text-sm text-[var(--color-text)] hover:text-[var(--color-primary)] font-medium"
+                    >
+                      {label}
+                    </a>
+                  )
+                })}
+              </div>
+            )}
           </nav>
 
           {/* Floating Action Buttons */}
@@ -1091,14 +1148,13 @@ export function ClassicTemplate({ profile }: { profile: any }) {
               return (
                 <section 
                   id="hero" 
-                  className="relative flex items-center justify-center min-h-[90vh] overflow-hidden"
+                  className="relative flex items-center justify-center min-h-[50vh] sm:min-h-[55vh] overflow-hidden"
                   style={{ 
                     background: bgImage
                       ? `url("${bgImage}") center/cover no-repeat`
                       : 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
-                    clipPath: 'polygon(0 0, 100% 0, 100% 85%, 0 100%)',
-                    paddingTop: '120px',
-                    paddingBottom: '60px'
+                    paddingTop: '80px',
+                    paddingBottom: '35px'
                   }}
                 >
                   {bgImage && (
@@ -1107,34 +1163,26 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                       style={{ opacity: overlayOpacity }}
                     />
                   )}
-                  <div className="max-w-[1200px] mx-auto px-6 sm:px-12 flex flex-col items-center text-center z-10 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative">
-                    {profile.avatarUrl ? (
-                      <div className="w-[200px] h-[200px] rounded-full overflow-hidden border-[5px] border-white shadow-2xl mb-8 hover:scale-105 transition-transform duration-500 bg-white">
-                        <img src={profile.avatarUrl} alt={displayName} className="w-full h-full object-cover" />
-                      </div>
-                    ) : (
-                      <div className="w-[200px] h-[200px] rounded-full overflow-hidden border-[5px] border-white shadow-2xl mb-8 hover:scale-105 transition-transform duration-500 bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-5xl font-black select-none">
-                        {initial}
-                      </div>
-                    )}
-                    <h1 className="text-[3rem] font-bold text-white mb-4" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+                  <div className="max-w-[1200px] mx-auto px-5 sm:px-12 flex flex-col items-center text-center z-10 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative">
+                    <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold text-white mb-2.5 sm:mb-4 text-center leading-snug whitespace-pre-line" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
                       {displayName}
                     </h1>
-                    <p className="text-[1.4rem] text-white/90 max-w-2xl leading-[1.6] break-words mb-10 font-medium">
+                    <p className="text-xs sm:text-sm md:text-base text-white/90 max-w-xl leading-relaxed mb-5 sm:mb-7 font-normal text-center">
                       {title || heroContent.subtitle?.[lang]}
                     </p>
-                    <div className="flex flex-wrap justify-center gap-4">
+                    <div className="flex flex-wrap justify-center items-center gap-2.5 sm:gap-4" dir="rtl">
                       <a 
                         href="#projects" 
-                        className="px-8 py-4 rounded-[25px] bg-white text-[var(--color-primary)] font-bold hover:-translate-y-[3px] transition-transform shadow-lg"
+                        className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-xs sm:text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-2 cursor-pointer"
                       >
-                        {lang === 'ar' ? 'شاهد أعمالي' : 'View My Work'}
+                        <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 rtl:rotate-180" />
+                        <span>{lang === 'ar' ? 'شاهد أعمالي' : 'View My Work'}</span>
                       </a>
                       <a 
                         href="#contact" 
-                        className="px-8 py-4 rounded-[25px] border-2 border-white text-white font-bold hover:bg-white/10 hover:-translate-y-[3px] transition-all"
+                        className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl border-2 border-white text-white font-bold text-xs sm:text-sm hover:bg-white/10 hover:-translate-y-0.5 transition-all cursor-pointer"
                       >
-                        {lang === 'ar' ? 'تواصل معي' : 'Contact Me'}
+                        <span>{lang === 'ar' ? 'تواصل معي' : 'Contact Me'}</span>
                       </a>
                     </div>
                   </div>
