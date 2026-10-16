@@ -339,27 +339,32 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
                 {c.heading?.[lang] || c.title?.[lang] || (lang === 'ar' ? 'المهارات' : 'Skills & Expertise')}
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-8">
                 {categories.map((cat, i) => (
-                  <div key={i} className="rounded-[15px] border border-[var(--color-border)] p-[30px] bg-[var(--color-card)] shadow-sm">
-                    <h3 className="text-xl break-words font-bold tracking-tight mb-6 text-[var(--color-text)] flex items-center gap-2">
-                      {cat.icon} {cat.title}
-                    </h3>
-                    <div className="space-y-6">
+                  <div key={i} className="group relative overflow-hidden rounded-[15px] border border-[var(--color-border)] p-4 sm:p-[30px] bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                    <span className="absolute top-0 left-0 right-0 h-1" style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))' }} />
+                    <div className="flex items-center gap-2.5 sm:gap-3 mb-4 sm:mb-6">
+                      <span className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm [&>*]:!text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
+                        {cat.icon}
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="text-base sm:text-xl break-words font-bold tracking-tight text-[var(--color-text)] leading-tight">
+                          {cat.title}
+                        </h3>
+                        <p className="text-[11px] sm:text-xs font-semibold text-[var(--color-text-muted)]">
+                          {cat.items.length} {cat.items.length === 1 ? (lang === 'ar' ? 'مهارة' : 'skill') : (lang === 'ar' ? 'مهارات' : 'skills')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
                       {cat.items.map((skill: { name: string; percentage: number }, j: number) => (
-                        <div key={j}>
-                          <div className="flex justify-between text-sm font-medium text-[var(--color-text)] mb-2 gap-4">
-                            <span className="truncate">{skill.name}</span>
-                            <span className="text-[var(--color-text-muted)] shrink-0">{skill.percentage}%</span>
-                          </div>
-                          <div className="h-2 w-full bg-[var(--color-border)] rounded-full overflow-hidden">
-                            <div 
-                              className="skill-bar h-full rounded-full w-0 transition-all duration-1000 ease-out" 
-                              style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))' }}
-                              data-width={`${skill.percentage}%`}
-                            />
-                          </div>
-                        </div>
+                        <span
+                          key={j}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-xs sm:text-sm font-medium text-[var(--color-text)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] hover:-translate-y-0.5 transition-all"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primary)' }} />
+                          {skill.name}
+                        </span>
                       ))}
                     </div>
                   </div>
@@ -579,27 +584,30 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                 )}
               </div>
               {serviceItems.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-8">
                   {serviceItems.map((service: any, i: number) => (
-                    <div key={i} className="rounded-xl border border-[var(--color-border)] p-7 bg-[var(--color-card)] shadow-sm hover:-translate-y-1 transition-transform duration-300">
-                      <div className="w-10 h-10 rounded-lg flex items-center justify-center mb-5" style={{ backgroundColor: 'var(--color-primary)' }}>
+                    <div key={i} className="group relative overflow-hidden rounded-xl border border-[var(--color-border)] p-4 sm:p-7 bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                      <span className="absolute top-0 left-0 right-0 h-1" style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))' }} />
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center mb-4 sm:mb-5 shadow-sm [&>*]:!text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
                         {getIcon(service.icon, 'w-5 h-5 text-white') || <Code className="w-5 h-5 text-white" />}
                       </div>
-                      <h3 className="text-xl break-words font-bold mb-3 text-[var(--color-text)] tracking-tight">{service.title}</h3>
-                      <p className="text-[var(--color-text-muted)] text-[15px] leading-relaxed break-words mb-5">{service.description}</p>
+                      <h3 className="text-base sm:text-xl break-words font-bold mb-2 sm:mb-3 text-[var(--color-text)] tracking-tight">{service.title}</h3>
+                      {service.description ? (
+                        <p className="text-[var(--color-text-muted)] text-[13px] sm:text-[15px] leading-relaxed break-words mb-4 sm:mb-5 line-clamp-3">{service.description}</p>
+                      ) : null}
                       {service.features && service.features.length > 0 && (
-                        <div>
-                          <p className="text-xs font-bold tracking-[0.15em] uppercase mb-3" style={{ color: 'var(--color-primary)' }}>
-                            Features
-                          </p>
-                          <ul className="space-y-2">
-                            {service.features.map((feature: string, fi: number) => (
-                              <li key={fi} className="flex items-start gap-2.5 text-sm text-[var(--color-text-muted)] font-medium">
-                                <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: 'var(--color-primary)' }} />
-                                <div className="flex-1 min-w-0 break-words">{feature}</div>
-                              </li>
-                            ))}
-                          </ul>
+                        <div className="flex flex-wrap gap-1.5">
+                          {service.features.slice(0, 4).map((feature: string, fi: number) => (
+                            <span key={fi} className="inline-flex items-center gap-1 rounded-md bg-[var(--color-primary)]/10 px-2 py-1 text-[11px] sm:text-xs font-semibold break-words" style={{ color: 'var(--color-primary)' }}>
+                              <CheckCircle className="w-3 h-3 shrink-0" />
+                              {feature}
+                            </span>
+                          ))}
+                          {service.features.length > 4 && (
+                            <span className="inline-flex items-center px-2 py-1 text-[11px] sm:text-xs font-semibold text-[var(--color-text-muted)]">
+                              +{service.features.length - 4}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -743,21 +751,21 @@ export function ClassicTemplate({ profile }: { profile: any }) {
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-8">
                   {projects.map((proj: any) => (
                     <div key={proj.id} className="group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col">
                       {proj.coverImage ? (
-                        <div className="h-[200px] w-full overflow-hidden bg-[var(--color-bg)] shrink-0">
+                        <div className="h-[120px] sm:h-[200px] w-full overflow-hidden bg-[var(--color-bg)] shrink-0">
                           <img src={proj.coverImage} alt={proj.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                         </div>
                       ) : (
-                        <div className="h-[200px] w-full bg-[var(--color-bg)] flex items-center justify-center border-b border-[var(--color-border)]">
-                          <Code className="h-12 w-12 text-[var(--color-border)]" />
+                        <div className="h-[120px] sm:h-[200px] w-full bg-[var(--color-bg)] flex items-center justify-center border-b border-[var(--color-border)]">
+                          <Code className="h-8 w-8 sm:h-12 sm:w-12 text-[var(--color-border)]" />
                         </div>
                       )}
-                        <div className="p-6 flex flex-col flex-1 min-w-0">
-                          <h3 className="text-xl break-words font-bold tracking-tight text-[var(--color-text)] mb-3">{proj.title}</h3>
-                          {proj.description && <p className="text-[var(--color-text-muted)] text-[15px] leading-relaxed break-words mb-4 line-clamp-3">{proj.description}</p>}
+                        <div className="p-4 sm:p-6 flex flex-col flex-1 min-w-0">
+                          <h3 className="text-base sm:text-xl break-words font-bold tracking-tight text-[var(--color-text)] mb-2 sm:mb-3">{proj.title}</h3>
+                          {proj.description && <p className="text-[var(--color-text-muted)] text-[13px] sm:text-[15px] leading-relaxed break-words mb-3 sm:mb-4 line-clamp-3">{proj.description}</p>}
                           {proj.tags && proj.tags.length > 0 && (
                             <div className="flex flex-wrap gap-2 mb-6">
                               {proj.tags.map((tag: string, i: number) => (
