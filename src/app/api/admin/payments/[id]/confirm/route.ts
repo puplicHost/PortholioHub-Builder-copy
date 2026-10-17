@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import { requireAdminApi } from '@/lib/admin-guard'
 import { audit } from '@/lib/audit'
+import { notify } from '@/lib/notify'
+import { sendPushToAdmin } from '@/lib/send-push'
 
 // POST /api/admin/payments/:id/confirm { note? }
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -17,6 +19,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       subscription: {
         include: { plan: true },
       },
+      user: { select: { displayName: true, email: true } },
     },
   })
 
@@ -91,6 +94,40 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       subscriptionId: payment.subscriptionId,
     },
   })
+
+  // Notify admins + the paying user, and best-effort push to the admin topic.
+  try {
+    const who = payment.user?.displayName || payment.user?.email || 'مستخدم'
+    await notify({
+      toAdmins: true,
+      type: 'payment.confirmed',
+      title: { en: 'Payment confirmed', ar: 'دفعة مؤكدة' },
+      body: {
+        en: `${payment.amountEgp} EGP confirmed from ${who}.`,
+        ar: `${payment.amountEgp} جنيه من ${who}.`,
+      },
+      link: '/admin/payments',
+      dedupeKey: `payment.confirmed:${payment.id}`,
+    })
+    await notify({
+      toUserIds: [payment.userId],
+      type: 'payment.confirmed',
+      title: { en: 'Payment confirmed', ar: 'تم تأكيد دفعتك' },
+      body: {
+        en: `We confirmed your payment of ${payment.amountEgp} EGP.`,
+        ar: `تم تأكيد دفعتك بمبلغ ${payment.amountEgp} جنيه.`,
+      },
+      link: '/profile/subscription',
+      dedupeKey: `payment.confirmed.user:${payment.id}`,
+    })
+  } catch (err) {
+    console.error('[admin/payments/confirm] notify failed:', err)
+  }
+
+  void sendPushToAdmin(
+    'دفعة مؤكدة',
+    `${payment.amountEgp} جنيه من ${payment.user?.displayName || payment.user?.email || 'مستخدم'}`,
+  )
 
   return Response.json({ ok: true, payment: updatedPayment })
 }

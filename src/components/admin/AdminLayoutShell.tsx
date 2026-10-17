@@ -22,6 +22,7 @@ import {
   Moon,
 } from 'lucide-react'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { AdminFcmRegistrar } from './AdminFcmRegistrar'
 
 export interface NavItemDef {
   href: string
@@ -106,6 +107,7 @@ export function AdminLayoutShell({
 
   return (
     <div className="flex min-h-screen bg-[var(--color-page)] text-[var(--color-text-primary)]">
+      <AdminFcmRegistrar />
       {/* Desktop Sidebar (hidden on mobile, visible on md+) */}
       <aside
         suppressHydrationWarning

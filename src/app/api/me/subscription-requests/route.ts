@@ -52,6 +52,27 @@ export async function POST(req: Request) {
     return Response.json({ code: 'INTERNAL_ERROR', message: 'Could not create request, try again' }, { status: 500 })
   }
 
+  // Notify active admins that a new subscription request is awaiting review.
+  try {
+    const { notify } = await import('@/lib/notify')
+    const who = user.displayName || user.email
+    await notify({
+      toAdmins: true,
+      type: 'subscription.request',
+      title: { en: 'New subscription request', ar: 'طلب اشتراك جديد' },
+      body: {
+        en: `${who} requested a subscription.`,
+        ar: `${who} يطلب اشتراكاً.`,
+      },
+      link: '/admin/requests',
+      dedupeKey: `subscription.request:${request.id}`,
+    })
+    const { sendPushToAdmin } = await import('@/lib/send-push')
+    void sendPushToAdmin('طلب اشتراك جديد', `${who} يطلب اشتراكاً`)
+  } catch (err) {
+    console.error('[me/subscription-requests] notify failed:', err)
+  }
+
   const whatsappNumber = await getPlatformWhatsapp()
   const planName = typeof plan.name === 'string' ? plan.name : plan.id
   const whatsappUrl = buildWhatsappUrl(

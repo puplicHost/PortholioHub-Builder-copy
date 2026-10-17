@@ -89,6 +89,8 @@ export async function POST(req: Request) {
         link: `/admin/users/${user.id}`,
         dedupeKey: `user.registered:${user.id}`,
       })
+      const { sendPushToAdmin } = await import('@/lib/send-push')
+      void sendPushToAdmin('مستخدم جديد', `${user.displayName || user.email} سجل للتو`)
     } catch (err) {
       console.error('[auth/register] notify failed:', err)
     }

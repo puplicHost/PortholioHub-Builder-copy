@@ -468,6 +468,63 @@ const VALID_PROJECT_ITEM_TYPES = [
 // locked sections from preview + public output).
 const FREE_LOCK_TOAST = '🔒 هذه الميزة متاحة للمشتركين فقط · تواصل معنا للترقية'
 
+// Builder chrome strings, localised to the active UI language. Only the
+// builder's surrounding chrome (nav / tabs / status / publish) follows the UI
+// language; the portfolio canvas keeps its own language and direction.
+const BUILDER_LABELS = {
+  en: {
+    builderTitle: 'Portfolio Builder',
+    saveSaving: 'Saving...',
+    unsaved: 'Unsaved changes',
+    saved: 'Saved',
+    saveFailed: 'Save failed',
+    publish: 'Publish',
+    unpublish: 'Unpublish',
+    publishing: 'Publishing...',
+    unpublishing: 'Unpublishing...',
+    published: 'Published ✓',
+    unpublished: 'Unpublished ✓',
+    sections: 'Sections',
+    pages: 'Pages',
+    edit: 'Edit',
+    preview: 'Preview',
+    navigation: 'Navigation',
+    openSections: 'Open sections',
+    openEditor: 'Open editor',
+    viewPreview: 'View preview',
+    publishAria: 'Publish portfolio',
+    unpublishAria: 'Unpublish portfolio',
+  },
+  ar: {
+    builderTitle: 'منشئ البورتفوليو',
+    saveSaving: 'جارٍ الحفظ...',
+    unsaved: 'تغييرات غير محفوظة',
+    saved: 'تم الحفظ',
+    saveFailed: 'تعذّر الحفظ',
+    publish: 'نشر',
+    unpublish: 'إلغاء النشر',
+    publishing: 'جارٍ النشر...',
+    unpublishing: 'جارٍ إلغاء النشر...',
+    published: 'تم النشر ✓',
+    unpublished: 'تم إلغاء النشر ✓',
+    sections: 'الأقسام',
+    pages: 'الصفحات',
+    edit: 'تحرير',
+    preview: 'معاينة',
+    navigation: 'التنقل',
+    openSections: 'فتح الأقسام',
+    openEditor: 'فتح المحرر',
+    viewPreview: 'عرض المعاينة',
+    publishAria: 'نشر البورتفوليو',
+    unpublishAria: 'إلغاء نشر البورتفوليو',
+  },
+} as const
+
+type BuilderLabelKey = keyof (typeof BUILDER_LABELS)['en']
+type BuilderLabels = Record<BuilderLabelKey, string>
+
+const BUILDER_DARK_KEY = 'portfoliohub-builder-dark'
+
 function ensureValidProjectItemTypes(projectPages: any[]) {
   if (!projectPages) return []
   return projectPages.map((proj: any) => ({
@@ -604,6 +661,7 @@ export function BuilderClient({
 }) {
   const { toast } = useToast()
   const { lang, setLang } = useI18n()
+  const L: BuilderLabels = BUILDER_LABELS[lang === 'ar' ? 'ar' : 'en']
   const router = useRouter()
 
   // FREE plan = anything that is not an active/paid state. Locked features
@@ -677,13 +735,25 @@ export function BuilderClient({
   const [lastSaved, setLastSaved] = useState<Date | null>(new Date())
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false)
   const [rightSheetOpen, setRightSheetOpen] = useState(false)
-  const [builderDarkMode, setBuilderDarkMode] = useState(false)
+  const [builderDarkMode, setBuilderDarkMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      return window.localStorage.getItem(BUILDER_DARK_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [activePage, setActivePage] = useState<'home' | string>('home')
   const [creatingProjectPage, setCreatingProjectPage] = useState(false)
   // Mobile iframe preview reload key: bumped on save + via the manual
   // refresh button so the true-390px render stays in sync with edits.
   const [mobileRefreshKey, setMobileRefreshKey] = useState(0)
+  // Mobile publish button feedback: idle → busy (spinner) → done (✓) → idle.
+  const [publishState, setPublishState] = useState<
+    'idle' | 'publishing' | 'unpublishing' | 'published' | 'unpublished'
+  >('idle')
+  const publishResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [savedSnapshot, setSavedSnapshot] = useState(() => getProfileSnapshot(profile))
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -692,24 +762,24 @@ export function BuilderClient({
   const [conflict, setConflict] = useState<{ serverVersion: number } | null>(null)
   const backoffRef = useRef(0)
 
-  // Sync builder dark mode to <html> so CSS vars (`:root` / `.dark` /
-  // `[data-theme="dark"]`) and Tailwind `dark:` variants resolve from the
-  // correct element on both localhost and Vercel (production). The wrapper
-  // div keeps its own `dark` class for scoped preview styling.
+  // Builder dark mode is scoped to the builder wrapper (`dark` class +
+  // `[data-theme]` on `.builder-root`, which sets all CSS vars and enables the
+  // Tailwind `dark:` variant for its subtree). It is NOT written to <html>, so
+  // it can never leak into other routes or fight next-themes. The preference
+  // is persisted so it survives reloads.
   useEffect(() => {
     try {
-      const root = document.documentElement
-      if (builderDarkMode) {
-        root.classList.add('dark')
-        root.setAttribute('data-theme', 'dark')
-      } else {
-        root.classList.remove('dark')
-        root.setAttribute('data-theme', 'light')
-      }
+      window.localStorage.setItem(BUILDER_DARK_KEY, builderDarkMode ? '1' : '0')
     } catch {
-      // SSR / no DOM — ignore
+      // storage unavailable — ignore
     }
   }, [builderDarkMode])
+
+  useEffect(() => {
+    return () => {
+      if (publishResetTimer.current) clearTimeout(publishResetTimer.current)
+    }
+  }, [])
 
   const isDirty = useMemo(() => {
     return getProfileSnapshot(profile) !== savedSnapshot
@@ -812,25 +882,43 @@ export function BuilderClient({
   }
 
   const handlePublish = async () => {
-    if (saveStatus === 'saving') return
+    if (saveStatus === 'saving' || publishState === 'publishing' || publishState === 'unpublishing') return
+    if (publishResetTimer.current) {
+      clearTimeout(publishResetTimer.current)
+      publishResetTimer.current = null
+    }
+    const resetSoon = () => {
+      publishResetTimer.current = setTimeout(() => setPublishState('idle'), 3000)
+    }
     if (profile.status === 'PUBLISHED') {
+      setPublishState('unpublishing')
       const res = await unpublishProfile()
       if (res.success) {
         setProfile((p: any) => ({ ...p, status: 'DRAFT', version: (res as any).version ?? p.version }))
         toast('success', 'Unpublished. Your public page is now hidden.')
+        setPublishState('unpublished')
+        resetSoon()
       } else {
         toast('error', getFriendlyErrorMessage((res as any)?.code ?? (res as any).error ?? 'UNPUBLISH_FAILED', lang))
+        setPublishState('idle')
       }
       return
     }
+    setPublishState('publishing')
     const saved = await handleSaveChanges()
-    if (!saved) return
+    if (!saved) {
+      setPublishState('idle')
+      return
+    }
     const res = await publishProfile()
     if (res.success) {
       setProfile((p: any) => ({ ...p, status: 'PUBLISHED', version: (res as any).version ?? p.version }))
       toast('success', 'Published! Your portfolio is now live.')
+      setPublishState('published')
+      resetSoon()
     } else {
       toast('error', getFriendlyErrorMessage((res as any)?.code ?? (res as any).error ?? 'PUBLISH_FAILED', lang))
+      setPublishState('idle')
     }
   }
 
@@ -2632,6 +2720,20 @@ case 'skills':
     }
   }
 
+  const publishBusy = publishState === 'publishing' || publishState === 'unpublishing'
+  const publishDone = publishState === 'published' || publishState === 'unpublished'
+  const publishLabel = publishBusy
+    ? publishState === 'unpublishing'
+      ? L.unpublishing
+      : L.publishing
+    : publishDone
+      ? publishState === 'unpublished'
+        ? L.unpublished
+        : L.published
+      : profile.status === 'PUBLISHED'
+        ? L.unpublish
+        : L.publish
+
   return (
     <div className={`builder-root flex h-screen w-full max-w-[100vw] flex-col overflow-hidden overflow-x-hidden bg-[var(--color-page)] select-none ${builderDarkMode ? 'dark' : ''}`} data-theme={builderDarkMode ? 'dark' : 'light'}>
       {/* FREE plan upgrade banner — sticky at the very top for free users */}
@@ -2702,7 +2804,7 @@ case 'skills':
           <div className="h-3.5 w-px shrink-0 bg-[var(--color-border)]" />
           <div className="flex min-w-0 items-center gap-1.5">
             <h1 className="truncate text-xs sm:text-sm font-semibold text-[var(--color-text-primary)] tracking-tight">
-              Portfolio Builder
+              {L.builderTitle}
             </h1>
           </div>
         </div>
@@ -2730,22 +2832,22 @@ case 'skills':
             {saveStatus === 'saving' ? (
               <span className="inline-flex items-center gap-1 text-[var(--color-primary)]">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span className="text-[11px] font-medium">Saving...</span>
+                <span className="text-[11px] font-medium">{L.saveSaving}</span>
               </span>
             ) : isDirty ? (
               <span className="inline-flex items-center gap-1.5 text-[var(--color-text-muted)]">
                 <span className="h-2 w-2 rounded-full bg-amber-500" />
-                <span className="text-[11px] font-medium">Unsaved changes</span>
+                <span className="text-[11px] font-medium">{L.unsaved}</span>
               </span>
             ) : saveStatus === 'saved' ? (
               <span className="inline-flex items-center gap-1 text-[var(--color-success)]">
                 <CheckCircle className="h-3.5 w-3.5" />
-                <span className="text-[11px] font-medium">Saved</span>
+                <span className="text-[11px] font-medium">{L.saved}</span>
               </span>
             ) : saveStatus === 'error' ? (
               <span className="inline-flex items-center gap-1 text-[var(--color-danger)]">
                 <AlertCircle className="h-3.5 w-3.5" />
-                <span className="text-[11px] font-medium">Save failed</span>
+                <span className="text-[11px] font-medium">{L.saveFailed}</span>
               </span>
             ) : null}
           </div>
@@ -2861,7 +2963,7 @@ case 'skills':
             <div className="fixed inset-0 bg-black/50" onClick={() => setLeftDrawerOpen(false)} />
             <div className="relative w-72 max-w-[80vw] bg-[var(--color-surface-secondary)] shadow-2xl flex flex-col h-full z-10" role="dialog" aria-modal="true" aria-label="Sections and pages">
               <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)]">
-                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Navigation</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">{L.navigation}</span>
                 <button onClick={() => setLeftDrawerOpen(false)} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]" aria-label="Close navigation">
                   <X className="h-5 w-5" />
                 </button>
@@ -2954,7 +3056,7 @@ case 'skills':
       <nav
         className="md:hidden shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-2 z-30"
         style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
-        aria-label="Builder navigation"
+        aria-label={L.navigation}
       >
         <div className="grid grid-cols-4 gap-1">
           <button
@@ -2964,10 +3066,10 @@ case 'skills':
               setLeftDrawerOpen(true)
             }}
             className="flex min-h-[56px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
-            aria-label="Open sections"
+            aria-label={L.openSections}
           >
             <Layout className="h-5 w-5 shrink-0" />
-            <span>Sections</span>
+            <span>{L.sections}</span>
           </button>
           <button
             type="button"
@@ -2976,10 +3078,10 @@ case 'skills':
               setRightSheetOpen(true)
             }}
             className="flex min-h-[56px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
-            aria-label="Open editor"
+            aria-label={L.openEditor}
           >
             <Sliders className="h-5 w-5 shrink-0" />
-            <span>Edit</span>
+            <span>{L.edit}</span>
           </button>
           <button
             type="button"
@@ -2988,19 +3090,37 @@ case 'skills':
               setRightSheetOpen(false)
             }}
             className="flex min-h-[56px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
-            aria-label="View preview"
+            aria-label={L.viewPreview}
           >
             <Eye className="h-5 w-5 shrink-0" />
-            <span>Preview</span>
+            <span>{L.preview}</span>
           </button>
           <button
             type="button"
             onClick={handlePublish}
-            className="flex min-h-[56px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors cursor-pointer"
-            aria-label={profile.status === 'PUBLISHED' ? 'Unpublish portfolio' : 'Publish portfolio'}
+            disabled={publishBusy}
+            aria-busy={publishBusy}
+            className={`flex min-h-[56px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold transition-colors ${
+              publishDone
+                ? 'text-[var(--color-success)]'
+                : 'text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10'
+            } disabled:opacity-70 disabled:cursor-wait`}
+            aria-label={
+              publishBusy
+                ? publishLabel
+                : profile.status === 'PUBLISHED'
+                  ? L.unpublishAria
+                  : L.publishAria
+            }
           >
-            <Globe className="h-5 w-5 shrink-0" />
-            <span>{profile.status === 'PUBLISHED' ? 'Unpublish' : 'Publish'}</span>
+            {publishBusy ? (
+              <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+            ) : publishDone ? (
+              <CheckCircle className="h-5 w-5 shrink-0" />
+            ) : (
+              <Globe className="h-5 w-5 shrink-0" />
+            )}
+            <span>{publishLabel}</span>
           </button>
         </div>
       </nav>
@@ -3023,7 +3143,7 @@ case 'skills':
                     : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                 }`}
               >
-                Sections
+                {L.sections}
               </button>
               <button
                 onClick={() => {
@@ -3045,7 +3165,7 @@ case 'skills':
                 }`}
               >
                 {isFreePlan && <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />}
-                Pages
+                {L.pages}
               </button>
             </div>
           </div>

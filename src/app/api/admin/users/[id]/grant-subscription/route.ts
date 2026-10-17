@@ -1,8 +1,14 @@
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { requireAdminApi } from '@/lib/admin-guard'
 import { audit } from '@/lib/audit'
+import { getSetting } from '@/lib/settings'
+import { notify } from '@/lib/notify'
+import { sendPushToAdmin } from '@/lib/send-push'
 
-// POST /api/admin/users/:id/grant-subscription — manually grant active subscription
+// POST /api/admin/users/:id/grant-subscription — manually grant/renew an
+// active subscription. Records a CONFIRMED Payment linked to the subscription
+// (price derived from the plan) so manual renewals count toward revenue.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireAdminApi()
   if (!gate.ok) return gate.response
@@ -40,27 +46,71 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return Response.json({ code: 'PLAN_NOT_FOUND', message: 'Selected plan not found' }, { status: 404 })
   }
 
-  const startedAt = new Date()
+  // Derive the amount from the plan: annual plans (≈1 year) use the annual
+  // price when present, otherwise the base price. Monthly uses base price.
+  const amountEgp = numDays >= 300 ? (plan.priceEgpAnnual ?? plan.priceEgp) : plan.priceEgp
+
+  const now = new Date()
+  const starter = await prisma.subscription.findFirst({
+    where: { userId: id, canceledAt: null },
+    orderBy: { expiresAt: 'desc' },
+    select: { expiresAt: true },
+  })
+  const currentEnds = starter?.expiresAt ? new Date(starter.expiresAt).getTime() : 0
+  const startedAt = currentEnds > now.getTime() ? new Date(currentEnds) : now
   const expiresAt = new Date(startedAt.getTime() + numDays * 86400000)
 
-  const subscription = await prisma.subscription.create({
-    data: {
-      userId: id,
-      planId,
-      status: 'ACTIVE',
-      amountEgp: 0,
-      startedAt,
-      expiresAt,
-      planSnapshot: {
-        grantedByAdmin: true,
-        grantedByAdminId: gate.adminId,
-        note: note?.trim() || 'Manual administrative grant',
-        grantedAt: startedAt.toISOString(),
+  const graceDaysRaw = await getSetting('subscription.graceDays').catch(() => 7)
+  const graceDays =
+    typeof graceDaysRaw === 'number' && graceDaysRaw >= 1 && graceDaysRaw <= 60 ? graceDaysRaw : 7
+  const gracePeriodEndsAt = new Date(expiresAt.getTime() + graceDays * 86400000)
+
+  const { subscription, payment } = await prisma.$transaction(async (tx) => {
+    const subscription = await tx.subscription.create({
+      data: {
+        userId: id,
+        planId,
+        status: 'ACTIVE',
+        amountEgp,
+        startedAt,
+        expiresAt,
+        gracePeriodEndsAt,
+        createdBy: gate.adminId,
+        planSnapshot: {
+          grantedByAdmin: true,
+          grantedByAdminId: gate.adminId,
+          note: note?.trim() || 'Manual administrative grant',
+          grantedAt: now.toISOString(),
+        },
       },
-    },
-    include: {
-      plan: { select: { id: true, name: true } },
-    },
+      include: {
+        plan: { select: { id: true, name: true } },
+      },
+    })
+
+    const payment = await tx.payment.create({
+      data: {
+        subscriptionId: subscription.id,
+        userId: id,
+        provider: 'manual_admin',
+        amountEgp,
+        currency: 'EGP',
+        status: 'CONFIRMED',
+        confirmedBy: gate.adminId,
+        confirmedAt: now,
+        completedAt: now,
+        metadata: {
+          grantedByAdmin: true,
+          planId: plan.id,
+          planName: plan.name,
+          durationDays: numDays,
+          note: note?.trim() || null,
+        } as Prisma.InputJsonValue,
+      },
+      select: { id: true, amountEgp: true },
+    })
+
+    return { subscription, payment }
   })
 
   await audit({
@@ -74,10 +124,43 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       planId: plan.id,
       planName: plan.name,
       durationDays: numDays,
+      amountEgp,
+      paymentId: payment.id,
       expiresAt: expiresAt.toISOString(),
       userEmail: user.email,
     },
   })
 
-  return Response.json({ ok: true, subscription })
+  // Notify admins (shared visibility) and the user whose access was extended.
+  try {
+    const who = user.displayName || user.email
+    await notify({
+      toAdmins: true,
+      type: 'subscription.renewed',
+      title: { en: 'Subscription renewed', ar: 'تم تجديد اشتراك' },
+      body: {
+        en: `${who} — subscription renewed (${amountEgp} EGP).`,
+        ar: `${who} — تم تجديد الاشتراك (${amountEgp} جنيه).`,
+      },
+      link: `/admin/users/${id}`,
+      dedupeKey: `subscription.renewed:${subscription.id}`,
+    })
+    await notify({
+      toUserIds: [id],
+      type: 'subscription.renewed',
+      title: { en: 'Your subscription was renewed', ar: 'تم تجديد اشتراكك' },
+      body: {
+        en: `Your subscription is now active until ${expiresAt.toLocaleDateString('en-GB')}.`,
+        ar: `اشتراكك الآن نشط حتى ${expiresAt.toLocaleDateString('en-GB')}.`,
+      },
+      link: '/profile/subscription',
+      dedupeKey: `subscription.renewed.user:${subscription.id}`,
+    })
+  } catch (err) {
+    console.error('[admin/grant-subscription] notify failed:', err)
+  }
+
+  void sendPushToAdmin('تم تجديد اشتراك', `${user.displayName || user.email} — ${amountEgp} جنيه`)
+
+  return Response.json({ ok: true, subscription, payment })
 }
