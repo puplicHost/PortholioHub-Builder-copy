@@ -3,14 +3,15 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
 import { useI18n } from '@/components/I18nProvider'
+import { usePlatformName } from '@/components/PlatformProvider'
+import { AuthShell } from '@/components/auth/AuthShell'
 import { getFriendlyErrorMessage } from '@/lib/validations/error-messages'
 import { getSafeRedirect } from '@/lib/urls'
 
 export function RegisterForm() {
   const { t, lang } = useI18n()
+  const brand = usePlatformName()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [displayName, setDisplayName] = useState('')
@@ -45,18 +46,23 @@ export function RegisterForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-4 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm"
-      >
-        <div>
-          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">{t('auth.createAccount')}</h1>
-          <p className="mt-1 text-sm text-[var(--color-text-muted)]">{t('auth.registerSubtitle')}</p>
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-[var(--color-text-secondary)]">{t('auth.displayName')}</label>
-          <Input
+    <AuthShell
+      brand={brand}
+      heading={t('auth.createAccount')}
+      subtitle={t('auth.registerSubtitle')}
+      footer={
+        <>
+          {t('auth.haveAccount')}{' '}
+          <Link href="/login">{t('auth.signIn')}</Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="auth-form">
+        <div className="auth-field">
+          <label htmlFor="register-name" className="auth-label">{t('auth.displayName')}</label>
+          <input
+            id="register-name"
+            className="auth-input"
             type="text"
             autoComplete="name"
             placeholder={t('auth.displayNamePlaceholder')}
@@ -64,9 +70,11 @@ export function RegisterForm() {
             onChange={(e) => setDisplayName(e.target.value)}
           />
         </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-[var(--color-text-secondary)]">{t('auth.email')}</label>
-          <Input
+        <div className="auth-field">
+          <label htmlFor="register-email" className="auth-label">{t('auth.email')}</label>
+          <input
+            id="register-email"
+            className="auth-input"
             type="email"
             required
             autoComplete="email"
@@ -75,9 +83,11 @@ export function RegisterForm() {
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-[var(--color-text-secondary)]">{t('auth.phone')}</label>
-          <Input
+        <div className="auth-field">
+          <label htmlFor="register-phone" className="auth-label">{t('auth.phone')}</label>
+          <input
+            id="register-phone"
+            className="auth-input"
             type="tel"
             required
             autoComplete="tel"
@@ -86,9 +96,11 @@ export function RegisterForm() {
             onChange={(e) => setPhone(e.target.value)}
           />
         </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-[var(--color-text-secondary)]">{t('auth.password')}</label>
-          <Input
+        <div className="auth-field">
+          <label htmlFor="register-password" className="auth-label">{t('auth.password')}</label>
+          <input
+            id="register-password"
+            className="auth-input"
             type="password"
             required
             autoComplete="new-password"
@@ -97,17 +109,11 @@ export function RegisterForm() {
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-        {error && <p className="text-sm text-[var(--color-danger)]">{error}</p>}
-        <Button type="submit" variant="primary" className="w-full" disabled={loading}>
+        {error && <p className="auth-error" role="alert">{error}</p>}
+        <button type="submit" className="auth-btn" disabled={loading}>
           {loading ? '…' : t('auth.createAccountBtn')}
-        </Button>
-        <p className="text-center text-sm text-[var(--color-text-muted)]">
-          {t('auth.haveAccount')}{' '}
-          <Link href="/login" className="font-medium text-[var(--color-primary)] hover:underline">
-            {t('auth.signIn')}
-          </Link>
-        </p>
+        </button>
       </form>
-    </div>
+    </AuthShell>
   )
 }

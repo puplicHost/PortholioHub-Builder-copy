@@ -13,6 +13,15 @@ export function buildWhatsappUrl(number: string, text: string): string | null {
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`
 }
 
+export const DEFAULT_UPGRADE_MESSAGE = 'مرحباً، أريد الاستفسار عن الاشتراك في PortfolioHub'
+
+// Canonical upgrade/contact link used by every upgrade touchpoint in the
+// builder (banner, locked-section toasts, CTAs). Returns null when no
+// platform number is configured so callers can hide the button.
+export function getWhatsAppLink(phone: string, message: string = DEFAULT_UPGRADE_MESSAGE): string | null {
+  return buildWhatsappUrl(phone, message)
+}
+
 export async function getPlatformWhatsapp(): Promise<string> {
   const value = await getSetting('contact.whatsapp').catch(() => '')
   return typeof value === 'string' ? value : ''

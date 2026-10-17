@@ -35,6 +35,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useI18n } from '@/components/I18nProvider'
 import { getFriendlyErrorMessage } from '@/lib/validations/error-messages'
 import { isSectionLockedForFree, stripLockedSectionsForFree } from '@/lib/free-sections'
+import { getWhatsAppLink, digitsOnly } from '@/lib/whatsapp'
 import { useRouter } from 'next/navigation'
 import { updatePortfolio, createProjectPage, updateProjectPage, deleteProjectPage, publishProfile, unpublishProfile, getOrCreateProfile } from '@/lib/actions/portfolio'
 import { uploadToCloudinary } from '@/lib/cloudinary'
@@ -609,11 +610,23 @@ export function BuilderClient({
   // (experience/skills/services/testimonials/project pages/analytics) show a
   // lock + upgrade toast instead of opening.
   const isFreePlan = initialSubscriptionState !== 'ACTIVE' && initialSubscriptionState !== 'GRACE'
-  const whatsappDigits = (whatsappNumber || '').replace(/\D/g, '')
-  const upgradeHref = whatsappDigits ? `https://wa.me/${whatsappDigits}` : '/profile/subscription'
+  // Every upgrade touchpoint (banner, locked-section toasts, CTAs) funnels
+  // to WhatsApp using the platform number from settings.
+  const upgradeHref = getWhatsAppLink(whatsappNumber) ?? '/profile/subscription'
+  const hasWhatsapp = digitsOnly(whatsappNumber).length > 0
+  const lockedToastAction = useMemo(
+    () =>
+      hasWhatsapp
+        ? {
+            label: 'تواصل واتساب',
+            onClick: () => window.open(upgradeHref, '_blank', 'noopener,noreferrer'),
+          }
+        : undefined,
+    [hasWhatsapp, upgradeHref],
+  )
   const showLockedToast = useCallback(() => {
-    toast('warning', FREE_LOCK_TOAST)
-  }, [toast])
+    toast('warning', FREE_LOCK_TOAST, lockedToastAction)
+  }, [toast, lockedToastAction])
 
   const handleLogout = async () => {
     try {
@@ -2633,8 +2646,8 @@ case 'skills':
           <span className="truncate">🔒 أنت على الخطة المجانية · بعض المزايا غير متاحة</span>
           <a
             href={upgradeHref}
-            target={whatsappDigits ? '_blank' : undefined}
-            rel={whatsappDigits ? 'noreferrer' : undefined}
+            target={hasWhatsapp ? '_blank' : undefined}
+            rel={hasWhatsapp ? 'noreferrer' : undefined}
             className="shrink-0 rounded-full bg-[#0D1B3E] px-3 py-1 text-[11px] font-bold text-white hover:opacity-90 transition-opacity min-h-[32px] inline-flex items-center"
           >
             ترقية الآن عبر واتساب
@@ -2867,35 +2880,39 @@ case 'skills':
           <div
             className={`transition-all duration-300 ease-in-out bg-[var(--color-surface)] overflow-hidden flex flex-col max-w-full ${
               previewMode === 'mobile'
-                ? 'w-[390px] max-w-[calc(100vw-1rem)] h-[780px] max-h-full rounded-[36px] shadow-2xl border-[8px] border-[var(--color-border)] relative shrink-0'
+                ? 'w-full h-full min-w-0 items-center justify-center bg-transparent shadow-none border-0'
                 : 'w-full h-full max-w-[1080px] min-w-0 rounded-[12px] shadow-md border border-black/5 dark:border-white/10'
             }`}
           >
-            {previewMode === 'mobile' && (
-              <div className="h-5 w-full bg-[var(--color-border)] flex items-center justify-center shrink-0 z-20">
-                <div className="h-3 w-20 bg-black/60 rounded-full" />
-              </div>
-            )}
             {previewMode === 'mobile' ? (
-              <div className="flex-1 w-full min-h-0 relative overflow-hidden">
-                {/* True 390px viewport simulation: the iframe's own viewport
-                    is 390px wide, so all responsive breakpoints render exactly
-                    as on a real phone. Reloads on every save + manual refresh. */}
-                <iframe
-                  key={`mobile-preview-${lastSaved?.getTime() ?? 0}-${mobileRefreshKey}`}
-                  src="/profile/builder/preview"
-                  title="Mobile portfolio preview"
-                  className="w-[390px] max-w-full h-full mx-auto block border-0 bg-white"
-                />
-                <button
-                  type="button"
-                  onClick={() => setMobileRefreshKey((k) => k + 1)}
-                  title="Reload mobile preview"
-                  aria-label="Reload mobile preview"
-                  className="absolute bottom-4 end-4 z-10 flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)] shadow-lg hover:text-[var(--color-primary)] transition-colors cursor-pointer"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </button>
+              <div className="w-[390px] max-w-[390px] mx-auto overflow-hidden rounded-[2.5rem] border-4 border-gray-800 shadow-2xl bg-white flex flex-col shrink-0">
+                <div className="h-5 w-full bg-gray-800 flex items-center justify-center shrink-0">
+                  <div className="h-3 w-20 bg-black/60 rounded-full" />
+                </div>
+                <div className="overflow-y-auto max-h-[844px] flex-1 w-full relative">
+                  {/* True 390px viewport simulation: the iframe's own viewport
+                      is exactly 390px wide, so all responsive breakpoints render
+                      exactly as on a real phone (iPhone 14: 390x844).
+                      Reloads on every save + manual refresh. */}
+                  <iframe
+                    key={`mobile-preview-${lastSaved?.getTime() ?? 0}-${mobileRefreshKey}`}
+                    src="/profile/builder/preview"
+                    title="Mobile portfolio preview"
+                    width="390"
+                    height="844"
+                    style={{ border: 'none' }}
+                    className="block w-[390px] max-w-none bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMobileRefreshKey((k) => k + 1)}
+                    title="Reload mobile preview"
+                    aria-label="Reload mobile preview"
+                    className="absolute bottom-4 end-4 z-10 flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)] shadow-lg hover:text-[var(--color-primary)] transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="flex-1 w-full min-h-0 overflow-hidden relative">
@@ -3011,7 +3028,7 @@ case 'skills':
               <button
                 onClick={() => {
                   if (isFreePlan) {
-                    toast('warning', 'صفحات المشاريع متاحة للمشتركين فقط · تواصل معنا للترقية')
+                    toast('warning', 'صفحات المشاريع متاحة للمشتركين فقط · تواصل معنا للترقية', lockedToastAction)
                     return
                   }
                   setLeftTab('pages')

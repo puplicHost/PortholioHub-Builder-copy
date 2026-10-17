@@ -3,7 +3,6 @@ import { cache } from 'react'
 import { prisma } from '@/lib/prisma'
 import { ClassicTemplate } from '@/components/portfolio/templates/ClassicTemplate'
 import { TrackBeacon } from '@/components/portfolio/TrackBeacon'
-import { isPortfolioVisible } from '@/lib/visibility'
 import { getSubscriptionState } from '@/lib/subscriptions'
 import { stripLockedSectionsForFree } from '@/lib/free-sections'
 import { toPublicProfile } from '@/lib/public-profile'
@@ -11,8 +10,10 @@ import { getAppUrl } from '@/lib/urls'
 import { Metadata } from 'next'
 
 // Shared within a single request: generateMetadata and the page below
-// read the same row with ONE round trip instead of two. Unpublished or
-// admin-hidden portfolios resolve to null → uniform 404 (plan Phase 6 §13).
+// read the same row with ONE round trip instead of two. Unknown usernames,
+// never-published or admin-hidden portfolios resolve to null → uniform 404.
+// Subscription state NEVER gates public rendering: any published portfolio
+// renders for free and paid users alike.
 const getPublicProfile = cache(async (username: string) => {
   const row = await prisma.userProfile.findUnique({
     where: { username },
@@ -31,7 +32,8 @@ const getPublicProfile = cache(async (username: string) => {
   })
   if (!row) return null
   const sub = await getSubscriptionState(row.userId)
-  if (!isPortfolioVisible(row, sub.state)) return null
+  // Only valid 404 reasons: unknown username, never published, or hidden by admin.
+  if (row.status !== 'PUBLISHED' || row.adminHidden) return null
   const profile = toPublicProfile(row)
   if (!profile || !profile.pages || profile.pages.length === 0) return null
   // FREE users never see internal links: external URLs only.
