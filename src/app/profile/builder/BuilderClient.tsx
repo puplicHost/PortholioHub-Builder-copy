@@ -2779,7 +2779,7 @@ case 'skills':
         : L.publish
 
   return (
-    <div className={`builder-root flex h-screen w-full max-w-[100vw] flex-col overflow-hidden overflow-x-hidden bg-[var(--color-page)] select-none ${builderDarkMode ? 'dark' : ''}`} data-theme={builderDarkMode ? 'dark' : 'light'}>
+    <div className={`builder-root flex h-[100dvh] w-full max-w-[100vw] flex-col overflow-hidden overflow-x-hidden bg-[var(--color-page)] select-none ${builderDarkMode ? 'dark' : ''}`} data-theme={builderDarkMode ? 'dark' : 'light'}>
       {/* FREE plan upgrade banner — sticky at the very top for free users */}
       {isFreePlan && (
         <div
@@ -2991,7 +2991,7 @@ case 'skills':
       {/* ─────────────────────────────────────────────────────────────
           MAIN 3-PANEL BODY
       ────────────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 min-w-0 overflow-hidden overflow-x-hidden relative">
+      <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden overflow-x-hidden relative">
         {/* ─────────────────────────────────────────────────────────────
             2. LEFT PANEL (~200px, pill tabs: Sections / Pages)
             Desktop on md+ (≥768px). Slide-over drawer on mobile.
@@ -3022,20 +3022,20 @@ case 'skills':
         {/* ─────────────────────────────────────────────────────────────
             3. CENTER CANVAS (full width on mobile, framed on md+)
         ────────────────────────────────────────────────────────────── */}
-        <main className="flex-1 min-w-0 max-w-[100vw] bg-[var(--color-page)] relative overflow-hidden overflow-x-hidden flex items-center justify-center p-2 pb-20 md:p-4 md:pb-4">
+        <main className="flex-1 min-h-0 min-w-0 max-w-[100vw] bg-[var(--color-page)] relative overflow-hidden overflow-x-hidden flex items-center justify-center p-2 md:p-4">
           <div
             className={`transition-all duration-300 ease-in-out bg-[var(--color-surface)] overflow-hidden flex flex-col max-w-full ${
               previewMode === 'mobile'
-                ? 'w-full h-full min-w-0 items-center justify-center bg-transparent shadow-none border-0'
+                ? 'w-full h-full min-h-0 min-w-0 items-center justify-center bg-transparent shadow-none border-0'
                 : 'w-full h-full max-w-[1080px] min-w-0 rounded-[12px] shadow-md border border-black/5 dark:border-white/10'
             }`}
           >
             {previewMode === 'mobile' ? (
-              <div className="w-[390px] max-w-[390px] mx-auto overflow-hidden rounded-[2.5rem] border-4 border-gray-800 shadow-2xl bg-white flex flex-col shrink-0">
+              <div className="w-[390px] max-w-full h-full max-h-full mx-auto overflow-hidden rounded-[2.5rem] border-4 border-gray-800 shadow-2xl bg-white flex flex-col">
                 <div className="h-5 w-full bg-gray-800 flex items-center justify-center shrink-0">
                   <div className="h-3 w-20 bg-black/60 rounded-full" />
                 </div>
-                <div className="overflow-y-auto max-h-[844px] flex-1 w-full relative">
+                <div className="flex-1 min-h-0 overflow-y-auto w-full relative">
                   {/* True 390px viewport simulation: the iframe's own viewport
                       is exactly 390px wide, so all responsive breakpoints render
                       exactly as on a real phone (iPhone 14: 390x844).
