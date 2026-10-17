@@ -9,7 +9,7 @@ import {
   Palette, Layout, FileText, Menu, X, Sliders, Plus, Trash2,
   Trophy, Star, Users, Briefcase, Heart, Zap, Target, Award,
   Clock, TrendingUp, Code, Layers, Rocket, PenTool, Sun, Moon,
-  ArrowUp, BarChart3, LogOut, Languages, User, AlertTriangle, Lock, RefreshCw
+  ArrowUp, BarChart3, LogOut, Languages, User, AlertTriangle, Lock, RefreshCw, Save
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -488,10 +488,13 @@ const BUILDER_LABELS = {
     pages: 'Pages',
     edit: 'Edit',
     preview: 'Preview',
+    saveChanges: 'Save Changes',
+    savedChanges: 'Saved ✓',
     navigation: 'Navigation',
     openSections: 'Open sections',
     openEditor: 'Open editor',
     viewPreview: 'View preview',
+    goLive: 'Go Live',
     publishAria: 'Publish portfolio',
     unpublishAria: 'Unpublish portfolio',
   },
@@ -511,10 +514,13 @@ const BUILDER_LABELS = {
     pages: 'الصفحات',
     edit: 'تحرير',
     preview: 'معاينة',
+    saveChanges: 'حفظ التغييرات',
+    savedChanges: 'تم الحفظ ✓',
     navigation: 'التنقل',
     openSections: 'فتح الأقسام',
     openEditor: 'فتح المحرر',
     viewPreview: 'عرض المعاينة',
+    goLive: 'افتح الموقع',
     publishAria: 'نشر البورتفوليو',
     unpublishAria: 'إلغاء نشر البورتفوليو',
   },
@@ -524,6 +530,9 @@ type BuilderLabelKey = keyof (typeof BUILDER_LABELS)['en']
 type BuilderLabels = Record<BuilderLabelKey, string>
 
 const BUILDER_DARK_KEY = 'portfoliohub-builder-dark'
+
+// Shown when the mobile "Go Live" button is tapped before publishing.
+const PUBLISH_NOT_READY_TOAST = 'انشر البورتفوليو أولاً'
 
 function ensureValidProjectItemTypes(projectPages: any[]) {
   if (!projectPages) return []
@@ -754,6 +763,9 @@ export function BuilderClient({
     'idle' | 'publishing' | 'unpublishing' | 'published' | 'unpublished'
   >('idle')
   const publishResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Mobile bottom-bar "Save Changes" feedback: idle → saving → saved → idle.
+  const [mobileSaveState, setMobileSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const saveResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [savedSnapshot, setSavedSnapshot] = useState(() => getProfileSnapshot(profile))
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -778,6 +790,7 @@ export function BuilderClient({
   useEffect(() => {
     return () => {
       if (publishResetTimer.current) clearTimeout(publishResetTimer.current)
+      if (saveResetTimer.current) clearTimeout(saveResetTimer.current)
     }
   }, [])
 
@@ -920,6 +933,37 @@ export function BuilderClient({
       toast('error', getFriendlyErrorMessage((res as any)?.code ?? (res as any).error ?? 'PUBLISH_FAILED', lang))
       setPublishState('idle')
     }
+  }
+
+  // Mobile bottom bar "Go Live": opens the public portfolio in a new tab, but
+  // only once it has been published (same destination as the desktop
+  // "View Live" link).
+  const handleGoLive = () => {
+    if (profile.status !== 'PUBLISHED' || !profile.username) {
+      toast('warning', PUBLISH_NOT_READY_TOAST)
+      return
+    }
+    setLeftDrawerOpen(false)
+    setRightSheetOpen(false)
+    window.open(`/u/${profile.username}`, '_blank', 'noopener,noreferrer')
+  }
+
+  // Mobile bottom-bar "Save Changes": same action as the header save, with
+  // local spinner + a 2s "Saved ✓" confirmation.
+  const handleMobileSave = async () => {
+    if (mobileSaveState === 'saving') return
+    if (saveResetTimer.current) {
+      clearTimeout(saveResetTimer.current)
+      saveResetTimer.current = null
+    }
+    setMobileSaveState('saving')
+    const ok = await handleSaveChanges()
+    if (!ok) {
+      setMobileSaveState('idle')
+      return
+    }
+    setMobileSaveState('saved')
+    saveResetTimer.current = setTimeout(() => setMobileSaveState('idle'), 2000)
   }
 
   // Conflict resolution (Sprint F4): Reload discards local edits for the
@@ -3073,27 +3117,37 @@ case 'skills':
           </button>
           <button
             type="button"
-            onClick={() => {
-              setLeftDrawerOpen(false)
-              setRightSheetOpen(true)
-            }}
-            className="flex min-h-[56px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
-            aria-label={L.openEditor}
+            onClick={handleMobileSave}
+            disabled={mobileSaveState === 'saving'}
+            aria-busy={mobileSaveState === 'saving'}
+            className={`flex min-h-[56px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer disabled:cursor-wait ${
+              !isDirty && mobileSaveState === 'idle' ? 'opacity-60' : ''
+            }`}
+            aria-label={L.saveChanges}
           >
-            <Sliders className="h-5 w-5 shrink-0" />
-            <span>{L.edit}</span>
+            {mobileSaveState === 'saving' ? (
+              <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+            ) : mobileSaveState === 'saved' ? (
+              <CheckCircle className="h-5 w-5 shrink-0 text-[var(--color-success)]" />
+            ) : (
+              <Save className="h-5 w-5 shrink-0" />
+            )}
+            <span>
+              {mobileSaveState === 'saving'
+                ? L.saveSaving
+                : mobileSaveState === 'saved'
+                  ? L.savedChanges
+                  : L.saveChanges}
+            </span>
           </button>
           <button
             type="button"
-            onClick={() => {
-              setLeftDrawerOpen(false)
-              setRightSheetOpen(false)
-            }}
+            onClick={handleGoLive}
             className="flex min-h-[56px] min-w-[44px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
-            aria-label={L.viewPreview}
+            aria-label={L.goLive}
           >
-            <Eye className="h-5 w-5 shrink-0" />
-            <span>{L.preview}</span>
+            <ExternalLink className="h-5 w-5 shrink-0" />
+            <span>{L.goLive}</span>
           </button>
           <button
             type="button"
