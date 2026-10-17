@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
+import { redirect } from 'next/navigation'
 import { LandingPage, type LandingSocial } from '@/components/landing/LandingPage'
 import { getAppUrl } from '@/lib/urls'
 import { prisma } from '@/lib/prisma'
 import { getSettings } from '@/lib/settings'
 import { getPlatformName } from '@/lib/platform'
+import { getUser } from '@/lib/guards'
 
 export async function generateMetadata(): Promise<Metadata> {
   const base = getAppUrl()
@@ -35,6 +37,9 @@ export async function generateMetadata(): Promise<Metadata> {
 // Server component: reads platform settings + active plan prices and passes
 // them to the client landing shell as serializable props.
 export default async function ArabicLandingPage() {
+  // Logged-in visitors skip the marketing page and land in their builder.
+  if (await getUser()) redirect('/profile/builder')
+
   const [name, plans, settings] = await Promise.all([
     getPlatformName().catch(() => 'PortfolioHub'),
     prisma.plan

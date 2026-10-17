@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
+import { redirect } from 'next/navigation'
 import { LandingPage } from '@/components/landing/LandingPage'
 import { getAppUrl } from '@/lib/urls'
+import { getUser } from '@/lib/guards'
 
 export async function generateMetadata(): Promise<Metadata> {
   const base = getAppUrl()
@@ -30,5 +32,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function EnglishLandingPage() {
+  // Logged-in visitors skip the marketing page and land in their builder.
+  if (await getUser()) redirect('/profile/builder')
+
   return <LandingPage lang="en" />
 }
