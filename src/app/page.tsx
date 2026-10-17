@@ -17,14 +17,14 @@ export async function generateMetadata(): Promise<Metadata> {
       url: base,
       siteName: 'PortfolioHub',
       type: 'website',
-      images: `${base}/og.svg`,
+      images: [{ url: `${base}/og?title=PortfolioHub&subtitle=${encodeURIComponent('ابني بورتفوليو احترافي بنفسك')}`, width: 1200, height: 630 }],
       locale: 'ar_EG',
     },
     twitter: {
       card: 'summary_large_image',
       title: 'PortfolioHub',
       description: 'ابنِ بروتفوليو احترافي في دقائق.',
-      images: [`${base}/og.svg`],
+      images: [`${base}/og?title=PortfolioHub&subtitle=${encodeURIComponent('ابني بورتفوليو احترافي بنفسك')}`],
     },
   }
 }

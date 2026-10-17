@@ -68,9 +68,10 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
   const title = `${projectPage.title} | ${ownerName}`
   const description = projectPage.description || `Check out ${projectPage.title} by ${ownerName}`
   const url = `${base}/u/${username}/projects/${projectPage.slug}`
+  const ogImageUrl = `${base}/og?title=${encodeURIComponent(projectPage.title)}&subtitle=${encodeURIComponent(ownerName)}`
   const cover = typeof projectPage.coverImage === 'string' && projectPage.coverImage.startsWith('http')
     ? projectPage.coverImage
-    : `${base}/opengraph.png`
+    : ogImageUrl
 
   return {
     title,

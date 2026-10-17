@@ -62,9 +62,10 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
   const title = `${profile.displayName || profile.username} | PortfolioHub`
   const description = profile.bio || `Check out the professional portfolio of ${profile.displayName || profile.username}`
   const url = `${base}/u/${profile.username}`
+  const ogImageUrl = `${base}/og?title=${encodeURIComponent(profile.displayName || profile.username)}&subtitle=${encodeURIComponent(profile.professionalTitle ?? 'Portfolio')}`
   const avatar = typeof profile.avatarUrl === 'string' && profile.avatarUrl.startsWith('http')
     ? profile.avatarUrl
-    : `${base}/opengraph.png`
+    : ogImageUrl
   const locale = contentLocale(profile) === 'ar' ? 'ar_EG' : 'en_US'
 
   return {
@@ -78,7 +79,7 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
       url,
       siteName: 'PortfolioHub',
       type: 'profile',
-      images: avatar,
+      images: [{ url: ogImageUrl, width: 1200, height: 630 }],
       locale,
     },
     twitter: {

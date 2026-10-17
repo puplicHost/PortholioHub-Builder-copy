@@ -4,9 +4,10 @@ import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { SignJWT, jwtVerify } from 'jose'
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'dev-secret-key-change-in-production',
-)
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required')
+}
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET)
 const JWT_EXPIRES_IN = '7d'
 const PASSWORD_SALT_ROUNDS = 12
 const SESSION_TOKEN_LENGTH = 32

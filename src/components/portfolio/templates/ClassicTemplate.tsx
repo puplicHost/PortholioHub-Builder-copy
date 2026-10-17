@@ -5,7 +5,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { trackPortfolioEvent } from '@/components/portfolio/TrackBeacon'
 import { TestimonialsSlider } from '@/components/portfolio/TestimonialsSlider'
-import { Moon, Sun, Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin, FileText, Menu, X } from 'lucide-react'
+import { PortfolioBottomNav, type PortfolioNavTab } from '@/components/portfolio/PortfolioBottomNav'
+import { Moon, Sun, Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin, FileText } from 'lucide-react'
 
 // Helper to lighten/darken a hex color
 function adjustColor(color: string, amount: number) {
@@ -47,7 +48,6 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
     setTheme(defaultColorMode)
   }
   const [isScrolled, setIsScrolled] = useState(false)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -56,15 +56,6 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
-
-  useEffect(() => {
-    if (!mobileMenuOpen) return
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMobileMenuOpen(false)
-    }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [mobileMenuOpen])
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -181,6 +172,19 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
     return true
   }
   const visibleSections = sections.filter(isSectionVisible)
+
+  // Mobile bottom navigation: always Home + Contact (the footer always
+  // renders), plus About / Projects only when those sections are published.
+  const navTabs: PortfolioNavTab[] = [
+    { id: 'hero', label: lang === 'ar' ? 'الرئيسية' : 'Home', icon: 'home' },
+    ...(visibleSections.some((s: any) => s.sectionType === 'about')
+      ? [{ id: 'about', label: lang === 'ar' ? 'عني' : 'About', icon: 'about' as const }]
+      : []),
+    ...(visibleSections.some((s: any) => s.sectionType === 'projects')
+      ? [{ id: 'projects', label: lang === 'ar' ? 'أعمالي' : 'Projects', icon: 'projects' as const }]
+      : []),
+    { id: 'contact', label: lang === 'ar' ? 'تواصل' : 'Contact', icon: 'contact' },
+  ]
 
   const getContactIcon = (label: string) => {
     const l = label.toLowerCase()
@@ -998,7 +1002,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
             id="contact"
             key={section.id}
             className="pt-[56px] pb-[40px]"
-            style={{ backgroundColor: '#0D1B3E', color: 'rgba(255,255,255,0.92)' }}
+            style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))', color: '#ffffff' }}
           >
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 flex flex-col items-center text-center">
               {/* 1. Name + short tagline */}
@@ -1053,6 +1057,23 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                 </div>
               )}
             </div>
+
+            {/* Permanent brand strip — stays inside the footer, same background */}
+            <div
+              className="mt-8 w-full px-4 text-center text-xs"
+              style={{ color: 'rgba(255,255,255,0.75)' }}
+            >
+              © {new Date().getFullYear()} · Developed with{' '}
+              <a
+                href="https://portholiohub.pages.dev/"
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:opacity-90 transition-opacity"
+                style={{ color: '#ffffff' }}
+              >
+                PortfolioHub
+              </a>
+            </div>
           </footer>
         )
       }
@@ -1080,17 +1101,6 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
           {/* Navigation Bar */}
           <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${isScrolled ? 'py-2.5 sm:py-3 shadow-md' : 'py-3 sm:py-5'}`} style={{ backgroundColor: isScrolled ? (theme === 'light' ? 'var(--color-bg)' : 'color-mix(in srgb, var(--color-bg) 90%, transparent)') : 'transparent', backdropFilter: isScrolled ? 'blur(10px)' : 'none', borderBottom: isScrolled ? '1px solid var(--color-border)' : 'none' }}>
             <div className="max-w-[1200px] mx-auto px-4 sm:px-12 flex items-center justify-between flex-row-reverse md:flex-row">
-              {/* Mobile hamburger button on the left (matches reference) */}
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className={`md:hidden p-2 rounded-lg border transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center ${isScrolled && theme === 'light' ? 'border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-text)] hover:opacity-80' : 'border-white/20 bg-white/5 text-white hover:bg-white/10'}`}
-                aria-label="Toggle menu"
-                aria-expanded={mobileMenuOpen}
-              >
-                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </button>
-
               <div className="flex items-center gap-6">
                 <ul className="hidden md:flex items-center gap-8 font-medium">
                   {visibleSections.map((s: any) => {
@@ -1149,37 +1159,10 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                 )}
               </div>
             </div>
-
-            {/* Mobile Dropdown Menu */}
-            {mobileMenuOpen && (
-              <div className="md:hidden border-t border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md px-6 py-4 shadow-xl space-y-2">
-                {visibleSections.map((s: any) => {
-                  if (s.sectionType === 'hero') return null
-                  const label = s.sectionType === 'footer'
-                    ? (lang === 'ar' ? 'تواصل معي' : 'Contact')
-                    : (s.content?.title?.[lang] || s.sectionType)
-                  const targetId = s.sectionType === 'footer'
-                    ? 'contact'
-                    : s.sectionType === 'contact'
-                      ? 'contact-info'
-                      : s.sectionType
-                  return (
-                    <a
-                      key={s.id}
-                      href={`#${targetId}`}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="block py-3 text-sm text-[var(--color-text)] hover:text-[var(--color-primary)] font-medium"
-                    >
-                      {label}
-                    </a>
-                  )
-                })}
-              </div>
-            )}
           </nav>
 
           {/* Floating Action Buttons */}
-          <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start gap-3">
+          <div className="fixed bottom-20 md:bottom-6 left-6 z-50 flex flex-col items-start gap-3">
             {showWhatsapp && (
               <a
                 href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`}
@@ -1273,22 +1256,35 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
             })}
           </main>
 
-          {/* Permanent brand strip — ALWAYS rendered, even when the user hides their footer section */}
-          <div
-            className="w-full py-3.5 px-4 text-center text-xs"
-            style={{ backgroundColor: '#0D1B3E', color: 'rgba(255,255,255,0.65)' }}
-          >
-            © {new Date().getFullYear()} · Developed with{' '}
-            <a
-              href="https://portholiohub.pages.dev/"
-              target="_blank"
-              rel="noreferrer"
-              className="underline hover:opacity-90 transition-opacity"
-              style={{ color: '#ffffff' }}
+          {/* Brand strip fallback — only when the footer section is hidden, so
+              the strip always renders (the footer normally renders it with the
+              hero background). */}
+          {!visibleSections.some((s: any) => s.sectionType === 'footer') && (
+            <div
+              className="w-full py-3.5 px-4 text-center text-xs"
+              style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))', color: 'rgba(255,255,255,0.75)' }}
             >
-              PortfolioHub
-            </a>
-          </div>
+              © {new Date().getFullYear()} · Developed with{' '}
+              <a
+                href="https://portholiohub.pages.dev/"
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:opacity-90 transition-opacity"
+                style={{ color: '#ffffff' }}
+              >
+                PortfolioHub
+              </a>
+            </div>
+          )}
+
+          {/* Mobile-only bottom navigation bar */}
+          <PortfolioBottomNav tabs={navTabs} />
+          {/* Spacer: keeps content clear of the fixed bar on mobile */}
+          <div
+            className="md:hidden"
+            style={{ height: 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
+            aria-hidden="true"
+          />
         </div>
       </div>
     </>

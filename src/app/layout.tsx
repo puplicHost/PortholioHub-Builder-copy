@@ -44,13 +44,21 @@ export async function generateMetadata(): Promise<Metadata> {
       url: getAppUrl(),
       siteName: name,
       type: 'website',
-      images: '/opengraph.png',
+      images: [{
+        url: '/og?title=PortfolioHub',
+        width: 1200,
+        height: 630,
+      }],
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description,
-      images: '/opengraph.png',
+      images: [{
+        url: '/og?title=PortfolioHub',
+        width: 1200,
+        height: 630,
+      }],
     },
   }
 }
