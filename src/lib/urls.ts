@@ -1,4 +1,4 @@
-const PRODUCTION_URL = 'https://portfoliohub.com'
+const PRODUCTION_URL = 'https://portfolio-hub.online'
 
 export function getSiteUrl(): string {
   return process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || PRODUCTION_URL

@@ -19,7 +19,7 @@ export async function middleware(request: NextRequest) {
   // localhost / 127.0.0.1 / ::1 are treated as the same local host.
   const hostOnly = hostname.split(':')[0].toLowerCase()
   const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1')
-  const baseDomain = process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).host : (isLocalhost ? 'localhost:3000' : 'portfoliohub.com')
+  const baseDomain = process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).host : (isLocalhost ? 'localhost:3000' : 'portfolio-hub.online')
   const baseHostOnly = baseDomain.split(':')[0].toLowerCase()
   const isLocalHostOnly = (h: string) => h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]'
   const isBaseHost = hostOnly === baseHostOnly || (isLocalHostOnly(hostOnly) && isLocalHostOnly(baseHostOnly))
