@@ -323,3 +323,78 @@ body {
     max-width: 100vw;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Landing page design system
+   Every token is scoped to `.landing-page` so it never leaks into the
+   app shell, admin panel, or builder (which keep their own tokens).
+   Dark mode is driven by `data-theme` on the wrapper element — set by
+   the landing theme toggle — never on <html>.
+   ══════════════════════════════════════════════════════════════════════ */
+.landing-page {
+  --accent: #0066cc;
+  --accent-focus: #0071e3;
+  --accent-on-dark: #2997ff;
+  --ink: #1d1d1f;
+  --ink-muted: #7a7a7a;
+  --canvas: #ffffff;
+  --canvas-alt: #f5f5f7;
+  --tile-1: #272729;
+  --tile-2: #2a2a2c;
+  --hairline: #e0e0e0;
+  --divider: #f0f0f0;
+  --on-dark: #ffffff;
+  --on-primary: #ffffff;
+  --glass: rgba(255, 255, 255, 0.88);
+  --glass-solid: rgba(255, 255, 255, 0.96);
+  --glass-bottom: rgba(255, 255, 255, 0.92);
+  --card-hover: #f0f0f2;
+  --tile-hover: #323234;
+  --space-xs: 8px;
+  --space-sm: 16px;
+  --space-md: 24px;
+  --space-lg: 32px;
+  --space-xl: 48px;
+  --space-2xl: 64px;
+  --space-3xl: 80px;
+  --space-4xl: 100px;
+  --space-5xl: 140px;
+  --space-6xl: 180px;
+  --font-primary: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Six Caps', sans-serif;
+}
+
+.landing-page[data-theme='dark'] {
+  --accent: #2997ff;
+  --accent-focus: #4aa3ff;
+  --accent-on-dark: #2997ff;
+  --ink: #f5f5f7;
+  --ink-muted: #a1a1a6;
+  --canvas: #0e0e10;
+  --canvas-alt: #1a1a1d;
+  --tile-1: #141417;
+  --tile-2: #1e1e21;
+  --hairline: #3a3a3c;
+  --divider: #2a2a2c;
+  --glass: rgba(22, 22, 24, 0.88);
+  --glass-solid: rgba(22, 22, 24, 0.96);
+  --glass-bottom: rgba(22, 22, 24, 0.92);
+  --card-hover: #232326;
+  --tile-hover: #28282b;
+}
+
+.landing-page[lang='ar'],
+html[dir='rtl'] .landing-page {
+  --font-primary: 'Cairo', 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.65;
+}
+
+/* Arabic headings read better at 600 in this design (the global
+   `html[dir='rtl'] h1..h4 { font-weight: 900 }` rule is stricter, so this
+   selector adds one class to win on specificity). */
+html .landing-page h1,
+html .landing-page h2,
+html .landing-page h3,
+html .landing-page h4 {
+  font-weight: 600;
+}

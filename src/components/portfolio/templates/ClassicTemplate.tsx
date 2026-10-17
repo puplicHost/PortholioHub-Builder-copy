@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { trackPortfolioEvent } from '@/components/portfolio/TrackBeacon'
+import { normalizeWhatsappNumber } from '@/lib/whatsapp'
 import { TestimonialsSlider } from '@/components/portfolio/TestimonialsSlider'
 import { PortfolioBottomNav, type PortfolioNavTab } from '@/components/portfolio/PortfolioBottomNav'
 import { Moon, Sun, Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin, FileText } from 'lucide-react'
@@ -63,8 +64,9 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
 
   const actionButtons = appearance.actionButtons || {}
   const showScrollToTop = actionButtons.showScrollToTop !== false
-  const showWhatsapp = actionButtons.showWhatsapp !== false && !!actionButtons.whatsappNumber
   const whatsappNumber = actionButtons.whatsappNumber || ''
+  const waDigits = normalizeWhatsappNumber(whatsappNumber)
+  const showWhatsapp = actionButtons.showWhatsapp !== false && !!waDigits
 
   // Intersection Observer for animations
   useEffect(() => {
@@ -100,11 +102,9 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
             id: 'footer-default-fallback',
             sectionType: 'footer',
             sectionOrder: 999,
-            content: {
-              headline: { en: 'Work with me', ar: 'تواصل معي' },
-              subheading: { en: "Let's build something great together.", ar: 'دعنا نبني شيئاً رائعاً معاً.' },
-              links: contactLinks,
-            },
+            // Old profiles without a footer section still get a footer, but
+            // with no invented copy: identity and links come from real data.
+            content: { links: contactLinks },
             settings: { isVisible: true },
           }]
         : []
@@ -990,91 +990,259 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
       }
       case 'footer': {
         const footerSocialLinks = (c.links && c.links.length > 0) ? c.links : (contactLinks || [])
-        // Quick nav anchors built from the sections actually on this page.
-        const footerNav = visibleSections
-          .filter((s: any) => s.sectionType !== 'hero' && s.sectionType !== 'footer')
-          .map((s: any) => ({
-            label: s.content?.title?.[lang] || s.sectionType,
-            href: s.sectionType === 'contact' ? '#contact-info' : `#${s.sectionType}`,
-          }))
+        // Localized fallback labels so unlabeled sections never render as raw
+        // English section ids (e.g. "projects") inside an Arabic footer.
+        const footerSectionLabels: Record<string, { en: string; ar: string }> = {
+          hero: { en: 'Home', ar: 'الرئيسية' },
+          about: { en: 'About', ar: 'نبذة' },
+          projects: { en: 'Projects', ar: 'الأعمال' },
+          skills: { en: 'Skills', ar: 'المهارات' },
+          experience: { en: 'Experience', ar: 'الخبرة' },
+          services: { en: 'Services', ar: 'الخدمات' },
+          testimonials: { en: 'Testimonials', ar: 'التقييمات' },
+          contact: { en: 'Contact', ar: 'تواصل' },
+          custom: { en: 'More', ar: 'المزيد' },
+        }
+
+        // ── Column 1 · Identity — real profile data only ────────────────
+        const heroSection = visibleSections.find((s: any) => s.sectionType === 'hero')
+        const heroSubtitle = heroSection?.content?.subtitle?.[lang] || ''
+        const aboutSection = visibleSections.find((s: any) => s.sectionType === 'about')
+        const aboutC = aboutSection?.content || {}
+        const aboutBioRaw = aboutC.biography?.[lang] ?? aboutC.text?.[lang] ?? ''
+        const bioShort = typeof aboutBioRaw === 'string'
+          ? aboutBioRaw.replace(/\s+/g, ' ').trim().slice(0, 120)
+          : ''
+        const role = title || heroSubtitle
+        const shortBio = bioShort || bio || (typeof profile.bio === 'string' ? profile.bio : '')
+
+        // ── Column 2 · Quick Links — only sections that exist on the page ──
+        const quickLinks: { label: string; href: string }[] = visibleSections
+          .filter((s: any) => s.sectionType !== 'footer')
+          .map((s: any) => {
+            const customLabel = s.content?.title?.[lang]
+            const fallback = footerSectionLabels[s.sectionType]
+            return {
+              label: customLabel || (fallback ? fallback[lang] : s.sectionType),
+              href: s.sectionType === 'hero' ? '#hero' : `#${s.sectionType}`,
+            }
+          })
+        // The contact section is folded into the footer (#contact), so the
+        // Contact anchor always points at the footer itself.
+        if (!quickLinks.some((l) => l.href === '#contact')) {
+          quickLinks.push({ label: footerSectionLabels.contact[lang], href: '#contact' })
+        }
+
+        // ── Column 3 · Get In Touch — email / whatsapp / location ─────────
+        const contactArr = Array.isArray(c.links) && c.links.length > 0 ? c.links : (contactLinks || [])
+        const findContact = (keys: string[]) =>
+          contactArr.find((l: any) => {
+            const t = String(l.type || l.platform || l.label || '').toLowerCase()
+            return keys.some((k) => t.includes(k))
+          })
+        const emailRaw = findContact(['email', 'mail'])
+        const waRaw = findContact(['whatsapp'])
+        const emailVal = emailRaw ? String(emailRaw.value || emailRaw.url || emailRaw.label || '') : ''
+        const waVal = waRaw ? String(waRaw.value || waRaw.url || '') : String(whatsappNumber || '')
+        const emailHref = emailVal
+          ? (emailVal.includes('@') && !emailVal.startsWith('mailto:') ? `mailto:${emailVal}` : emailVal)
+          : ''
+        const waHref = waVal
+          ? (waVal.startsWith('http') ? waVal : `https://wa.me/${normalizeWhatsappNumber(waVal)}`)
+          : ''
+        const locVal = localized.location?.[lang] || profile.location || ''
+
+        // Saved footer headline/subheading — the exact fields the builder edits.
+        const heading = c.headline?.[lang] || ''
+        const subheading = c.subheading?.[lang] || ''
+        const ctaHref = emailHref || waHref || '#contact'
+
+        const GOLD = '#D4A017'
+        const year = new Date().getFullYear()
+        const cairoLink = 'https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap'
         return (
-          <footer
-            id="contact"
-            key={section.id}
-            className="pt-[56px] pb-[40px]"
-            style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))', color: '#ffffff' }}
-          >
-            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 flex flex-col items-center text-center">
-              {/* 1. Name + short tagline */}
-              <p className="text-lg sm:text-xl font-bold tracking-tight text-white break-words">
-                {displayName}
-              </p>
-              {title && (
-                <p className="mt-1 text-sm text-white/70 max-w-lg mx-auto break-words">
-                  {title}
-                </p>
-              )}
-
-              {/* 2. Quick nav links (anchor links to page sections) */}
-              {footerNav.length > 0 && (
-                <nav aria-label="Footer" className="mt-5 flex flex-wrap justify-center items-center gap-x-5 gap-y-2">
-                  {footerNav.map((n: { label: string; href: string }) => (
-                    <a
-                      key={n.href}
-                      href={n.href}
-                      className="text-xs font-medium text-white/70 hover:text-white transition-colors capitalize min-h-[44px] inline-flex items-center"
-                    >
-                      {n.label}
-                    </a>
-                  ))}
-                </nav>
-              )}
-
-              {/* 3. Row of social/contact icon buttons */}
-              {footerSocialLinks.length > 0 && (
-                <div className="mt-5 flex flex-wrap justify-center items-center gap-3">
-                  {footerSocialLinks.map((link: any, idx: number) => {
-                    const platform = link.platform || link.label || 'globe'
-                    const rawUrl = link.url || ''
-                    const href = rawUrl.startsWith('http') || rawUrl.startsWith('mailto:') || rawUrl.startsWith('tel:')
-                      ? rawUrl
-                      : rawUrl.includes('@')
-                        ? `mailto:${rawUrl}`
-                        : `https://${rawUrl}`
-                    return (
-                      <a
-                        key={idx}
-                        href={href}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="h-11 w-11 rounded-full border border-white/20 bg-white/5 text-white flex items-center justify-center transition-all duration-200 hover:scale-110 hover:bg-white/10 hover:border-white/40"
-                        title={link.label || link.platform || 'Link'}
-                      >
-                        {getSocialIcon(platform) || getContactIcon(platform)}
-                      </a>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Permanent brand strip — stays inside the footer, same background */}
-            <div
-              className="mt-8 w-full px-4 text-center text-xs"
-              style={{ color: 'rgba(255,255,255,0.75)' }}
+          <>
+            <link rel="stylesheet" href={cairoLink} />
+            <footer
+              id="contact"
+              key={section.id}
+              dir={lang === 'ar' ? 'rtl' : 'ltr'}
+              className="border-t border-white/15 pt-12 pb-8 sm:pt-16"
+              style={{
+                background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
+                color: '#ffffff',
+                fontFamily: lang === 'ar'
+                  ? "'Cairo', system-ui, -apple-system, sans-serif"
+                  : 'Inter, system-ui, -apple-system, sans-serif',
+              }}
             >
-              © {new Date().getFullYear()} · Developed with{' '}
-              <a
-                href="https://portholiohub.pages.dev/"
-                target="_blank"
-                rel="noreferrer"
-                className="underline hover:opacity-90 transition-opacity"
-                style={{ color: '#ffffff' }}
-              >
-                PortfolioHub
-              </a>
-            </div>
-          </footer>
+              <div className="mx-auto max-w-[1200px] px-6 sm:px-12">
+                {/* ── Three columns ──────────────────────────────────────── */}
+                <div className="grid grid-cols-1 gap-10 text-center md:grid-cols-[1.5fr_1fr_1.3fr] md:gap-12 md:text-start">
+
+                  {/* Column 1 · Identity */}
+                  <div>
+                    <p className="break-words text-xl font-bold tracking-tight text-white sm:text-2xl">
+                      {displayName}
+                    </p>
+                    {role && (
+                      <p className="mt-1.5 text-sm font-medium break-words" style={{ color: GOLD }}>
+                        {role}
+                      </p>
+                    )}
+                    {shortBio && (
+                      <p className="mx-auto mt-4 max-w-sm text-sm leading-relaxed text-white/75 break-words md:mx-0">
+                        {shortBio}
+                      </p>
+                    )}
+                    {footerSocialLinks.length > 0 && (
+                      <div className="mt-5 flex flex-wrap justify-center gap-3 md:justify-start">
+                        {footerSocialLinks.map((link: any, idx: number) => {
+                          const platform = link.platform || link.label || 'globe'
+                          const label = link.label || link.platform || (lang === 'ar' ? 'رابط' : 'Link')
+                          const rawUrl = link.url || ''
+                          const href = rawUrl.startsWith('http') || rawUrl.startsWith('mailto:') || rawUrl.startsWith('tel:')
+                            ? rawUrl
+                            : rawUrl.includes('@')
+                              ? `mailto:${rawUrl}`
+                              : `https://${rawUrl}`
+                          return (
+                            <a
+                              key={idx}
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={label}
+                              title={label}
+                              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition-all duration-200 hover:-translate-y-0.5 hover:border-[#D4A017] hover:bg-[#D4A017] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+                            >
+                              {getSocialIcon(platform) || getContactIcon(platform)}
+                            </a>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Column 2 · Quick links */}
+                  {quickLinks.length > 0 && (
+                    <nav aria-label={lang === 'ar' ? 'روابط سريعة' : 'Quick links'}>
+                      <h3
+                        className="text-sm font-bold uppercase tracking-wider"
+                        style={{ color: GOLD }}
+                      >
+                        {lang === 'ar' ? 'روابط سريعة' : 'Quick Links'}
+                      </h3>
+                      <ul className="mt-4 space-y-1">
+                        {quickLinks.map((n: { label: string; href: string }) => (
+                          <li key={n.href}>
+                            <a
+                              href={n.href}
+                              className="group inline-flex min-h-[36px] items-center text-sm font-medium text-white/80 transition-colors hover:text-[#D4A017] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+                            >
+                              <span className="relative">
+                                {n.label}
+                                <span
+                                  aria-hidden="true"
+                                  className="pointer-events-none absolute -bottom-0.5 left-0 h-px w-0 bg-[#D4A017] transition-all duration-200 group-hover:w-full"
+                                />
+                              </span>
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </nav>
+                  )}
+
+                  {/* Column 3 · Contact — driven by saved footer headline/subheading */}
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: GOLD }}>
+                      {heading || (lang === 'ar' ? 'تواصل معي' : 'Get In Touch')}
+                    </h3>
+                    {subheading && (
+                      <p className="mt-3 text-sm leading-relaxed text-white/75 break-words">
+                        {subheading}
+                      </p>
+                    )}
+                    <ul className="mt-4 space-y-3 flex flex-col items-center md:items-start">
+                      {emailHref && (
+                        <li>
+                          <a
+                            href={emailHref}
+                            className="inline-flex items-center gap-2.5 text-sm text-white/80 transition-colors hover:text-[#D4A017] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+                          >
+                            <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            <span className="break-all">{emailVal.replace(/^mailto:/, '')}</span>
+                          </a>
+                        </li>
+                      )}
+                      {waHref && (
+                        <li>
+                          <a
+                            href={waHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2.5 text-sm text-white/80 transition-colors hover:text-[#D4A017] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+                          >
+                            <MessageCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            <span>{lang === 'ar' ? 'واتساب' : 'WhatsApp'}</span>
+                          </a>
+                        </li>
+                      )}
+                      {locVal && (
+                        <li className="inline-flex items-center gap-2.5 text-sm text-white/80">
+                          <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span className="break-words">{locVal}</span>
+                        </li>
+                      )}
+                    </ul>
+                    {(emailHref || waHref) && (
+                      <a
+                        href={ctaHref}
+                        className="mt-6 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold text-[#1a1a1a] shadow-sm transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+                        style={{ background: GOLD }}
+                      >
+                        {lang === 'ar' ? 'تواصل معي' : 'Get in touch'}
+                        <ArrowRight className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Bottom bar — always credits the owner + PortfolioHub ── */}
+                <div className="mt-12 border-t border-white/15 pt-5">
+                  <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-between sm:gap-4">
+                    <p className="text-xs text-white/80">
+                      © {year} · {displayName}
+                    </p>
+                    <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-5">
+                      <p className="text-xs text-white/80">
+                        © {year} · {lang === 'ar' ? 'بُني بواسطة' : 'Developed with'}{' '}
+                        <a
+                          href="https://portfolio-hub.online"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-semibold text-white underline decoration-white/40 underline-offset-2 transition-colors hover:text-[#D4A017] focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-white/90"
+                        >
+                          PortfolioHub
+                        </a>
+                      </p>
+                      {showScrollToTop && (
+                        <button
+                          type="button"
+                          onClick={scrollToTop}
+                          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-white/80 transition-colors hover:text-[#D4A017] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+                        >
+                          <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                          {lang === 'ar' ? 'للأعلى' : 'Back to top'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </footer>
+          </>
         )
       }
       default:
@@ -1165,7 +1333,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
           <div className="fixed bottom-20 md:bottom-6 left-6 z-50 flex flex-col items-start gap-3">
             {showWhatsapp && (
               <a
-                href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`}
+                href={`https://wa.me/${waDigits}`}
                 target="_blank"
                 rel="noreferrer"
                 onClick={() => trackPortfolioEvent(profile.username, 'whatsapp_click')}
@@ -1261,19 +1429,30 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
               hero background). */}
           {!visibleSections.some((s: any) => s.sectionType === 'footer') && (
             <div
-              className="w-full py-3.5 px-4 text-center text-xs"
-              style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))', color: 'rgba(255,255,255,0.75)' }}
+              className="w-full border-t border-white/15 py-5 px-4 text-white/80"
+              style={{
+                background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
+                fontFamily: lang === 'ar'
+                  ? "'Cairo', system-ui, -apple-system, sans-serif"
+                  : 'Inter, system-ui, -apple-system, sans-serif',
+              }}
             >
-              © {new Date().getFullYear()} · Developed with{' '}
-              <a
-                href="https://portholiohub.pages.dev/"
-                target="_blank"
-                rel="noreferrer"
-                className="underline hover:opacity-90 transition-opacity"
-                style={{ color: '#ffffff' }}
-              >
-                PortfolioHub
-              </a>
+              <div className="mx-auto flex max-w-[1200px] flex-col items-center gap-2 text-xs sm:flex-row sm:justify-between">
+                <p className="text-xs text-white/80">
+                  © {new Date().getFullYear()} · {displayName}
+                </p>
+                <p className="text-xs text-white/80">
+                  © {new Date().getFullYear()} · {lang === 'ar' ? 'بُني بواسطة' : 'Developed with'}{' '}
+                  <a
+                    href="https://portfolio-hub.online"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-white underline decoration-white/40 underline-offset-2 transition-colors hover:text-[#D4A017] focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-white/90"
+                  >
+                    PortfolioHub
+                  </a>
+                </p>
+              </div>
             </div>
           )}
 

@@ -1,0 +1,2079 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="PortfolioHub — Professional portfolios for content writers, copywriters, script writers, and creatives. Designed to showcase your work, build trust, and make a stronger first impression.">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="favicon.png">
+  <title>PortfolioHub — Portfolios for Content Writers</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Six+Caps&family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    (function() {
+      try {
+        var lang = localStorage.getItem('ph_lang');
+        if (lang !== 'en') {
+          document.documentElement.lang = 'ar';
+          document.documentElement.dir = 'rtl';
+        }
+      } catch (e) {}
+      var saved = localStorage.getItem('theme');
+      var dark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    })();
+  </script>
+  <style>
+    :root {
+      --accent: #0066cc;
+      --accent-focus: #0071e3;
+      --accent-on-dark: #2997ff;
+      --ink: #1d1d1f;
+      --ink-muted: #7a7a7a;
+      --canvas: #ffffff;
+      --canvas-alt: #f5f5f7;
+      --tile-1: #272729;
+      --tile-2: #2a2a2c;
+      --hairline: #e0e0e0;
+      --divider: #f0f0f0;
+      --on-dark: #ffffff;
+      --on-primary: #ffffff;
+      --glass: rgba(255,255,255,0.88);
+      --glass-solid: rgba(255,255,255,0.96);
+      --glass-bottom: rgba(255,255,255,0.92);
+      --card-hover: #f0f0f2;
+      --tile-hover: #323234;
+      --space-xs: 8px;
+      --space-sm: 16px;
+      --space-md: 24px;
+      --space-lg: 32px;
+      --space-xl: 48px;
+      --space-2xl: 64px;
+      --space-3xl: 80px;
+      --space-4xl: 100px;
+      --space-5xl: 140px;
+      --space-6xl: 180px;
+      --font-primary: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-display: 'Six Caps', sans-serif;
+    }
+    html[data-theme="dark"] {
+      --accent: #2997ff;
+      --accent-focus: #4aa3ff;
+      --accent-on-dark: #2997ff;
+      --ink: #f5f5f7;
+      --ink-muted: #a1a1a6;
+      --canvas: #0e0e10;
+      --canvas-alt: #1a1a1d;
+      --tile-1: #141417;
+      --tile-2: #1e1e21;
+      --hairline: #3a3a3c;
+      --divider: #2a2a2c;
+      --on-dark: #ffffff;
+      --on-primary: #ffffff;
+      --glass: rgba(22,22,24,0.88);
+      --glass-solid: rgba(22,22,24,0.96);
+      --glass-bottom: rgba(22,22,24,0.92);
+      --card-hover: #232326;
+      --tile-hover: #28282b;
+    }
+    /* ===== Arabic typography ===== */
+    html[lang="ar"] {
+      --font-primary: 'Cairo', 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    html[lang="ar"] body { line-height: 1.65; }
+    html[lang="ar"] .hero-title { letter-spacing: 0; line-height: 1.25; }
+    html[lang="ar"] .section-title { letter-spacing: 0; line-height: 1.3; }
+    html[lang="ar"] .hero-tag,
+    html[lang="ar"] .section-label,
+    html[lang="ar"] .filter-btn,
+    html[lang="ar"] .project-type,
+    html[lang="ar"] .footer-logo,
+    html[lang="ar"] .mobile-nav-item,
+    html[lang="ar"] .project-name,
+    html[lang="ar"] .service-card h3 { letter-spacing: 0; }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 0; }
+    body {
+      font-family: var(--font-primary);
+      background: var(--canvas);
+      color: var(--ink);
+      line-height: 1.47;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    img { max-width: 100%; height: auto; display: block; }
+    a { text-decoration: none; color: inherit; }
+    ul { list-style: none; }
+    .container {
+      width: 100%;
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 0 var(--space-xl);
+    }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--canvas-alt); }
+    ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 2px; }
+    /* ===== Header ===== */
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      padding: var(--space-sm) 0;
+      transition: background 0.4s;
+    }
+    header.scrolled { background: var(--glass); backdrop-filter: blur(20px); border-bottom: 1px solid var(--divider); }
+    .header-inner { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+    .header-nav { display: flex; align-items: center; gap: var(--space-md); }
+    .header-nav a {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink-muted);
+      transition: color 0.3s;
+      letter-spacing: -0.01em;
+    }
+    .header-nav a:hover { color: var(--accent); }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+      margin-inline-start: auto;
+    }
+    /* ===== Language Switcher ===== */
+    .lang-switch {
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--hairline);
+      border-radius: 9999px;
+      padding: 3px;
+      gap: 2px;
+      background: var(--canvas);
+    }
+    .lang-btn {
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-family: var(--font-primary);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: var(--ink-muted);
+      padding: 5px 11px;
+      border-radius: 9999px;
+      transition: color 0.25s, background 0.25s;
+      min-height: 28px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .lang-btn:hover { color: var(--ink); }
+    .lang-btn.active { background: var(--accent); color: var(--on-primary); }
+    /* ===== Theme Toggle ===== */
+    .theme-toggle {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: 1px solid var(--hairline);
+      border-radius: 50%;
+      cursor: pointer;
+      color: var(--ink-muted);
+      transition: color 0.3s, border-color 0.3s, background 0.3s;
+      -webkit-tap-highlight-color: transparent;
+      position: relative;
+    }
+    .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+    .theme-toggle svg {
+      width: 18px;
+      height: 18px;
+      transition: transform 0.3s;
+    }
+    .theme-toggle:hover svg { transform: rotate(20deg); }
+    .theme-toggle .icon-sun { display: none; }
+    html[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+    html[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+    /* ===== Hamburger ===== */
+    .hamburger {
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      gap: 5px;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      background: none;
+      border: none;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      z-index: 1002;
+    }
+    .hamburger span {
+      display: block;
+      width: 22px;
+      height: 2px;
+      background: var(--ink);
+      border-radius: 2px;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      margin: 0 auto;
+    }
+    .hamburger.active span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .hamburger.active span:nth-child(2) { opacity: 0; }
+    .hamburger.active span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+    /* ===== Mobile Menu Overlay ===== */
+    .mobile-menu {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--glass-solid);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      z-index: 999;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.35s ease, visibility 0.35s ease;
+    }
+    .mobile-menu.open { opacity: 1; visibility: visible; }
+    .mobile-menu-nav {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: var(--space-xl);
+    }
+    .mobile-menu-nav a {
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--ink);
+      letter-spacing: -0.03em;
+      transition: color 0.25s;
+      -webkit-tap-highlight-color: transparent;
+      position: relative;
+    }
+    .mobile-menu-nav a::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 50%;
+      transform: translateX(-50%) scaleX(0);
+      width: 100%;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 1px;
+      transition: transform 0.3s ease;
+    }
+    .mobile-menu-nav a:hover { color: var(--accent); }
+    .mobile-menu-nav a:hover::after { transform: translateX(-50%) scaleX(1); }
+    /* ===== Hero (light tile) ===== */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding: var(--space-6xl) var(--space-xl) var(--space-3xl);
+      background: var(--canvas);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+    .hero-bg span {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.15;
+      will-change: transform;
+    }
+    .hero-bg .orb-1 {
+      width: 500px; height: 500px;
+      background: var(--accent);
+      top: -15%; left: -8%;
+      animation: floatOrb 25s ease-in-out infinite;
+    }
+    .hero-bg .orb-2 {
+      width: 400px; height: 400px;
+      background: #4a9eff;
+      bottom: -12%; right: -6%;
+      animation: floatOrb 30s ease-in-out infinite reverse;
+    }
+    .hero-bg .orb-3 {
+      width: 300px; height: 300px;
+      background: var(--accent);
+      top: 40%; right: 20%;
+      animation: floatOrb 20s ease-in-out infinite 5s;
+      opacity: 0.08;
+    }
+    @keyframes floatOrb {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      25% { transform: translate(40px, -60px) scale(1.08); }
+      50% { transform: translate(-20px, 30px) scale(0.95); }
+      75% { transform: translate(50px, 40px) scale(1.05); }
+    }
+    .hero-content { width: 100%; max-width: 1320px; margin: 0 auto; position: relative; z-index: 1; }
+    .hero-tag {
+      font-size: 14px;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+      color: var(--accent);
+      margin-bottom: var(--space-md);
+      display: block;
+    }
+    .hero-title {
+      font-size: clamp(48px, 9vw, 120px);
+      font-weight: 600;
+      line-height: 1.07;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+      max-width: 90%;
+    }
+    .hero-title .indent {
+      display: block;
+      padding-inline-end: clamp(80px, 15vw, 400px);
+      color: var(--accent);
+    }
+    .hero-subtitle {
+      font-size: clamp(14px, 1.2vw, 20px);
+      font-weight: 400;
+      color: var(--ink-muted);
+      letter-spacing: 0;
+      max-width: 38%;
+      margin-top: var(--space-lg);
+      line-height: 1.6;
+    }
+    .hero-support {
+      max-width: 38%;
+      margin-top: var(--space-sm);
+      font-size: clamp(13px, 1vw, 16px);
+      font-weight: 500;
+      color: var(--ink);
+      opacity: 0.75;
+      line-height: 1.6;
+    }
+    .hero-ctas {
+      display: flex;
+      gap: var(--space-sm);
+      margin-top: var(--space-xl);
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 32px;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--on-primary);
+      background: var(--accent);
+      border-radius: 12px;
+      transition: background 0.3s, transform 0.2s, box-shadow 0.3s;
+      -webkit-tap-highlight-color: transparent;
+      border: none;
+      cursor: pointer;
+      font-family: var(--font-primary);
+    }
+    .hero-cta:hover {
+      background: var(--accent-focus);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,102,204,0.25);
+    }
+    .hero-cta:active { transform: translateY(0); }
+    .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 32px;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+      background: none;
+      border: 1px solid var(--hairline);
+      border-radius: 12px;
+      transition: border-color 0.3s, color 0.3s, transform 0.2s, background 0.3s;
+      -webkit-tap-highlight-color: transparent;
+      cursor: pointer;
+      font-family: var(--font-primary);
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
+    .btn-ghost:active { transform: translateY(0); }
+    .btn-ghost svg, .hero-cta svg, .cta-btn svg { transition: transform 0.3s ease; }
+    .btn-ghost:hover svg, .hero-cta:hover svg, .cta-btn:hover svg { transform: translateX(3px); }
+    html[dir="rtl"] .btn-ghost:hover svg,
+    html[dir="rtl"] .hero-cta:hover svg,
+    html[dir="rtl"] .cta-btn:hover svg { transform: translateX(-3px) scaleX(-1); }
+    .hero-note {
+      margin-top: var(--space-lg);
+      font-size: 13px;
+      color: var(--ink-muted);
+      max-width: 38%;
+      line-height: 1.6;
+    }
+    .hero-social {
+      display: flex;
+      gap: var(--space-sm);
+      margin-top: var(--space-xl);
+    }
+    .hero-social a {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--hairline);
+      color: var(--ink-muted);
+      border-radius: 50%;
+      transition: background 0.3s, color 0.3s, border-color 0.3s;
+    }
+    .hero-social a:hover {
+      background: var(--accent);
+      color: var(--on-primary);
+      border-color: var(--accent);
+    }
+    .hero-scroll {
+      position: absolute;
+      bottom: var(--space-lg);
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      letter-spacing: -0.01em;
+      color: var(--ink-muted);
+      opacity: 0.4;
+      animation: scrollPulse 2s ease-in-out infinite;
+      white-space: nowrap;
+    }
+    @keyframes scrollPulse {
+      0%, 100% { opacity: 0.4; transform: translateX(-50%) translateY(0); }
+      50% { opacity: 0.8; transform: translateX(-50%) translateY(4px); }
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    /* ===== Sections ===== */
+    section { padding: var(--space-3xl) 0; }
+    .section-inner { width: 100%; max-width: 1320px; margin: 0 auto; padding: 0 var(--space-xl); }
+    .section-number {
+      font-family: var(--font-display);
+      font-size: clamp(36px, 4vw, 64px);
+      color: var(--accent);
+      line-height: 1;
+      margin-bottom: var(--space-sm);
+      letter-spacing: 0.02em;
+      direction: ltr;
+      display: block;
+    }
+    .section-label {
+      font-size: 14px;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+      color: var(--accent);
+      margin-bottom: var(--space-xs);
+      display: block;
+    }
+    .section-title {
+      font-size: clamp(28px, 4vw, 52px);
+      font-weight: 600;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: var(--space-lg);
+    }
+    .section-title-wide { max-width: 60%; }
+    .section-lead {
+      max-width: 45%;
+      font-size: clamp(14px, 1.2vw, 18px);
+      color: var(--ink-muted);
+      line-height: 1.7;
+      margin-bottom: var(--space-2xl);
+    }
+    /* Light section variant */
+    .section-light { background: var(--canvas); }
+    /* Dark section variant */
+    .section-dark {
+      background: var(--tile-1);
+      color: var(--on-dark);
+    }
+    .section-dark .section-title { color: var(--on-dark); }
+    .section-dark .section-number { color: var(--accent-on-dark); }
+    .section-dark .section-label { color: var(--accent-on-dark); }
+    .section-dark .section-title-wide { color: var(--on-dark); }
+    .section-dark .section-lead { color: rgba(255,255,255,0.6); }
+    /* ===== Problem section (dark) ===== */
+    .problem-body {
+      max-width: 620px;
+      font-size: clamp(15px, 1.3vw, 18px);
+      color: rgba(255,255,255,0.75);
+      line-height: 1.85;
+    }
+    .problem-body p { margin-bottom: var(--space-md); }
+    .problem-body .problem-quote {
+      font-size: clamp(16px, 1.5vw, 20px);
+      font-weight: 600;
+      color: var(--accent-on-dark);
+      margin: var(--space-lg) 0;
+    }
+    .highlight-card {
+      display: inline-block;
+      margin-top: var(--space-2xl);
+      padding: var(--space-md) var(--space-lg);
+      border: 1px solid rgba(41,151,255,0.3);
+      border-radius: 16px;
+      background: rgba(41,151,255,0.08);
+      color: var(--accent-on-dark);
+      font-size: 16px;
+      font-weight: 600;
+      line-height: 1.6;
+      max-width: 620px;
+    }
+    /* ===== Service cards (light) ===== */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-md);
+    }
+    .service-card {
+      background: var(--canvas-alt);
+      border: 1px solid var(--divider);
+      border-radius: 18px;
+      padding: var(--space-xl);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s, background 0.3s, border-color 0.3s;
+    }
+    .service-card:hover { transform: translateY(-4px); background: var(--card-hover); border-color: var(--hairline); }
+    .service-card:active { transform: scale(0.98); }
+    .service-card h3 {
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      margin-bottom: var(--space-sm);
+      line-height: 1.3;
+    }
+    .service-card > p {
+      font-size: 14px;
+      color: var(--ink-muted);
+      line-height: 1.7;
+    }
+    .service-card .card-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,102,204,0.1);
+      color: var(--accent);
+      margin-bottom: var(--space-md);
+    }
+    html[data-theme="dark"] .service-card .card-icon { background: rgba(41,151,255,0.12); color: var(--accent); }
+    /* ===== Why portfolio (dark) ===== */
+    .why-questions {
+      list-style: none;
+      margin-top: var(--space-lg);
+      display: grid;
+      gap: 12px;
+      max-width: 560px;
+    }
+    .why-questions li {
+      padding: 15px 20px;
+      background: var(--tile-2);
+      border-radius: 14px;
+      color: rgba(255,255,255,0.7);
+      font-size: 15px;
+      line-height: 1.6;
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+    .why-questions li::before {
+      content: '?';
+      display: inline-block;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(41,151,255,0.15);
+      color: var(--accent-on-dark);
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+      line-height: 22px;
+      margin-inline-end: 10px;
+    }
+    html[lang="ar"] .why-questions li::before { content: '؟'; }
+    /* ===== Why us (light) ===== */
+    .feature-card {
+      background: var(--canvas-alt);
+      border: 1px solid var(--divider);
+      border-radius: 18px;
+      padding: var(--space-xl);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s, background 0.3s, border-color 0.3s;
+    }
+    .feature-card:hover { transform: translateY(-4px); background: var(--card-hover); border-color: var(--hairline); }
+    .feature-card .card-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,102,204,0.1);
+      color: var(--accent);
+      margin-bottom: var(--space-md);
+    }
+    html[data-theme="dark"] .feature-card .card-icon { background: rgba(41,151,255,0.12); color: var(--accent); }
+    .feature-card h3 {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      margin-bottom: var(--space-xs);
+      line-height: 1.3;
+    }
+    .feature-card p {
+      font-size: 14px;
+      color: var(--ink-muted);
+      line-height: 1.7;
+    }
+    .platform-chips {
+      margin-top: auto;
+      padding-top: var(--space-md);
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-xs);
+    }
+    .platform-chips span {
+      font-size: 12px;
+      color: var(--accent);
+      background: var(--canvas);
+      border: 1px solid var(--hairline);
+      padding: 5px 12px;
+      border-radius: 9999px;
+    }
+    /* ===== Filters ===== */
+    .filter-bar {
+      display: flex;
+      gap: var(--space-lg);
+      margin-bottom: var(--space-xl);
+      flex-wrap: wrap;
+    }
+    .filter-btn {
+      background: none;
+      border: none;
+      font-family: var(--font-primary);
+      font-size: 14px;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+      color: var(--ink-muted);
+      cursor: pointer;
+      padding: 6px 0;
+      transition: color 0.3s;
+      min-height: 44px;
+    }
+    .filter-btn:hover { color: var(--ink); }
+    .filter-btn.active { color: var(--accent); }
+    .section-dark .filter-btn { color: rgba(255,255,255,0.5); }
+    .section-dark .filter-btn:hover { color: rgba(255,255,255,0.8); }
+    .section-dark .filter-btn.active { color: var(--accent-on-dark); }
+    /* ===== Projects (dark tile) ===== */
+    .projects-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-lg);
+    }
+    .project-card {
+      display: flex;
+      flex-direction: column;
+      background: var(--tile-2);
+      border: 1px solid var(--hairline);
+      border-radius: 18px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .project-card:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: 0 20px 48px rgba(0,0,0,0.35); }
+    .project-media {
+      position: relative;
+      aspect-ratio: 16/10;
+      overflow: hidden;
+      background: var(--tile-1);
+    }
+    .project-bg {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      transform: scale(1.01);
+      transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .project-card:hover .project-bg { transform: scale(1.06); }
+    .project-badge {
+      position: absolute;
+      inset-inline-start: 12px;
+      top: 12px;
+      z-index: 2;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      padding: 5px 12px;
+      border-radius: 9999px;
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: rgba(255,255,255,0.92);
+    }
+    .project-hover {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 100%);
+      opacity: 0;
+      transition: opacity 0.35s ease;
+    }
+    .project-card:hover .project-hover { opacity: 1; }
+    .project-open {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 9999px;
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.25);
+      transform: translateY(6px);
+      transition: transform 0.35s ease, background 0.3s ease;
+    }
+    .project-card:hover .project-open { transform: translateY(0); }
+    .project-open svg, .project-link svg { transition: transform 0.3s ease; }
+    .project-card:hover .project-open svg { transform: translateX(3px); }
+    html[dir="rtl"] .project-card:hover .project-open svg,
+    html[dir="rtl"] .project-link svg { transform: scaleX(-1); }
+    .project-body {
+      padding: var(--space-lg);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+    }
+    .project-name {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--on-dark);
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+    .project-type {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accent-on-dark);
+    }
+    .project-foot {
+      margin-top: auto;
+      padding-top: var(--space-sm);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .project-specialty {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      line-height: 1.4;
+    }
+    .project-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent-on-dark);
+      white-space: nowrap;
+    }
+    .projects-empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 64px 24px;
+      color: rgba(255,255,255,0.4);
+      font-size: 15px;
+    }
+    .project-skeleton {
+      background: var(--tile-2);
+      aspect-ratio: 16/10;
+      border-radius: 18px;
+      position: relative;
+      overflow: hidden;
+      cursor: default;
+    }
+    .project-skeleton::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%);
+      background-size: 200% 100%;
+      animation: skelShimmer 1.4s infinite;
+    }
+    @keyframes skelShimmer {
+      from { background-position: 200% 0; }
+      to   { background-position: -200% 0; }
+    }
+    /* ===== CTA section (light) ===== */
+    .cta-section { text-align: center; }
+    .cta-section .section-label { display: block; }
+    .cta-section .section-title {
+      max-width: 700px;
+      margin-inline: auto;
+      margin-bottom: var(--space-md);
+    }
+    .cta-desc {
+      max-width: 540px;
+      margin: 0 auto var(--space-xl);
+      color: var(--ink-muted);
+      font-size: 16px;
+      line-height: 1.75;
+    }
+    .cta-btns {
+      display: flex;
+      gap: var(--space-sm);
+      justify-content: center;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 15px 34px;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--on-primary);
+      background: var(--accent);
+      border-radius: 12px;
+      transition: background 0.3s, transform 0.2s, box-shadow 0.3s;
+      -webkit-tap-highlight-color: transparent;
+      border: none;
+      cursor: pointer;
+      font-family: var(--font-primary);
+    }
+    .cta-btn:hover {
+      background: var(--accent-focus);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,102,204,0.25);
+    }
+    .cta-btn:active { transform: translateY(0); }
+    .cta-secondary {
+      font-size: 13px;
+      color: var(--ink-muted);
+      margin-top: var(--space-md);
+      display: block;
+    }
+    .cta-secondary a { color: var(--accent); font-weight: 600; }
+    .cta-secondary a:hover { text-decoration: underline; }
+    /* ===== Footer ===== */
+    footer {
+      background: var(--canvas-alt);
+      border-top: 1px solid var(--divider);
+      padding: var(--space-4xl) 0 0;
+    }
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr 1fr 1fr;
+      gap: var(--space-3xl);
+    }
+    .footer-logo {
+      display: block;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      margin-bottom: var(--space-md);
+    }
+    .footer-desc {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--ink-muted);
+      max-width: 280px;
+      margin-bottom: var(--space-lg);
+    }
+    .footer-social {
+      display: flex;
+      gap: 10px;
+    }
+    .footer-social a {
+      width: 38px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--divider);
+      color: var(--ink-muted);
+      border-radius: 10px;
+      transition: background 0.3s, color 0.3s, border-color 0.3s;
+    }
+    .footer-social a:hover {
+      background: var(--accent);
+      color: var(--on-primary);
+      border-color: var(--accent);
+    }
+    .footer-heading {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--ink);
+      margin-bottom: var(--space-lg);
+    }
+    .footer-links {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .footer-links a {
+      font-size: 14px;
+      color: var(--ink-muted);
+      transition: color 0.25s;
+    }
+    .footer-links a:hover { color: var(--accent); }
+    .footer-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: var(--space-4xl);
+      padding: var(--space-lg) 0;
+      border-top: 1px solid var(--divider);
+      font-size: 12px;
+      color: var(--ink-muted);
+      gap: var(--space-sm);
+    }
+    #back-top {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: var(--font-primary);
+      color: var(--ink-muted);
+      transition: color 0.3s;
+      min-height: 44px;
+      padding: 0 8px;
+    }
+    #back-top:hover { color: var(--accent); }
+    #back-top svg { transition: transform 0.3s; }
+    #back-top:hover svg { transform: translateY(-2px); }
+    /* ===== Reveal ===== */
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.7s, transform 0.7s;
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+    /* ===== Responsive ===== */
+    @media (max-width: 1024px) {
+      .container { padding: 0 var(--space-lg); }
+      .section-inner { padding: 0 var(--space-lg); }
+      .hero-title .indent { padding-inline-end: 80px; }
+      .hero-subtitle, .hero-support, .hero-note { max-width: 55%; }
+      .projects-grid { grid-template-columns: 1fr 1fr; }
+      .section-title-wide { max-width: 80%; }
+    }
+    @media (max-width: 767px) {
+      .container { padding: 0 var(--space-md); }
+      .section-inner { padding: 0 var(--space-md); }
+      .hero { padding: var(--space-5xl) var(--space-md) var(--space-2xl); }
+      .hero-title { font-size: clamp(36px, 8vw, 56px); max-width: 100%; }
+      .hero-title .indent { padding-inline-end: 0; }
+      .hero-subtitle { max-width: 100%; font-size: 15px; }
+      .hero-support, .hero-note { max-width: 100%; }
+      .cards-grid { grid-template-columns: 1fr; }
+      .section-lead { max-width: 100%; }
+      .projects-grid { grid-template-columns: 1fr; gap: var(--space-md); }
+      .section-title-wide { max-width: 100%; }
+      .filter-bar {
+        gap: var(--space-sm);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        flex-wrap: nowrap;
+        padding-bottom: 4px;
+      }
+      .filter-bar::-webkit-scrollbar { display: none; }
+      .filter-btn {
+        white-space: nowrap;
+        padding: 8px 16px;
+        font-size: 13px;
+        flex-shrink: 0;
+      }
+    }
+    /* ===== Floating WhatsApp ===== */
+    .whatsapp-float {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 56px;
+      height: 56px;
+      background: var(--accent);
+      color: var(--on-primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99;
+      transition: transform 0.2s, background 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .whatsapp-float:hover { background: var(--accent-focus); transform: scale(1.05); }
+    .whatsapp-float:active { transform: scale(0.95); }
+    /* ===== Mobile Bottom Nav ===== */
+    .mobile-bottom-nav {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 64px;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+      background: var(--glass-bottom);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--hairline);
+      z-index: 100;
+      justify-content: space-around;
+      align-items: center;
+    }
+    .mobile-nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      font-size: 10px;
+      letter-spacing: -0.01em;
+      color: var(--ink-muted);
+      transition: color 0.2s;
+      -webkit-tap-highlight-color: transparent;
+      padding: 4px 16px;
+      min-height: 44px;
+      justify-content: center;
+      position: relative;
+    }
+    .mobile-nav-item.active { color: var(--accent); }
+    .mobile-nav-item.active::before {
+      content: '';
+      position: absolute;
+      top: -1px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 24px;
+      height: 3px;
+      background: var(--accent);
+      border-radius: 0 0 3px 3px;
+    }
+    .mobile-nav-item:active { opacity: 0.6; }
+    .mobile-nav-item svg {
+      width: 22px;
+      height: 22px;
+      transition: transform 0.2s ease;
+    }
+    .mobile-nav-item.active svg { transform: scale(1.1); }
+    /* ===== Tablet & Mobile (≤767px) ===== */
+    @media (max-width: 767px) {
+      .header-nav { display: none; }
+      .hamburger { display: flex; }
+      .mobile-menu { display: block; }
+      .mobile-bottom-nav { display: flex; }
+      body { padding-bottom: 64px; }
+      .header-inner { padding-top: max(var(--space-sm), env(safe-area-inset-top, 0)); }
+      .whatsapp-float { bottom: 80px; right: 16px; width: 50px; height: 50px; }
+      .hero-bg .orb-1 { width: 350px; height: 350px; }
+      .hero-bg .orb-2 { width: 280px; height: 280px; }
+      .hero-bg .orb-3 { width: 200px; height: 200px; }
+    }
+    @media (max-width: 479px) {
+      .container { padding: 0 var(--space-md); }
+      .section-inner { padding: 0 var(--space-md); }
+      .hero {
+        min-height: auto;
+        padding: 72px var(--space-md) 40px;
+      }
+      .hero-content { display: flex; flex-direction: column; align-items: flex-start; }
+      .hero-tag {
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: var(--space-md);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      html[lang="ar"] .hero-tag { letter-spacing: 0; text-transform: none; }
+      .hero-tag::before {
+        content: '';
+        width: 24px;
+        height: 2px;
+        background: var(--accent);
+        border-radius: 1px;
+      }
+      .hero-title {
+        font-size: 38px;
+        max-width: 100%;
+        line-height: 1.1;
+      }
+      .hero-title .indent {
+        padding-inline-end: 0;
+        display: block;
+        color: var(--accent);
+        margin-top: 4px;
+      }
+      .hero-subtitle {
+        max-width: 100%;
+        font-size: 15px;
+        margin-top: var(--space-md);
+        line-height: 1.65;
+        color: var(--ink-muted);
+      }
+      .hero-ctas { flex-direction: column; align-items: stretch; }
+      .hero-cta, .btn-ghost {
+        width: 100%;
+        justify-content: center;
+        padding: 14px 28px;
+        font-size: 15px;
+        border-radius: 12px;
+      }
+      .hero-content .reveal { animation: slideUp 0.6s ease both; }
+      .hero-content .reveal:nth-child(1) { animation-delay: 0.05s; }
+      .hero-content .reveal:nth-child(2) { animation-delay: 0.15s; }
+      .hero-content .reveal:nth-child(3) { animation-delay: 0.25s; }
+      .hero-content .reveal:nth-child(4) { animation-delay: 0.35s; }
+      .hero-content .reveal:nth-child(5) { animation-delay: 0.45s; }
+      .hero-content .reveal:nth-child(6) { animation-delay: 0.5s; }
+      .hero-content .reveal:nth-child(7) { animation-delay: 0.55s; }
+      .hero-social {
+        justify-content: flex-start;
+        margin-top: var(--space-lg);
+        gap: 12px;
+      }
+      .hero-social a {
+        width: 46px;
+        height: 46px;
+      }
+      .hero-social a:active {
+        background: var(--accent);
+        color: var(--on-primary);
+        border-color: var(--accent);
+      }
+      .hero-scroll { display: none; }
+      .hero-bg .orb-1 { width: 240px; height: 240px; top: -10%; left: -15%; }
+      .hero-bg .orb-2 { width: 200px; height: 200px; bottom: -8%; right: -12%; }
+      .hero-bg .orb-3 { width: 140px; height: 140px; top: 35%; right: 10%; opacity: 0.06; }
+      .section-number { font-size: 48px; }
+      .section-title { font-size: 22px; }
+      .cards-grid { grid-template-columns: 1fr; }
+      .service-card, .feature-card { padding: var(--space-lg); }
+      .project-card { border-radius: 14px; }
+      .project-card:active { transform: scale(0.98); }
+      .footer-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-2xl);
+      }
+      .footer-desc { max-width: 100%; }
+      .footer-bottom { flex-direction: column; gap: var(--space-sm); text-align: center; }
+      .section-dark { padding: var(--space-3xl) 0; }
+      .mobile-menu-nav a { font-size: 24px; }
+    }
+    /* ===== RTL refinements ===== */
+    html[dir="rtl"] .footer-bottom { text-align: right; }
+    html[dir="rtl"] .lang-btn { letter-spacing: 0; }
+    html[dir="rtl"] .hero-tag,
+    html[dir="rtl"] .section-label,
+    html[dir="rtl"] .filter-btn,
+    html[dir="rtl"] .mobile-nav-item { letter-spacing: 0; }
+  </style>
+</head>
+<body>
+  <!-- ===== Header ===== -->
+  <header id="header" role="banner">
+    <div class="container header-inner">
+      <nav class="header-nav">
+        <a href="#service" data-i18n="navServices">Services</a>
+        <a href="#why-portfolio" data-i18n="navWhy">Why Portfolio?</a>
+        <a href="#portfolio" data-i18n="navPortfolio">Our Work</a>
+      </nav>
+      <div class="header-actions">
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+          <button class="lang-btn active" data-lang="ar" aria-pressed="true">AR</button>
+        </div>
+        <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode">
+          <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+        <button class="hamburger" id="hamburger" aria-label="Toggle menu" aria-expanded="false" aria-controls="mobile-menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+    </div>
+    <div class="mobile-menu" id="mobile-menu" aria-hidden="true">
+      <nav class="mobile-menu-nav" aria-label="Mobile navigation">
+        <a href="#home" data-i18n="navHome">Home</a>
+        <a href="#service" data-i18n="navServices">Services</a>
+        <a href="#why-portfolio" data-i18n="navWhy">Why Portfolio?</a>
+        <a href="#portfolio" data-i18n="navPortfolio">Our Work</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <!-- ===== Hero (light) ===== -->
+    <section id="home" class="hero" aria-label="Hero">
+      <div class="hero-bg" aria-hidden="true">
+        <span class="orb-1"></span>
+        <span class="orb-2"></span>
+        <span class="orb-3"></span>
+      </div>
+      <div class="hero-content">
+        <span class="hero-tag reveal" data-i18n="heroTag">Portfolios for Content Writers</span>
+        <h1 class="hero-title reveal">
+          <span data-i18n="heroTitle1">Let Your Work</span><br>
+          <span data-i18n="heroTitle2">Speak for You.</span>
+          <span class="indent" data-i18n="heroTitleIndent">A Portfolio That Sells.</span>
+        </h1>
+        <p class="hero-subtitle reveal" data-i18n="heroSubtitle">
+          Professional portfolios for content writers, copywriters, script writers, and creatives — designed to showcase your work, build trust, and make a stronger first impression.
+        </p>
+        <p class="hero-support reveal" data-i18n="heroSupport">
+          Not just a link you send to a client... it's the place where your work sells you.
+        </p>
+        <div class="hero-ctas reveal">
+          <a href="https://wa.me/201223789179" target="_blank" rel="noopener noreferrer" class="hero-cta" data-i18n="heroCta">Build My Portfolio</a>
+          <a href="#portfolio" class="btn-ghost" data-i18n="heroCta2">View Our Work</a>
+        </div>
+        <p class="hero-note reveal" data-i18n="heroNote">
+          Designed specifically for content writers, copywriters, script writers, and content creators.
+        </p>
+        <div class="hero-social reveal">
+          <a href="https://www.facebook.com/profile.php?id=61591188372137" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+          </a>
+          <a href="https://wa.me/201223789179" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
+          </a>
+          <a href="https://www.instagram.com/portfoli0hub/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+          </a>
+          <a href="https://www.linkedin.com/company/portfoliohubb/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+        </div>
+      </div>
+      <div class="hero-scroll" data-i18n="heroScroll">Scroll to explore</div>
+    </section>
+
+    <!-- ===== 01 The Problem (dark) ===== -->
+    <section id="problem" class="section-dark" aria-labelledby="problem-title">
+      <div class="section-inner">
+        <div class="reveal">
+          <span class="section-number">01</span>
+          <span class="section-label" data-i18n="problemLabel">The Problem</span>
+          <h2 id="problem-title" class="section-title section-title-wide" data-i18n="problemTitle">Your Work Is Excellent... But Is Its Presentation as Strong?</h2>
+        </div>
+        <div class="problem-body reveal">
+          <p data-i18n="problemBody1">You can be a highly skilled content writer.</p>
+          <p class="problem-quote" data-i18n="problemBodyQuote">&ldquo;Send me your portfolio.&rdquo;</p>
+          <p data-i18n="problemBody2">You start gathering links from here, Google Docs from there, and PDFs with your work scattered everywhere.</p>
+          <p data-i18n="problemBody3">The problem isn't your work. The problem is the way your work is presented.</p>
+        </div>
+        <div class="highlight-card reveal" data-i18n="problemHighlight">We turn your work into a professional portfolio that does you justice.</div>
+      </div>
+    </section>
+
+    <!-- ===== 02 The Service (light) ===== -->
+    <section id="service" class="section-light" aria-labelledby="service-title">
+      <div class="section-inner">
+        <div class="reveal">
+          <span class="section-number">02</span>
+          <span class="section-label" data-i18n="serviceLabel">The Service</span>
+          <h2 id="service-title" class="section-title section-title-wide" data-i18n="serviceTitle">What You'll Get</h2>
+        </div>
+        <div class="cards-grid">
+          <div class="service-card reveal">
+            <div class="card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            </div>
+            <h3 data-i18n="service1t">A Portfolio That Reflects You</h3>
+            <p data-i18n="service1d">Not a repeated template. We design your portfolio to reflect your personality, specialty, and working style.</p>
+          </div>
+          <div class="service-card reveal">
+            <div class="card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+            </div>
+            <h3 data-i18n="service2t">Professional Presentation of Your Work</h3>
+            <p data-i18n="service2d">Every project is presented so clients understand what you did, for whom, and the kind of work you can deliver.</p>
+          </div>
+          <div class="service-card reveal">
+            <div class="card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20l-8 9v8l-4 2v-10L2 3z"/></svg>
+            </div>
+            <h3 data-i18n="service3t">Your Work Is the Star</h3>
+            <p data-i18n="service3d">The design isn't there to show itself. It presents your work clearly and convincingly.</p>
+          </div>
+          <div class="service-card reveal">
+            <div class="card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
+            </div>
+            <h3 data-i18n="service4t">Responsive on Every Device</h3>
+            <p data-i18n="service4d">Clients view portfolios on mobile and laptop. Either way, the experience stays professional.</p>
+          </div>
+          <div class="service-card reveal">
+            <div class="card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            </div>
+            <h3 data-i18n="service5t">One Link for All Your Work</h3>
+            <p data-i18n="service5d">Instead of Drive, PDFs, Google Docs, and endless links — one portfolio you can send anywhere.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 03 Why a Portfolio? (dark) ===== -->
+    <section id="why-portfolio" class="section-dark" aria-labelledby="why-portfolio-title">
+      <div class="section-inner">
+        <div class="reveal">
+          <span class="section-number">03</span>
+          <span class="section-label" data-i18n="whyPortfolioLabel">Why a Portfolio?</span>
+          <h2 id="why-portfolio-title" class="section-title section-title-wide" data-i18n="whyPortfolioTitle">Clients Don't Buy a &ldquo;Writer&rdquo;... They Buy Trust.</h2>
+          <p class="section-lead" data-i18n="whyPortfolioBody">Before a client reaches out, they usually have questions:</p>
+        </div>
+        <ul class="why-questions reveal">
+          <li data-i18n="whyQ1">Does this person understand my work?</li>
+          <li data-i18n="whyQ2">Is their style right for my brand?</li>
+          <li data-i18n="whyQ3">Do they actually have experience?</li>
+          <li data-i18n="whyQ4">Can I trust them?</li>
+        </ul>
+        <div class="highlight-card reveal" data-i18n="whyPortfolioAnswer">A professional portfolio answers these questions before the conversation even starts.</div>
+      </div>
+    </section>
+
+    <!-- ===== 04 Why Us (light) ===== -->
+    <section id="why-us" class="section-light" aria-labelledby="why-us-title">
+      <div class="section-inner">
+        <div class="reveal">
+          <span class="section-number">04</span>
+          <span class="section-label" data-i18n="whyUsLabel">Why Us</span>
+          <h2 id="why-us-title" class="section-title section-title-wide" data-i18n="whyUsTitle">Built Specifically for Content Writers.</h2>
+        </div>
+        <div class="cards-grid">
+          <div class="feature-card reveal">
+            <div class="card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <h3 data-i18n="whyUs1t">Not a Ready-Made Template</h3>
+            <p data-i18n="whyUs1d">Every portfolio is built around your personality, specialty, and how you present your work.</p>
+          </div>
+          <div class="feature-card reveal">
+            <div class="card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M12 14v4"/><path d="M8 22h8"/></svg>
+            </div>
+            <h3 data-i18n="whyUs2t">Your Work Takes Center Stage</h3>
+            <p data-i18n="whyUs2d">The design isn't there to show itself. It gives your work the space it deserves.</p>
+          </div>
+          <div class="feature-card reveal">
+            <div class="card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <h3 data-i18n="whyUs3t">An Easy Experience for Clients</h3>
+            <p data-i18n="whyUs3d">Clients land, learn who you are, see your work, and contact you — without friction.</p>
+          </div>
+          <div class="feature-card reveal">
+            <div class="card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><circle cx="12" cy="8" r="0.5" fill="currentColor"/></svg>
+            </div>
+            <h3 data-i18n="whyUs4t">A Look That Makes You Professional</h3>
+            <p data-i18n="whyUs4d">Because the first impression starts before a client reads the first word of your copy.</p>
+          </div>
+          <div class="feature-card reveal">
+            <div class="card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <h3 data-i18n="whyUs5t">Ready to Share</h3>
+            <p data-i18n="whyUs5d">Use your portfolio on:</p>
+            <div class="platform-chips">
+              <span data-i18n="platformLinkedIn">LinkedIn</span>
+              <span data-i18n="platformFacebook">Facebook</span>
+              <span data-i18n="platformInstagram">Instagram</span>
+              <span data-i18n="platformCv">CV</span>
+              <span data-i18n="platformEmail">Email</span>
+              <span data-i18n="platformWhatsApp">WhatsApp</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 05 Portfolio (dark) ===== -->
+    <section id="portfolio" class="section-dark" aria-labelledby="portfolio-title">
+      <div class="section-inner">
+        <div class="reveal">
+          <span class="section-number">05</span>
+          <span class="section-label" data-i18n="portfolioLabel">Our Work</span>
+          <h2 id="portfolio-title" class="section-title section-title-wide" data-i18n="portfolioTitle">See the Portfolios Before You Make Yours.</h2>
+          <p class="section-lead" data-i18n="portfolioDesc">
+            Real examples of content writers and creators, each with a dedicated portfolio. Every portfolio has its own personality — but the goal is the same: presenting work in a way that makes its owner look the part.
+          </p>
+        </div>
+        <div class="filter-bar reveal" id="filterBar" role="tablist" aria-label="Filter projects"></div>
+        <div class="projects-grid" id="projectsGrid">
+          <div class="project-skeleton"></div>
+          <div class="project-skeleton"></div>
+          <div class="project-skeleton"></div>
+          <div class="project-skeleton"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 06 CTA (light) ===== -->
+    <section id="cta" class="section-light cta-section" aria-labelledby="cta-title">
+      <div class="section-inner">
+        <span class="section-label reveal" data-i18n="ctaLabel">Ready to Present Your Work Differently?</span>
+        <h2 id="cta-title" class="section-title reveal" data-i18n="ctaTitle">You Have Work Worth Seeing.</h2>
+        <p class="cta-desc reveal" data-i18n="ctaDesc">
+          Don't let the way your work is presented lower its value. Have a portfolio that makes the first impression work in your favor.
+        </p>
+        <div class="cta-btns reveal">
+          <a href="https://wa.me/201223789179" target="_blank" rel="noopener noreferrer" class="cta-btn">
+            <span data-i18n="ctaBtn">Start Your Portfolio</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+          </a>
+        </div>
+        <span class="cta-secondary">
+          <span data-i18n="ctaSecondary">Or reach out to us directly on </span><a href="https://wa.me/201223789179" target="_blank" rel="noopener noreferrer">WhatsApp</a>.
+        </span>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== Floating WhatsApp ===== -->
+  <a href="https://wa.me/201223789179" target="_blank" rel="noopener noreferrer" class="whatsapp-float" aria-label="WhatsApp">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
+  </a>
+
+  <!-- ===== Mobile Bottom Nav ===== -->
+  <nav class="mobile-bottom-nav" aria-label="Main navigation">
+    <a href="#home" class="mobile-nav-item active">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
+      <span data-i18n="navHome">Home</span>
+    </a>
+    <a href="#service" class="mobile-nav-item">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><circle cx="12" cy="8" r="0.5" fill="currentColor"/></svg>
+      <span data-i18n="navServices">Services</span>
+    </a>
+    <a href="#why-portfolio" class="mobile-nav-item">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span data-i18n="navWhy">Why Portfolio?</span>
+    </a>
+    <a href="#portfolio" class="mobile-nav-item">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+      <span data-i18n="navPortfolio">Our Work</span>
+    </a>
+  </nav>
+
+  <!-- ===== Footer ===== -->
+  <footer role="contentinfo">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <span class="footer-logo">PortfolioHub</span>
+          <p class="footer-desc" data-i18n="footerDesc">
+            We turn your work from scattered files and links into a portfolio that presents you the way you deserve.
+          </p>
+          <div class="footer-social">
+            <a href="https://www.facebook.com/profile.php?id=61591188372137" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+            </a>
+            <a href="https://wa.me/201223789179" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
+            </a>
+            <a href="https://www.instagram.com/portfoli0hub/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+            </a>
+            <a href="https://www.linkedin.com/company/portfoliohubb/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+            </a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <h4 class="footer-heading" data-i18n="footerNavH">Navigation</h4>
+          <nav class="footer-links" aria-label="Footer navigation">
+            <a href="#home" data-i18n="footerHome">Home</a>
+            <a href="#service" data-i18n="footerServices">Services</a>
+            <a href="#why-portfolio" data-i18n="footerWhy">Why Portfolio?</a>
+            <a href="#portfolio" data-i18n="footerPortfolio">Our Work</a>
+          </nav>
+        </div>
+        <div class="footer-col">
+          <h4 class="footer-heading" data-i18n="footerServicesH">Services</h4>
+          <nav class="footer-links">
+            <a href="#service" data-i18n="fs1">Portfolios for Content Writers</a>
+            <a href="#service" data-i18n="fs2">Portfolios for Copywriters</a>
+            <a href="#service" data-i18n="fs3">Portfolios for Script Writers</a>
+            <a href="#service" data-i18n="fs4">Personal Branding Websites</a>
+          </nav>
+        </div>
+        <div class="footer-col">
+          <h4 class="footer-heading" data-i18n="footerContactH">Get in Touch</h4>
+          <div class="footer-links">
+            <a href="https://wa.me/201223789179" target="_blank" rel="noopener noreferrer" data-i18n="footerWhatsApp">WhatsApp</a>
+            <a href="https://www.linkedin.com/company/portfoliohubb/" target="_blank" rel="noopener noreferrer" data-i18n="footerLinkedIn">LinkedIn</a>
+            <a href="https://www.facebook.com/profile.php?id=61591188372137" target="_blank" rel="noopener noreferrer" data-i18n="footerFacebook">Facebook</a>
+            <a href="https://www.instagram.com/portfoli0hub/" target="_blank" rel="noopener noreferrer" data-i18n="footerInstagram">Instagram</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span data-i18n="footerCopyright">&copy; 2026 PortfolioHub. All rights reserved.</span>
+        <button id="back-top" aria-label="Back to top"><span data-i18n="backTopLabel">Back to top</span> <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg></button>
+      </div>
+    </div>
+  </footer>
+  <script>
+    (function() {
+      'use strict';
+
+      /* ===== Content (centralized, bilingual) ===== */
+      const I18N = {
+        en: {
+          metaTitle: 'PortfolioHub — Portfolios for Content Writers',
+          langAria: 'Language',
+          navServices: 'Services',
+          navWhy: 'Why Portfolio?',
+          navPortfolio: 'Our Work',
+          navHome: 'Home',
+          heroTag: 'Portfolios for Content Writers',
+          heroTitle1: 'Let Your Work',
+          heroTitle2: 'Speak for You.',
+          heroTitleIndent: 'A Portfolio That Sells.',
+          heroSubtitle: 'Professional portfolios for content writers, copywriters, script writers, and creatives — designed to showcase your work, build trust, and make a stronger first impression.',
+          heroSupport: 'Not just a link you send to a client... it\'s the place where your work sells you.',
+          heroCta: 'Build My Portfolio',
+          heroCta2: 'View Our Work',
+          heroNote: 'Designed specifically for content writers, copywriters, script writers, and content creators.',
+          heroScroll: 'Scroll to explore',
+          problemLabel: 'The Problem',
+          problemTitle: 'Your Work Is Excellent... But Is Its Presentation as Strong?',
+          problemBody1: 'You can be a highly skilled content writer.',
+          problemBodyQuote: '\u201CSend me your portfolio.\u201D',
+          problemBody2: 'You start gathering links from here, Google Docs from there, and PDFs with your work scattered everywhere.',
+          problemBody3: 'The problem isn\'t your work. The problem is the way your work is presented.',
+          problemHighlight: 'We turn your work into a professional portfolio that does you justice.',
+          serviceLabel: 'The Service',
+          serviceTitle: 'What You\'ll Get',
+          service1t: 'A Portfolio That Reflects You',
+          service1d: 'Not a repeated template. We design your portfolio to reflect your personality, specialty, and working style.',
+          service2t: 'Professional Presentation of Your Work',
+          service2d: 'Every project is presented so clients understand what you did, for whom, and the kind of work you can deliver.',
+          service3t: 'Your Work Is the Star',
+          service3d: 'The design isn\'t there to show itself. It presents your work clearly and convincingly.',
+          service4t: 'Responsive on Every Device',
+          service4d: 'Clients view portfolios on mobile and laptop. Either way, the experience stays professional.',
+          service5t: 'One Link for All Your Work',
+          service5d: 'Instead of Drive, PDFs, Google Docs, and endless links — one portfolio you can send anywhere.',
+          whyPortfolioLabel: 'Why a Portfolio?',
+          whyPortfolioTitle: 'Clients Don\'t Buy a \u201CWriter\u201D... They Buy Trust.',
+          whyPortfolioBody: 'Before a client reaches out, they usually have questions:',
+          whyQ1: 'Does this person understand my work?',
+          whyQ2: 'Is their style right for my brand?',
+          whyQ3: 'Do they actually have experience?',
+          whyQ4: 'Can I trust them?',
+          whyPortfolioAnswer: 'A professional portfolio answers these questions before the conversation even starts.',
+          whyUsLabel: 'Why Us',
+          whyUsTitle: 'Built Specifically for Content Writers.',
+          whyUs1t: 'Not a Ready-Made Template',
+          whyUs1d: 'Every portfolio is built around your personality, specialty, and how you present your work.',
+          whyUs2t: 'Your Work Takes Center Stage',
+          whyUs2d: 'The design isn\'t there to show itself. It gives your work the space it deserves.',
+          whyUs3t: 'An Easy Experience for Clients',
+          whyUs3d: 'Clients land, learn who you are, see your work, and contact you — without friction.',
+          whyUs4t: 'A Look That Makes You Professional',
+          whyUs4d: 'Because the first impression starts before a client reads the first word of your copy.',
+          whyUs5t: 'Ready to Share',
+          whyUs5d: 'Use your portfolio on:',
+          platformLinkedIn: 'LinkedIn',
+          platformFacebook: 'Facebook',
+          platformInstagram: 'Instagram',
+          platformCv: 'CV',
+          platformEmail: 'Email',
+          platformWhatsApp: 'WhatsApp',
+          portfolioLabel: 'Our Work',
+          portfolioTitle: 'See the Portfolios Before You Make Yours.',
+          portfolioDesc: 'Real examples of content writers and creators, each with a dedicated portfolio. Every portfolio has its own personality — but the goal is the same: presenting work in a way that makes its owner look the part.',
+          viewPortfolio: 'View Portfolio',
+          noProjects: 'No projects found in this category.',
+          ctaLabel: 'Ready to Present Your Work Differently?',
+          ctaTitle: 'You Have Work Worth Seeing.',
+          ctaDesc: 'Don\'t let the way your work is presented lower its value. Have a portfolio that makes the first impression work in your favor.',
+          ctaBtn: 'Start Your Portfolio',
+          ctaSecondary: 'Or reach out to us directly on ',
+          footerDesc: 'We turn your work from scattered files and links into a portfolio that presents you the way you deserve.',
+          footerNavH: 'Navigation',
+          footerHome: 'Home',
+          footerServices: 'Services',
+          footerWhy: 'Why Portfolio?',
+          footerPortfolio: 'Our Work',
+          footerServicesH: 'Services',
+          fs1: 'Portfolios for Content Writers',
+          fs2: 'Portfolios for Copywriters',
+          fs3: 'Portfolios for Script Writers',
+          fs4: 'Personal Branding Websites',
+          footerContactH: 'Get in Touch',
+          footerWhatsApp: 'WhatsApp',
+          footerLinkedIn: 'LinkedIn',
+          footerFacebook: 'Facebook',
+          footerInstagram: 'Instagram',
+          footerCopyright: '\u00A9 2026 PortfolioHub. All rights reserved.',
+          backTopLabel: 'Back to top'
+        },
+        ar: {
+          metaTitle: 'PortfolioHub — بورتفوليو احترافي لكتّاب المحتوى',
+          langAria: 'اللغة',
+          navServices: 'الخدمات',
+          navWhy: 'ليه Portfolio؟',
+          navPortfolio: 'أعمالنا',
+          navHome: 'الرئيسية',
+          heroTag: 'Portfolio احترافي لكتّاب المحتوى',
+          heroTitle1: 'خلّي شغلك',
+          heroTitle2: 'يتكلم عنك.',
+          heroTitleIndent: 'Portfolio احترافي يليق بيك.',
+          heroSubtitle: 'Portfolio احترافي يعرض خبرتك، شغلك، وأسلوبك بشكل يخلي العميل ياخدك بجدية من أول نظرة.',
+          heroSupport: 'مش مجرد لينك تبعته للعميل... ده مكان يخلي شغلك يبيعك.',
+          heroCta: 'اعمل الـ Portfolio بتاعك',
+          heroCta2: 'شوف نماذج من أعمالنا',
+          heroNote: 'مصمم خصيصًا لكتّاب المحتوى، الـ Copywriters والـ Script Writers وصنّاع المحتوى.',
+          heroScroll: 'اسحب للاستكشاف',
+          problemLabel: 'المشكلة',
+          problemTitle: 'شغلك ممتاز... بس هل طريقة عرضه بنفس القوة؟',
+          problemBody1: 'أنت ممكن تكون كاتب محتوى شاطر جدًا.',
+          problemBodyQuote: 'لكن لما العميل يقولك: «ابعتلي Portfolio.»',
+          problemBody2: 'تبدأ تجمع Links من هنا، وGoogle Docs من هناك، وPDF فيه شغلك كله...',
+          problemBody3: 'المشكلة مش في شغلك. المشكلة في الطريقة اللي شغلك بيتعرض بيها.',
+          problemHighlight: 'إحنا بنحوّل شغلك إلى Portfolio احترافي يليق بيك.',
+          serviceLabel: 'الخدمة',
+          serviceTitle: 'إيه اللي هتاخده؟',
+          service1t: 'Portfolio يعبر عنك',
+          service1d: 'مش Template متكرر. بنصمم الـ Portfolio بحيث يعكس شخصيتك، تخصصك، وطريقة شغلك.',
+          service2t: 'عرض احترافي لأعمالك',
+          service2d: 'كل مشروع بيتعرض بطريقة تخلي العميل يفهم إنت عملت إيه، ولمين، ونوع الشغل اللي تقدر تقدمه.',
+          service3t: 'شغلك هو البطل',
+          service3d: 'التصميم مش معمول عشان يستعرض نفسه. هو معمول عشان يستعرض شغلك بشكل واضح ومقنع.',
+          service4t: 'متجاوب على كل الأجهزة',
+          service4d: 'العميل ممكن يشوف الـ Portfolio من الموبايل أو اللابتوب. في الحالتين، التجربة تفضل Professional.',
+          service5t: 'Link واحد لكل شغلك',
+          service5d: 'بدل Drive وPDF وGoogle Docs ولينكات كتير... يبقى عندك Portfolio واحد تبعته في أي مكان.',
+          whyPortfolioLabel: 'ليه Portfolio؟',
+          whyPortfolioTitle: 'العميل مش بيشتري «كاتب»... العميل بيشتري ثقة.',
+          whyPortfolioBody: 'قبل ما العميل يتواصل معاك، غالبًا عنده أسئلة:',
+          whyQ1: 'هل الشخص ده فاهم شغلي؟',
+          whyQ2: 'هل أسلوبه مناسب للـ Brand بتاعي؟',
+          whyQ3: 'هل عنده خبرة فعلًا؟',
+          whyQ4: 'هل أقدر أثق فيه؟',
+          whyPortfolioAnswer: 'الـ Portfolio الصح بيجاوب على الأسئلة دي قبل ما تبدأ المكالمة أصلًا.',
+          whyUsLabel: 'ليه إحنا؟',
+          whyUsTitle: 'معمول مخصوص لكتّاب المحتوى.',
+          whyUs1t: 'مش Template جاهز',
+          whyUs1d: 'كل Portfolio بيتبني حسب شخصيتك، تخصصك، وطريقة عرض شغلك.',
+          whyUs2t: 'شغلك في المقدمة',
+          whyUs2d: 'التصميم مش معمول عشان يستعرض نفسه. هو معمول عشان يخلي شغلك ياخد المساحة اللي يستحقها.',
+          whyUs3t: 'تجربة سهلة للعميل',
+          whyUs3d: 'العميل يدخل، يعرف أنت مين، يشوف شغلك، ويتواصل معاك بدون تعقيد.',
+          whyUs4t: 'شكل يخليك Professional',
+          whyUs4d: 'لأن أول Impression بيبدأ قبل ما العميل يقرأ أول كلمة من الـ Copy بتاعك.',
+          whyUs5t: 'جاهز للمشاركة',
+          whyUs5d: 'استخدم الـ Portfolio بتاعك على:',
+          platformLinkedIn: 'LinkedIn',
+          platformFacebook: 'Facebook',
+          platformInstagram: 'Instagram',
+          platformCv: 'CV',
+          platformEmail: 'Email',
+          platformWhatsApp: 'WhatsApp',
+          portfolioLabel: 'أعمالنا',
+          portfolioTitle: 'شوف الـ Portfolio قبل ما تعمل بتاعك.',
+          portfolioDesc: 'نماذج حقيقية لكتاب محتوى وصنّاع محتوى تم تصميم Portfolio خاص بيهم. كل Portfolio له شخصية مختلفة... لكن الهدف واحد: عرض الشغل بشكل احترافي يخلي صاحبه يظهر بالشكل اللي يستحقه.',
+          viewPortfolio: 'شوف الـ Portfolio',
+          noProjects: 'مفيش مشاريع في القسم ده.',
+          ctaLabel: 'جاهز تعرض شغلك بشكل مختلف؟',
+          ctaTitle: 'عندك شغل يستاهل يتشاف؟',
+          ctaDesc: 'ما تخليش طريقة عرض شغلك تقلل من قيمته. خلّي عندك Portfolio يخلي أول Impression في صالحك.',
+          ctaBtn: 'ابدأ الـ Portfolio بتاعك',
+          ctaSecondary: 'أو تواصل معانا مباشرة على ',
+          footerDesc: 'بنحوّل شغلك من مجرد ملفات ولينكات... إلى Portfolio يخليك تظهر بالشكل اللي تستحقه.',
+          footerNavH: 'التصفح',
+          footerHome: 'الرئيسية',
+          footerServices: 'الخدمات',
+          footerWhy: 'ليه Portfolio؟',
+          footerPortfolio: 'أعمالنا',
+          footerServicesH: 'الخدمات',
+          fs1: 'Portfolio لكتّاب المحتوى',
+          fs2: 'Portfolio للـ Copywriters',
+          fs3: 'Portfolio للـ Script Writers',
+          fs4: 'Personal Branding Websites',
+          footerContactH: 'تواصل معانا',
+          footerWhatsApp: 'WhatsApp',
+          footerLinkedIn: 'LinkedIn',
+          footerFacebook: 'Facebook',
+          footerInstagram: 'Instagram',
+          footerCopyright: '\u00A9 2026 PortfolioHub. All rights reserved.',
+          backTopLabel: 'العودة للأعلى'
+        }
+      };
+
+      /* ===== Filters (bilingual) ===== */
+      const FILTERS = [
+        { id: 'all', en: 'All', ar: 'الكل' },
+        { id: 'personal', en: 'Personal Portfolio', ar: 'Portfolio شخصي' },
+        { id: 'corporate', en: 'Company Portfolio', ar: 'Portfolio شركة' }
+      ];
+
+      /* ===== Per-project data (kept separate from UI) ===== */
+      const PROJECT_META = {
+        'Aliya Abdelaziz': {
+          badge: { en: 'Content Writer', ar: 'كاتب محتوى' },
+          type: { en: 'Content Writer Portfolio', ar: 'Portfolio كاتب محتوى' },
+          tagline: { en: 'A personal portfolio designed to showcase experience, services, and selected work.', ar: 'Portfolio شخصي لعرض الخبرات والخدمات وأبرز الأعمال بطريقة عصرية.' },
+          specialty: { en: 'Content Writer · Personal Brand', ar: 'كاتب محتوى · علامة شخصية' },
+          filters: ['personal']
+        },
+        'Kholud Mohammad': {
+          badge: { en: 'Copywriter', ar: 'Copywriter' },
+          type: { en: 'Copywriter Portfolio', ar: 'Portfolio Copywriter' },
+          tagline: { en: 'A portfolio focused on professional identity and a clean, direct presentation of work.', ar: 'Portfolio يركز على الشخصية المهنية وعرض الأعمال بطريقة بسيطة ومباشرة.' },
+          specialty: { en: 'Copywriter · Personal Brand', ar: 'Copywriter · علامة شخصية' },
+          filters: ['personal']
+        },
+        'Nermin Saeed': {
+          badge: { en: 'Content & Marketing', ar: 'محتوى وتسويق' },
+          type: { en: 'Content & Marketing Portfolio', ar: 'Portfolio محتوى وتسويق' },
+          tagline: { en: 'Designed to showcase experience, services, and key projects in a fast, easy experience.', ar: 'Portfolio مصمم لإظهار الخبرات، الخدمات، وأبرز المشاريع في تجربة سهلة وسريعة.' },
+          specialty: { en: 'Content Writer · Marketing', ar: 'كاتب محتوى · تسويق' },
+          filters: ['personal']
+        },
+        'Heba Taha': {
+          badge: { en: 'Content & Marketing', ar: 'محتوى وتسويق رقمي' },
+          type: { en: 'Content & Digital Marketing Portfolio', ar: 'Portfolio محتوى وتسويق رقمي' },
+          tagline: { en: 'A personal portfolio showcasing experience, skills, and services in a professional way.', ar: 'Portfolio شخصي لعرض الخبرات، المهارات، والخدمات بشكل احترافي.' },
+          specialty: { en: 'Content · Digital Marketing', ar: 'محتوى · تسويق رقمي' },
+          filters: ['personal']
+        },
+        'Omnia Abess': {
+          badge: { en: 'Personal Brand', ar: 'علامة شخصية' },
+          type: { en: 'Personal Portfolio', ar: 'Portfolio شخصي' },
+          tagline: { en: 'A clean personal portfolio designed to present experience and work with elegance.', ar: 'Portfolio شخصي بسيط وأنيق لعرض الخبرات والأعمال.' },
+          specialty: { en: 'Personal Brand · Portfolio', ar: 'علامة شخصية · Portfolio' },
+          filters: ['personal']
+        },
+        'Marwa Abdelaziz': {
+          badge: { en: 'Personal Brand', ar: 'علامة شخصية' },
+          type: { en: 'Personal Portfolio', ar: 'Portfolio شخصي' },
+          tagline: { en: 'A clean personal portfolio designed to present experience and work with elegance.', ar: 'Portfolio شخصي بسيط وأنيق لعرض الخبرات والأعمال.' },
+          specialty: { en: 'Personal Brand · Portfolio', ar: 'علامة شخصية · Portfolio' },
+          filters: ['personal']
+        },
+        'Amira Ashraf': {
+          badge: { en: 'Personal Brand', ar: 'علامة شخصية' },
+          type: { en: 'Personal Portfolio', ar: 'Portfolio شخصي' },
+          tagline: { en: 'A clean personal portfolio designed to present experience and work with elegance.', ar: 'Portfolio شخصي بسيط وأنيق لعرض الخبرات والأعمال.' },
+          specialty: { en: 'Personal Brand · Portfolio', ar: 'علامة شخصية · Portfolio' },
+          filters: ['personal']
+        },
+        'Esraa Adel': {
+          badge: { en: 'Personal Brand', ar: 'علامة شخصية' },
+          type: { en: 'Personal Portfolio', ar: 'Portfolio شخصي' },
+          tagline: { en: 'A clean personal portfolio designed to present experience and work with elegance.', ar: 'Portfolio شخصي بسيط وأنيق لعرض الخبرات والأعمال.' },
+          specialty: { en: 'Personal Brand · Portfolio', ar: 'علامة شخصية · Portfolio' },
+          filters: ['personal']
+        },
+        'Basmala Mohmed': {
+          badge: { en: 'Personal Brand', ar: 'علامة شخصية' },
+          type: { en: 'Personal Portfolio', ar: 'Portfolio شخصي' },
+          tagline: { en: 'A clean personal portfolio designed to present experience and work with elegance.', ar: 'Portfolio شخصي بسيط وأنيق لعرض الخبرات والأعمال.' },
+          specialty: { en: 'Personal Brand · Portfolio', ar: 'علامة شخصية · Portfolio' },
+          filters: ['personal']
+        },
+        'Brandolla Agency': {
+          badge: { en: 'Corporate', ar: 'شركة' },
+          type: { en: 'Digital Agency Portfolio', ar: 'Portfolio وكالة رقمية' },
+          tagline: { en: 'A corporate website built to present services and build brand trust.', ar: 'موقع شركة مصمم لعرض الخدمات وبناء ثقة العملاء في العلامة.' },
+          specialty: { en: 'Corporate · Digital Agency', ar: 'شركة · وكالة رقمية' },
+          filters: ['corporate']
+        }
+      };
+
+      /* ===== State ===== */
+      const LANG_KEY = 'ph_lang';
+      let currentLang = 'en';
+      let allProjects = null;
+      let activeFilter = 'all';
+
+      const SUPABASE_URL = 'https://amvmyxnqapdfrqffmrmr.supabase.co';
+      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFtdm15eG5xYXBkZnJxZmZtcm1yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzNTU3MDcsImV4cCI6MjEwMTkzMTcwN30.LC1dBgX618d59UxFzN2qsw819scsTMMpBzPRyGWjYe0';
+
+      function t(key) {
+        const dict = I18N[currentLang] || I18N.en;
+        return (dict && dict[key] != null) ? dict[key] : (I18N.en[key] != null ? I18N.en[key] : key);
+      }
+
+      function escHtml(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
+
+      function cssUrl(s) {
+        return String(s).replace(/['"\\]/g, '');
+      }
+
+      function projectMeta(p) {
+        const known = PROJECT_META[p.title];
+        if (known) return known;
+        const corp = String(p.category).toLowerCase() === 'corporate';
+        if (corp) {
+          return {
+            badge: { en: 'Corporate', ar: 'شركة' },
+            type: { en: p.description || 'Company Portfolio', ar: p.description || 'Portfolio شركة' },
+            tagline: { en: p.description || 'A professional company portfolio.', ar: p.description || 'Portfolio احترافي للشركات.' },
+            specialty: { en: 'Corporate · Company', ar: 'شركة · أعمال' },
+            filters: ['corporate']
+          };
+        }
+        return {
+          badge: { en: 'Personal Brand', ar: 'علامة شخصية' },
+          type: { en: p.description || 'Personal Portfolio', ar: p.description || 'Portfolio شخصي' },
+          tagline: { en: p.description || 'A professional personal portfolio.', ar: p.description || 'Portfolio احترافي لعرض الشغل.' },
+          specialty: { en: 'Personal Brand · Portfolio', ar: 'علامة شخصية · Portfolio' },
+          filters: ['personal']
+        };
+      }
+
+      /* ===== Language ===== */
+      function translateStatic() {
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+          el.textContent = t(el.dataset.i18n);
+        });
+        const sw = document.querySelector('.lang-switch');
+        if (sw) sw.setAttribute('aria-label', t('langAria'));
+        document.title = t('metaTitle');
+      }
+
+      function setLanguage(lang, persist) {
+        if (lang !== 'ar' && lang !== 'en') lang = 'en';
+        currentLang = lang;
+        document.documentElement.lang = lang;
+        document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+        if (persist) {
+          try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
+        }
+        document.querySelectorAll('.lang-btn').forEach(b => {
+          const on = b.dataset.lang === lang;
+          b.classList.toggle('active', on);
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        translateStatic();
+        renderFilters();
+        renderProjects();
+      }
+
+      /* ===== Filters ===== */
+      function renderFilters() {
+        const bar = document.getElementById('filterBar');
+        if (!bar) return;
+        bar.innerHTML = FILTERS.map(f => `
+          <button class="filter-btn ${f.id === activeFilter ? 'active' : ''}" data-filter="${f.id}" role="tab" aria-selected="${f.id === activeFilter ? 'true' : 'false'}">${escHtml(f[currentLang])}</button>
+        `).join('');
+        bar.querySelectorAll('.filter-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            activeFilter = btn.dataset.filter;
+            renderFilters();
+            renderProjects();
+          });
+        });
+      }
+
+      /* ===== Projects ===== */
+      const DEFAULT_PROJECTS = [
+        { title: 'Aliya Abdelaziz', description: 'Portfolio Website', url: 'https://puplichost.github.io/Aliya-Abdelaziz/', category: 'personal', image: 'portfolios/1.png' },
+        { title: 'Kholud Mohammad', description: 'Portfolio Website', url: 'https://puplichost.github.io/Kholud-Mohammad/', category: 'personal', image: 'portfolios/2.png' },
+        { title: 'Nermin Saeed', description: 'Portfolio Website', url: 'https://puplichost.github.io/Nermin-Saeed-/', category: 'personal', image: 'portfolios/3.png' },
+        { title: 'Omnia Abess', description: 'Portfolio Website', url: 'https://puplichost.github.io/omnia-Abess/', category: 'personal', image: 'portfolios/4.png' },
+        { title: 'Heba Taha', description: 'Portfolio Website', url: 'https://puplichost.github.io/Heba-Taha/', category: 'personal', image: 'portfolios/5.png' },
+        { title: 'Marwa Abdelaziz', description: 'Portfolio Website', url: 'https://puplichost.github.io/Marwa-Abdelaziz/', category: 'personal', image: 'portfolios/6.png' },
+        { title: 'Amira Ashraf', description: 'Portfolio Website', url: 'https://puplichost.github.io/Amira-Ashraf/', category: 'personal', image: 'portfolios/7.png' },
+        { title: 'Brandolla Agency', description: 'Digital Agency', url: 'https://brandollaagency.com/', category: 'corporate', image: 'portfolios/8.png' },
+        { title: 'Esraa Adel', description: 'Portfolio Website', url: 'https://puplichost.github.io/ESRAA-ADEL-/', category: 'personal', image: 'portfolios/9.png' },
+        { title: 'Basmala Mohmed', description: 'Portfolio Website', url: 'https://puplichost.github.io/Bassmla-Mohmed/', category: 'personal', image: 'portfolios/10.png' }
+      ];
+
+      function projectCardHTML(p) {
+        const meta = projectMeta(p);
+        const viewLabel = t('viewPortfolio');
+        const arrow = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>';
+        return `
+          <a href="${escHtml(p.url)}" target="_blank" rel="noopener noreferrer" class="project-card reveal" data-filters="${escHtml(meta.filters.join(' '))}">
+            <div class="project-media">
+              <div class="project-bg" style="background-image:url('${cssUrl(p.image_url || p.image)}')"></div>
+              <span class="project-badge">${escHtml(meta.badge[currentLang])}</span>
+              <div class="project-hover">
+                <span class="project-open">${escHtml(viewLabel)}${arrow}</span>
+              </div>
+            </div>
+            <div class="project-body">
+              <h3 class="project-name">${escHtml(p.title)}</h3>
+              <span class="project-type">${escHtml(meta.type[currentLang])}</span>
+              <div class="project-foot">
+                <span class="project-specialty">${escHtml(meta.specialty[currentLang])}</span>
+                <span class="project-link">${escHtml(viewLabel)}${arrow}</span>
+              </div>
+            </div>
+          </a>`;
+      }
+
+      function renderProjects() {
+        const grid = document.getElementById('projectsGrid');
+        if (!grid || !allProjects) return;
+        const filtered = activeFilter === 'all'
+          ? allProjects
+          : allProjects.filter(p => projectMeta(p).filters.indexOf(activeFilter) !== -1);
+
+        if (filtered.length === 0) {
+          grid.innerHTML = `<div class="projects-empty">${escHtml(t('noProjects'))}</div>`;
+          return;
+        }
+
+        grid.innerHTML = filtered.map(projectCardHTML).join('');
+
+        if (window.__revealObserver) {
+          window.__revealObserver.disconnect();
+          document.querySelectorAll('.reveal:not(.visible)').forEach(el => window.__revealObserver.observe(el));
+        }
+      }
+
+      async function loadProjects() {
+        let data = null;
+        try {
+          const res = await fetch(
+            `${SUPABASE_URL}/rest/v1/projects?select=*&order=created_at.desc`,
+            { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+          );
+          if (!res.ok) throw new Error('Failed to fetch projects');
+          data = await res.json();
+        } catch (e) {
+          data = null;
+        }
+        allProjects = (Array.isArray(data) && data.length > 0) ? data : DEFAULT_PROJECTS.slice();
+        renderProjects();
+      }
+
+      /* ===== Theme ===== */
+      const themeToggle = document.getElementById('theme-toggle');
+      themeToggle.addEventListener('click', () => {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+        localStorage.setItem('theme', isDark ? 'light' : 'dark');
+      });
+
+      /* ===== Language switcher ===== */
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (btn.dataset.lang !== currentLang) setLanguage(btn.dataset.lang, true);
+        });
+      });
+
+      /* ===== Header scroll ===== */
+      const header = document.getElementById('header');
+      window.addEventListener('scroll', () => {
+        header.classList.toggle('scrolled', window.scrollY > 40);
+      }, { passive: true });
+
+      /* ===== Hamburger Menu ===== */
+      const hamburger = document.getElementById('hamburger');
+      const mobileMenu = document.getElementById('mobile-menu');
+      const menuLinks = mobileMenu.querySelectorAll('a');
+      function toggleMenu() {
+        const isOpen = hamburger.classList.toggle('active');
+        mobileMenu.classList.toggle('open', isOpen);
+        mobileMenu.setAttribute('aria-hidden', !isOpen);
+        hamburger.setAttribute('aria-expanded', isOpen);
+        document.body.style.overflow = isOpen ? 'hidden' : '';
+      }
+      function closeMenu() {
+        hamburger.classList.remove('active');
+        mobileMenu.classList.remove('open');
+        mobileMenu.setAttribute('aria-hidden', 'true');
+        hamburger.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
+      }
+      hamburger.addEventListener('click', toggleMenu);
+      menuLinks.forEach(link => link.addEventListener('click', closeMenu));
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && mobileMenu.classList.contains('open')) closeMenu();
+      });
+
+      /* ===== Back to top ===== */
+      document.getElementById('back-top').addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+
+      /* ===== Scroll Reveal ===== */
+      window.__revealObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('visible'); });
+      }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+      document.querySelectorAll('.reveal').forEach(el => window.__revealObserver.observe(el));
+
+      /* ===== Mobile Bottom Nav ===== */
+      const navItems = document.querySelectorAll('.mobile-nav-item');
+      navItems.forEach(item => {
+        item.addEventListener('click', function() {
+          navItems.forEach(n => n.classList.remove('active'));
+          this.classList.add('active');
+        });
+      });
+      window.addEventListener('scroll', () => {
+        const sections = ['home', 'problem', 'service', 'why-portfolio', 'why-us', 'portfolio', 'cta'];
+        let current = 'home';
+        sections.forEach(id => {
+          const el = document.getElementById(id);
+          if (el && el.getBoundingClientRect().top <= window.innerHeight * 0.5) current = id;
+        });
+        navItems.forEach(n => {
+          n.classList.toggle('active', n.getAttribute('href') === '#' + current);
+        });
+      }, { passive: true });
+
+      /* ===== Init ===== */
+      try {
+        currentLang = localStorage.getItem(LANG_KEY) === 'en' ? 'en' : 'ar';
+      } catch (e) {}
+      setLanguage(currentLang, false);
+      loadProjects();
+    })();
+  </script>
+</body>
+</html>
