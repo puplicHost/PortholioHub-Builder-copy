@@ -14,10 +14,11 @@ export function LandingHeader({
 }: {
   name: string
   ar: boolean
-  labels: { features: string; how: string; plans: string; login: string; start: string }
+  labels: { features: string; how: string; plans: string; faq: string; login: string; start: string }
 }) {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
+  const [active, setActive] = useState('')
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40)
@@ -25,6 +26,31 @@ export function LandingHeader({
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  useEffect(() => {
+    const ids = ['features', 'how', 'plans', 'faq']
+    const els = ids
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => el !== null)
+    if (els.length === 0) return
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) setActive(e.target.id)
+        })
+      },
+      { rootMargin: '-45% 0px -50% 0px', threshold: 0 },
+    )
+    els.forEach((el) => obs.observe(el))
+    return () => obs.disconnect()
+  }, [])
+
+  const items = [
+    { id: 'features', label: labels.features },
+    { id: 'how', label: labels.how },
+    { id: 'plans', label: labels.plans },
+    { id: 'faq', label: labels.faq },
+  ]
 
   useEffect(() => {
     if (!open) return
@@ -44,9 +70,16 @@ export function LandingHeader({
       <div className="ph-container ph-header-inner">
         <Link href="/" className="ph-brand">{name}</Link>
         <nav className="ph-nav" aria-label={ar ? 'روابط' : 'Links'}>
-          <a href="#features">{labels.features}</a>
-          <a href="#how">{labels.how}</a>
-          <a href="#plans">{labels.plans}</a>
+          {items.map((it) => (
+            <a
+              key={it.id}
+              href={`#${it.id}`}
+              className={active === it.id ? 'active' : undefined}
+              aria-current={active === it.id ? 'true' : undefined}
+            >
+              {it.label}
+            </a>
+          ))}
         </nav>
         <div className="ph-header-actions">
           <Link href="/login" className="ph-header-link">{labels.login}</Link>
@@ -65,9 +98,9 @@ export function LandingHeader({
       </div>
 
       <div id="ph-mobile-menu" className="ph-menu" role="dialog" aria-modal="true" aria-hidden={!open}>
-        <a href="#features" onClick={() => setOpen(false)}>{labels.features}</a>
-        <a href="#how" onClick={() => setOpen(false)}>{labels.how}</a>
-        <a href="#plans" onClick={() => setOpen(false)}>{labels.plans}</a>
+        {items.map((it) => (
+          <a key={it.id} href={`#${it.id}`} onClick={() => setOpen(false)}>{it.label}</a>
+        ))}
         <Link href="/login" onClick={() => setOpen(false)}>{labels.login}</Link>
         <Link href="/register" onClick={() => setOpen(false)} className="ph-menu-cta">{labels.start}</Link>
       </div>
