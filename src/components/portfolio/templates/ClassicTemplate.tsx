@@ -49,6 +49,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
     setTheme(defaultColorMode)
   }
   const [isScrolled, setIsScrolled] = useState(false)
+  const [activeId, setActiveId] = useState('hero')
 
   useEffect(() => {
     const handleScroll = () => {
@@ -172,6 +173,33 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
     return true
   }
   const visibleSections = sections.filter(isSectionVisible)
+
+  // Scroll-spy: highlight the nav link for the section currently in view.
+  const navSectionIds = visibleSections.map((s: any) =>
+    s.sectionType === 'footer' ? 'contact' : s.sectionType === 'contact' ? 'contact-info' : s.sectionType
+  )
+  const navSectionIdsKey = navSectionIds.join(',')
+  useEffect(() => {
+    const els = navSectionIdsKey
+      .split(',')
+      .map((id) => (id ? document.getElementById(id) : null))
+      .filter((el): el is HTMLElement => !!el)
+    if (els.length === 0) return
+    const update = () => {
+      let current = els[0].id
+      for (const el of els) {
+        if (el.getBoundingClientRect().top <= 120) current = el.id
+      }
+      setActiveId(current)
+    }
+    update()
+    window.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    return () => {
+      window.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [navSectionIdsKey])
 
   // Mobile bottom navigation: always Home + Contact (the footer always
   // renders), plus About / Projects only when those sections are published.
@@ -1061,11 +1089,10 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
         const year = new Date().getFullYear()
         const cairoLink = 'https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap'
         return (
-          <>
+          <React.Fragment key={section.id}>
             <link rel="stylesheet" href={cairoLink} />
             <footer
               id="contact"
-              key={section.id}
               dir={lang === 'ar' ? 'rtl' : 'ltr'}
               className="border-t border-white/15 pt-12 pb-8 sm:pt-16"
               style={{
@@ -1242,7 +1269,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                 </div>
               </div>
             </footer>
-          </>
+          </React.Fragment>
         )
       }
       default:
@@ -1256,7 +1283,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
     <>
       <link rel="stylesheet" href={fontLink} />
       <style dangerouslySetInnerHTML={{__html: `
-        html { scroll-behavior: smooth; }
+        html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
         @media (prefers-reduced-motion: reduce) {
           html { scroll-behavior: auto; }
           .fade-up { opacity: 1 !important; transform: none !important; transition: none !important; }
@@ -1268,9 +1295,39 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
           
           {/* Navigation Bar */}
           <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${isScrolled ? 'py-2.5 sm:py-3 shadow-md' : 'py-3 sm:py-5'}`} style={{ backgroundColor: isScrolled ? (theme === 'light' ? 'var(--color-bg)' : 'color-mix(in srgb, var(--color-bg) 90%, transparent)') : 'transparent', backdropFilter: isScrolled ? 'blur(10px)' : 'none', borderBottom: isScrolled ? '1px solid var(--color-border)' : 'none' }}>
-            <div className="max-w-[1200px] mx-auto px-4 sm:px-12 flex items-center justify-between flex-row-reverse md:flex-row">
-              <div className="flex items-center gap-6">
-                <ul className="hidden md:flex items-center gap-8 font-medium">
+            <div className="max-w-[1200px] mx-auto px-4 sm:px-12">
+              {/* MOBILE (unchanged): bottom nav handles links; language pill stays right-aligned */}
+              <div className="md:hidden flex items-center justify-end">
+                {defaultLangMode === 'both' && (
+                  <div className={`flex items-center rounded-full border p-0.5 text-[11px] font-bold ${isScrolled && theme === 'light' ? 'border-[var(--color-border)] bg-[var(--color-card)]' : 'border-white/20 bg-white/5'}`}>
+                    <button
+                      type="button"
+                      onClick={() => setLang('ar')}
+                      className={`rounded-full px-2.5 py-1 transition-colors cursor-pointer ${lang === 'ar' ? 'bg-[#2563eb] text-white' : (isScrolled && theme === 'light' ? 'text-[var(--color-text-muted)]' : 'text-slate-300')}`}
+                    >
+                      AR
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLang('en')}
+                      className={`rounded-full px-2.5 py-1 transition-colors cursor-pointer ${lang === 'en' ? 'bg-[#2563eb] text-white' : (theme === 'light' ? 'text-[var(--color-text-muted)]' : 'text-slate-300')}`}
+                    >
+                      EN
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* DESKTOP (md+): 3-column split — name | links | contact */}
+              <div className="hidden md:grid w-full items-center gap-6" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
+                <a
+                  href="#hero"
+                  className={`justify-self-start truncate max-w-[240px] text-lg font-bold tracking-tight transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${isScrolled && theme === 'light' ? 'text-[var(--color-text)] hover:text-[var(--color-primary)]' : 'text-white hover:text-white/80'}`}
+                >
+                  {displayName}
+                </a>
+
+                <ul className="justify-self-center flex items-center gap-5 lg:gap-8 font-medium">
                   {visibleSections.map((s: any) => {
                     if (s.sectionType === 'hero') return null
                     if (s.sectionType === 'skills') {
@@ -1289,42 +1346,41 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                         : s.sectionType
                     return (
                       <li key={s.id}>
-                        <a href={`#${targetId}`} className={`capitalize transition-colors relative group font-medium ${isScrolled && theme === 'light' ? 'text-[var(--color-text-muted)] hover:text-[var(--color-primary)]' : 'text-white/90 hover:text-white'}`}>
+                        <a
+                          href={`#${targetId}`}
+                          aria-current={activeId === targetId ? 'location' : undefined}
+                          className={`capitalize transition-colors relative group font-medium rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
+                            activeId === targetId
+                              ? (isScrolled && theme === 'light' ? 'text-[var(--color-primary)]' : 'text-white')
+                              : (isScrolled && theme === 'light' ? 'text-[var(--color-text-muted)] hover:text-[var(--color-primary)]' : 'text-white/90 hover:text-white')
+                          }`}
+                        >
                           {label}
-                          <span className={`absolute -bottom-1 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${isScrolled && theme === 'light' ? 'bg-[var(--color-primary)]' : 'bg-white'}`}></span>
+                          <span className={`absolute -bottom-1 start-0 h-0.5 transition-all duration-300 group-hover:w-full ${activeId === targetId ? 'w-full' : 'w-0'} ${isScrolled && theme === 'light' ? 'bg-[var(--color-primary)]' : 'bg-white'}`}></span>
                         </a>
                       </li>
                     )
                   })}
                 </ul>
-                {defaultLangMode === 'both' && (
-                  <>
+
+                <div className="justify-self-end flex items-center gap-3">
+                  <a
+                    href="#contact"
+                    className="inline-flex items-center justify-center rounded-full px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:-translate-y-0.5 active:scale-[0.97] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-primary)]"
+                    style={{ backgroundColor: 'var(--color-primary)' }}
+                  >
+                    {lang === 'ar' ? 'تواصل معي' : 'Contact Me'}
+                  </a>
+                  {defaultLangMode === 'both' && (
                     <button
                       onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-                      className="h-9 px-3 hidden md:inline-flex items-center justify-center rounded-full bg-white/10 border border-white/20 shadow-sm hover:scale-110 transition-transform text-white text-xs font-bold uppercase cursor-pointer"
+                      className="h-9 px-3 inline-flex items-center justify-center rounded-full bg-white/10 border border-white/20 shadow-sm hover:scale-110 active:scale-95 transition-transform text-white text-xs font-bold uppercase cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                       title="Switch language"
                     >
                       {lang === 'en' ? 'AR' : 'EN'}
                     </button>
-                    {/* Mobile segmented AR | EN pill (matches reference) */}
-                    <div className={`md:hidden flex items-center rounded-full border p-0.5 text-[11px] font-bold ${isScrolled && theme === 'light' ? 'border-[var(--color-border)] bg-[var(--color-card)]' : 'border-white/20 bg-white/5'}`}>
-                      <button
-                        type="button"
-                        onClick={() => setLang('ar')}
-                        className={`rounded-full px-2.5 py-1 transition-colors cursor-pointer ${lang === 'ar' ? 'bg-[#2563eb] text-white' : (isScrolled && theme === 'light' ? 'text-[var(--color-text-muted)]' : 'text-slate-300')}`}
-                      >
-                        AR
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setLang('en')}
-                        className={`rounded-full px-2.5 py-1 transition-colors cursor-pointer ${lang === 'en' ? 'bg-[#2563eb] text-white' : (theme === 'light' ? 'text-[var(--color-text-muted)]' : 'text-slate-300')}`}
-                      >
-                        EN
-                      </button>
-                    </div>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </nav>
