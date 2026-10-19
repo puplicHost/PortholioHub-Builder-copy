@@ -7,7 +7,7 @@ import { getSetting } from '@/lib/settings'
 // Single transaction: PENDING-lock → dates (A4) → Subscription + Payment +
 // request update + audit. Double-approve lands on 409.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(req)
   if (!gate.ok) return gate.response
 
   const { id } = await params

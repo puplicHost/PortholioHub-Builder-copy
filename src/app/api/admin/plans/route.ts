@@ -56,7 +56,7 @@ function parsePlanBody(body: Record<string, unknown> | null) {
 }
 
 export async function POST(req: Request) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(req)
   if (!gate.ok) return gate.response
 
   const body = await req.json().catch(() => null)

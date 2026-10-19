@@ -27,23 +27,35 @@ export async function middleware(request: NextRequest) {
   // Extract subdomain if it exists and is not 'www' or the base domain itself
   if (!isBaseHost && hostOnly !== `www.${baseHostOnly}` && !pathname.startsWith('/api') && !pathname.startsWith('/_next')) {
     const subdomain = hostOnly.replace(`.${baseHostOnly}`, '')
+    const rewrittenPath = `/u/${subdomain}${pathname === '/' ? '' : pathname}`
     // Rewrite to /u/[subdomain]
     return withSecurityHeaders(
-      NextResponse.rewrite(new URL(`/u/${subdomain}${pathname === '/' ? '' : pathname}`, request.url)),
+      NextResponse.rewrite(new URL(rewrittenPath, request.url)),
+      rewrittenPath,
     )
   }
 
-  return withSecurityHeaders(NextResponse.next())
+  return withSecurityHeaders(NextResponse.next(), pathname)
 }
 
-function withSecurityHeaders(response: NextResponse): NextResponse {
+function withSecurityHeaders(response: NextResponse, pathname: string): NextResponse {
   // Baseline hardening. No script-src tightening here: Cloudinary and
   // Google Fonts must keep working (visual freeze); tighten to report-only
   // in a later pass after auditing every inline script.
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-  response.headers.set('X-Frame-Options', 'DENY')
+
+  // X-Frame-Options: same-origin framing is granted ONLY to the surfaces the
+  // builder embeds in an <iframe> — the public portfolio page (/u/...) and the
+  // builder's device-preview route. `DENY` (the previous blanket value) blocks
+  // framing even from the same origin, which is exactly why the builder's
+  // desktop/mobile preview iframes came back blank / "refused to connect".
+  // Every other route keeps the strict `DENY`.
+  const frameable =
+    pathname === '/profile/builder/preview' || pathname.startsWith('/u/')
+  response.headers.set('X-Frame-Options', frameable ? 'SAMEORIGIN' : 'DENY')
+
   if (process.env.NODE_ENV === 'production') {
     response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
   }

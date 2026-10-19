@@ -4,7 +4,7 @@ import { audit } from '@/lib/audit'
 
 // POST /api/admin/portfolios/:username/unhide
 export async function POST(_req: Request, { params }: { params: Promise<{ username: string }> }) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(_req)
   if (!gate.ok) return gate.response
 
   const { username } = await params

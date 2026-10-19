@@ -4,11 +4,12 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useMounted } from '@/lib/hooks/useMounted'
+import { pickLang } from '@/lib/portfolio-language'
 
 interface TestimonialItem {
   id?: string
-  name?: string
-  title?: string
+  name?: string | { en?: string; ar?: string }
+  title?: string | { en?: string; ar?: string }
   photoUrl?: string
   text?: { en?: string; ar?: string } | string
   rating?: number
@@ -89,11 +90,11 @@ export function TestimonialsSlider({
                       ? 'ring-1 ring-[var(--color-primary)]/40 brightness-105'
                       : 'opacity-90 hover:opacity-100'
                   }`}
-                  title={t.name ? `View ${t.name}` : 'View photo'}
+                  title={pickLang(t.name, lang) ? `View ${pickLang(t.name, lang)}` : 'View photo'}
                 >
                   <img
                     src={t.photoUrl}
-                    alt={t.name || 'Testimonial'}
+                    alt={pickLang(t.name, lang) || 'Testimonial'}
                     loading="lazy"
                     className="h-[220px] w-full rounded-xl object-cover transition-transform duration-500 group-hover:scale-105"
                   />
@@ -156,7 +157,7 @@ export function TestimonialsSlider({
             >
               <img
                 src={activeLightboxItem.photoUrl}
-                alt={activeLightboxItem.name || 'Testimonial photo'}
+                alt={pickLang(activeLightboxItem.name, lang) || 'Testimonial photo'}
                 className="max-h-[90vh] max-w-[90vw] rounded-2xl object-contain shadow-2xl"
               />
               <button

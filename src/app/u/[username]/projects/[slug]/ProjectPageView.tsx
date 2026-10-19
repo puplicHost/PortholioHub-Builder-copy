@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { sanitizeUrl } from '@/lib/urls'
+import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
 
 function ArrowUp({ className }: { className?: string }) {
   return (
@@ -34,22 +36,16 @@ function adjustColor(color: string, amount: number) {
 
 export function ProjectPageView({ profile, projectPage }: { profile: any; projectPage: any }) {
   const appearance = profile.appearance || {}
-  const defaultLangMode = appearance.defaultLanguage || 'en'
+  const defaultLangMode = getPortfolioLang(appearance)
   const defaultColorMode = appearance.colorMode || 'light'
-  const [lang, setLang] = useState<'ar' | 'en'>(defaultLangMode === 'ar' ? 'ar' : 'en')
-  const [theme, setTheme] = useState<'light' | 'dark'>(defaultColorMode)
+  const [lang] = useState<'ar' | 'en'>(defaultLangMode === 'ar' ? 'ar' : 'en')
+  const [theme] = useState<'light' | 'dark'>(defaultColorMode)
   const [showScrollTop, setShowScrollTop] = useState(false)
 
-  // Mount-only read of the browser-persisted theme. Kept in an effect
-  // (not a state initializer) so the first committed render always matches
-  // SSR; applied inside rAF so it lands before the next paint.
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      const savedTheme = localStorage.getItem('portfolio-theme') as 'light' | 'dark' | null
-      if (savedTheme === 'light' || savedTheme === 'dark') setTheme(savedTheme)
-    })
-    return () => cancelAnimationFrame(id)
-  }, [])
+  // The visitor theme + language toggles were REMOVED from the portfolio
+  // output (owner request): the page always renders with the owner's saved
+  // defaults (`appearance.colorMode` / `getPortfolioLang`). No localStorage
+  // read/write, so a stale visitor preference can never override the owner.
 
   useEffect(() => {
     const handleScroll = () => setShowScrollTop(window.scrollY > 300)
@@ -67,7 +63,7 @@ export function ProjectPageView({ profile, projectPage }: { profile: any; projec
   const currentBorder = appearance.borderColor || (theme === 'dark' ? '#374151' : '#e5e7eb')
   const currentOutline = appearance.outlineColor || primary
   const fontFam = appearance.font || 'Inter'
-  const displayName = profile.displayName || profile.username
+  const displayName = pickLang(profile.localized?.displayName, lang) || profile.displayName || profile.username
   const initial = displayName.substring(0, 2).toUpperCase()
   const projects = projectPage.items || []
   const displayMode = projectPage.displayMode || 'grid'
@@ -93,31 +89,11 @@ export function ProjectPageView({ profile, projectPage }: { profile: any; projec
         <div className="max-w-[1200px] mx-auto px-6 sm:px-12 flex items-center justify-between">
           <Link href={`/u/${profile.username}`} className="flex items-center">
             {appearance.logoUrl ? (
-              <img src={appearance.logoUrl} alt="Logo" className="h-9 w-auto object-contain" />
+              <img src={sanitizeUrl(appearance.logoUrl)} alt="Logo" className="h-9 w-auto object-contain" />
             ) : (
               <span className="text-2xl font-black text-[var(--color-primary)] tracking-tight">{initial}</span>
             )}
           </Link>
-          <div className="flex items-center gap-6">
-            {appearance.defaultLanguage === 'both' && (
-              <button
-                onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-                className="px-2 py-1 text-[11px] font-bold text-[var(--color-text)] border border-[var(--color-border)] rounded bg-[var(--color-card)] hover:bg-[var(--color-border)] transition-colors"
-              >
-                {lang === 'en' ? 'AR' : 'EN'}
-              </button>
-            )}
-            <button
-              onClick={() => {
-                const next = theme === 'dark' ? 'light' : 'dark'
-                setTheme(next)
-                localStorage.setItem('portfolio-theme', next)
-              }}
-              className="h-9 w-9 flex items-center justify-center rounded-full bg-[var(--color-card)] border border-[var(--color-border)] shadow-sm text-[var(--color-text)] cursor-pointer"
-            >
-              {theme === 'dark' ? '☀' : '☾'}
-            </button>
-          </div>
         </div>
       </nav>
 
@@ -150,7 +126,7 @@ export function ProjectPageView({ profile, projectPage }: { profile: any; projec
               <div key={item.id} className="flex flex-col sm:flex-row rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm">
                 <div className="w-full sm:w-[300px] h-[200px] sm:h-auto shrink-0 bg-[var(--color-bg)] flex items-center justify-center border-b sm:border-b-0 sm:border-r border-[var(--color-border)] overflow-hidden">
                   {item.imageUrl ? (
-                    <img src={item.imageUrl} alt={item.title || 'Project'} className="w-full h-full object-cover" />
+                    <img src={sanitizeUrl(item.imageUrl)} alt={item.title || 'Project'} className="w-full h-full object-cover" />
                   ) : (
                     <Code className="h-12 w-12 text-[var(--color-border)]" />
                   )}
@@ -159,7 +135,7 @@ export function ProjectPageView({ profile, projectPage }: { profile: any; projec
                   <h3 className="text-xl break-words font-bold tracking-tight text-[var(--color-text)] mb-3">{item.title || 'Project Item'}</h3>
                   {item.textContent && <p className="text-[var(--color-text-muted)] text-[15px] leading-relaxed break-words mb-4">{item.textContent}</p>}
                   {item.externalUrl && (
-                    <a href={item.externalUrl} target="_blank" rel="noreferrer" className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity mt-auto">
+                    <a href={sanitizeUrl(item.externalUrl)} target="_blank" rel="noreferrer" className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity mt-auto">
                       <ExternalLink className="h-4 w-4" /> View
                     </a>
                   )}
@@ -176,7 +152,7 @@ export function ProjectPageView({ profile, projectPage }: { profile: any; projec
               <div key={item.id} className="group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col">
                 <div className="h-[200px] w-full bg-[var(--color-bg)] flex items-center justify-center border-b border-[var(--color-border)] overflow-hidden">
                   {item.imageUrl ? (
-                    <img src={item.imageUrl} alt={item.title || 'Project'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <img src={sanitizeUrl(item.imageUrl)} alt={item.title || 'Project'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   ) : (
                     <Code className="h-12 w-12 text-[var(--color-border)]" />
                   )}
@@ -185,7 +161,7 @@ export function ProjectPageView({ profile, projectPage }: { profile: any; projec
                   <h3 className="text-xl break-words font-bold tracking-tight text-[var(--color-text)] mb-3">{item.title || 'Project Item'}</h3>
                   {item.textContent && <p className="text-[var(--color-text-muted)] text-[15px] leading-relaxed break-words mb-4 line-clamp-3">{item.textContent}</p>}
                   {item.externalUrl && (
-                    <a href={item.externalUrl} target="_blank" rel="noreferrer" className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity mt-auto">
+                    <a href={sanitizeUrl(item.externalUrl)} target="_blank" rel="noreferrer" className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity mt-auto">
                       <ExternalLink className="h-4 w-4" /> View
                     </a>
                   )}
@@ -199,14 +175,16 @@ export function ProjectPageView({ profile, projectPage }: { profile: any; projec
         )}
       </div>
 
-      {/* Footer */}
+      {/* Footer — sits on the site's PRIMARY colour with BACKGROUND-toned ink
+          (owner request); `appearance.footerBg`/`footerText` are explicit
+          owner overrides and win when set. */}
       <footer
         className="py-16"
-        style={{ backgroundColor: appearance.footerBg || '#0f172a', color: appearance.footerText || '#94a3b8' }}
+        style={{ backgroundColor: appearance.footerBg || 'var(--color-primary)', color: appearance.footerText || 'var(--color-bg)' }}
       >
         <div className="max-w-[1200px] mx-auto px-6 sm:px-12">
           <div className="flex items-center justify-between">
-            <p className="text-[15px] text-white/70">© {new Date().getFullYear()} · Developed with PortfolioHub</p>
+            <p className="text-[15px]" style={{ color: appearance.footerText || 'var(--color-bg)' }}>© {new Date().getFullYear()} · Developed with PortfolioHub</p>
           </div>
         </div>
       </footer>

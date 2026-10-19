@@ -19,5 +19,5 @@ export default async function BuilderPreviewPage() {
   ])
   const isFree = !sub || (sub.state !== 'ACTIVE' && sub.state !== 'GRACE')
   const viewProfile = isFree ? stripLockedSectionsForFree(profile) : profile
-  return <ClassicTemplate profile={viewProfile} isFree={isFree} />
+  return <ClassicTemplate profile={viewProfile} isFree={isFree} preview />
 }

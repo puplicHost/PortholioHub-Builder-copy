@@ -86,11 +86,17 @@
    `[data-theme="dark"]` (builder local toggle + future-proofing) must stay
    in sync. Both selectors target <html> so Vercel SSR + client hydration
    resolve the same tokens. Do NOT rely on prefers-color-scheme alone —
-   ThemeProvider sets defaultTheme="light" with enableSystem={false}. */
+   ThemeProvider sets defaultTheme="light" with enableSystem={false}.
+   `.builder-root[data-theme="dark"]` is listed explicitly: the builder's
+   local toggle puts data-theme on that wrapper (not <html>), and the
+   higher-specificity (0,2,0) selector beats the `:root` theme variables
+   regardless of where Tailwind emits them in the final stylesheet — without
+   it the toggle looked dead because `:root` won at equal specificity. */
 .dark,
 [data-theme="dark"],
 html.dark,
-html[data-theme="dark"] {
+html[data-theme="dark"],
+.builder-root[data-theme="dark"] {
   --color-page: #0e0e10;
   --color-surface: #18181b;
   --color-surface-secondary: #1f1f23;

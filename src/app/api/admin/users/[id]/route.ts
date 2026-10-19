@@ -36,7 +36,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
 // PATCH /api/admin/users/:id — update user details (displayName, email, phone, isAdmin)
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(req)
   if (!gate.ok) return gate.response
 
   const { id } = await params
@@ -129,12 +129,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     },
   })
 
+  // Explicit audit for privilege changes (grant/revoke), separate from the
+  // generic user.update entry so admin grants/revokes are trivially queryable.
+  // WHO may promote admins is unchanged by design — flagged as a policy
+  // decision in the fix report (no roles introduced).
+  if (typeof isAdmin === 'boolean' && isAdmin !== existing.isAdmin) {
+    await audit({
+      actorId: gate.adminId,
+      action: isAdmin ? 'admin.grant' : 'admin.revoke',
+      targetType: 'User',
+      targetId: id,
+      targetUserId: id,
+      meta: { isAdmin },
+    })
+  }
+
   return Response.json({ ok: true, user: updated })
 }
 
 // DELETE /api/admin/users/:id — permanent cascading deletion with email confirmation
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(req)
   if (!gate.ok) return gate.response
 
   const { id } = await params

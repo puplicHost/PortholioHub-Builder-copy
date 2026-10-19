@@ -75,28 +75,30 @@ export function GalleryEditor({
       <FormCard title="Section Content" subtitle="Heading for the gallery">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
+            <label htmlFor={`${sectionId}-heading-en`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
               Heading (EN)
             </label>
             <Input
+              id={`${sectionId}-heading-en`}
               value={c.title?.en || ''}
               onChange={(e) => updateSectionContent(sectionId, 'title', 'en', e.target.value)}
               className="h-[44px] min-h-[44px] w-full px-[12px] py-[10px] text-[15px]"
             />
           </div>
           <div dir="rtl">
-            <label className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
+            <label htmlFor={`${sectionId}-heading-ar`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
               العنوان (AR)
             </label>
             <Input
+              id={`${sectionId}-heading-ar`}
               value={c.title?.ar || ''}
               onChange={(e) => updateSectionContent(sectionId, 'title', 'ar', e.target.value)}
               className="h-[44px] min-h-[44px] w-full px-[12px] py-[10px] text-right text-[15px]"
             />
           </div>
         </div>
-        <div className="mt-4">
-          <label className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
+        <div className="mt-4" role="group" aria-labelledby={`${sectionId}-section-icon-label`}>
+          <label id={`${sectionId}-section-icon-label`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
             Section Icon
           </label>
           <IconPicker
@@ -116,7 +118,7 @@ export function GalleryEditor({
             >
               <div className="mt-2 flex flex-col gap-4">
                 <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
+                  <label htmlFor={`${sectionId}-image-${idx}`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
                     Image
                   </label>
                   <div className="flex items-center gap-3">
@@ -132,6 +134,7 @@ export function GalleryEditor({
                       </div>
                     )}
                     <Input
+                      id={`${sectionId}-image-${idx}`}
                       value={item.imageUrl || ''}
                       onChange={(e) => updateItem(idx, { imageUrl: e.target.value })}
                       placeholder="https://... or upload"
@@ -157,10 +160,11 @@ export function GalleryEditor({
                   </div>
                 </div>
                 <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
+                  <label htmlFor={`${sectionId}-caption-${idx}`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
                     Caption (optional)
                   </label>
                   <Input
+                    id={`${sectionId}-caption-${idx}`}
                     value={item.caption || ''}
                     onChange={(e) => updateItem(idx, { caption: e.target.value })}
                     placeholder="Caption..."
@@ -170,8 +174,9 @@ export function GalleryEditor({
                 <div className="flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={() => setItems(items.filter((_: any, i: number) => i !== idx))}
-                    className="rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] cursor-pointer"
+                    onClick={() => { if (!window.confirm('Remove this image? This cannot be undone.')) return; setItems(items.filter((_: any, i: number) => i !== idx)) }}
+                    aria-label="Remove image"
+                    className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                     title="Remove image"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -181,7 +186,8 @@ export function GalleryEditor({
                       type="button"
                       onClick={() => moveItem(idx, -1)}
                       disabled={idx === 0}
-                      className="rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 cursor-pointer"
+                      aria-label="Move image up"
+                      className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                       title="Move up"
                     >
                       <ChevronUp className="h-4 w-4" />
@@ -190,7 +196,8 @@ export function GalleryEditor({
                       type="button"
                       onClick={() => moveItem(idx, 1)}
                       disabled={idx === items.length - 1}
-                      className="rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 cursor-pointer"
+                      aria-label="Move image down"
+                      className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                       title="Move down"
                     >
                       <ChevronDown className="h-4 w-4" />

@@ -6,7 +6,8 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { ensurePersonalWorkspace } from '@/lib/workspaces'
 import { validateUsername } from '@/lib/portfolio'
-import { validateSections, validateProjects } from '@/lib/portfolio-schema'
+import { validateSections, validateProjects, validateProfileExtras } from '@/lib/portfolio-schema'
+import { sanitizeUrl } from '@/lib/urls'
 import { Prisma } from '@prisma/client'
 
 async function requireUserWithWorkspace() {
@@ -286,6 +287,23 @@ export async function updatePortfolio(data: {
   try {
     const user = await requireUserWithWorkspace()
 
+    // Ownership anchor: never trust the client-supplied `data.id`. Every
+    // relation write is scoped to THIS user's own profile row.
+    const own = await prisma.userProfile.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    })
+    if (!own) {
+      return { success: false, error: 'Profile not found' }
+    }
+
+    // Sanitize JSON extras with silent per-field fallback (legacy rows safe).
+    const extras = validateProfileExtras({
+      appearance: data.appearance,
+      localized: data.localized,
+      contactLinks: data.contactLinks,
+    })
+
     // Optimistic concurrency: reject stale writers with their conflict
     // surfaced (full 409 modal lands in Sprint F).
     if (data.expectedVersion !== undefined) {
@@ -337,9 +355,9 @@ export async function updatePortfolio(data: {
         data: {
           username,
           avatarUrl: data.avatarUrl,
-          appearance: data.appearance,
-          localized: data.localized,
-          contactLinks: data.contactLinks,
+          appearance: extras.appearance as Prisma.InputJsonValue,
+          localized: extras.localized as Prisma.InputJsonValue,
+          contactLinks: extras.contactLinks as Prisma.InputJsonValue,
           version: { increment: 1 },
         },
         select: { version: true },
@@ -361,7 +379,7 @@ export async function updatePortfolio(data: {
     const savedSections: { id: string; tempId?: string }[] = []
     if (data.sections && data.sections.length > 0) {
       const homePage = await prisma.profilePage.findFirst({
-        where: { profileId: data.id, slug: 'home' },
+        where: { profileId: own.id, slug: 'home' },
         select: { id: true },
       })
       for (const sec of data.sections) {
@@ -382,8 +400,9 @@ export async function updatePortfolio(data: {
           })
           savedSections.push({ id: created.id, tempId: sec.id })
         } else if (!(typeof sec.id === 'string' && sec.id.startsWith('new-'))) {
-          await prisma.pageSection.update({
-            where: { id: sec.id },
+          // Scoped to the caller's own page — a foreign section id is skipped.
+          await prisma.pageSection.updateMany({
+            where: { id: sec.id, page: { profileId: own.id } },
             data: {
               sectionOrder: sec.sectionOrder,
               content: sec.content,
@@ -407,7 +426,8 @@ export async function updatePortfolio(data: {
         'external_image',
       ]
 
-      const existingProjects = await prisma.projectPage.findMany({ where: { profileId: data.id } })
+      const existingProjects = await prisma.projectPage.findMany({ where: { profileId: own.id } })
+      const ownProjectIds = new Set(existingProjects.map((p) => p.id))
       const keptProjectIds = new Set<string>()
       const usedSlugs = new Set<string>()
 
@@ -436,7 +456,7 @@ export async function updatePortfolio(data: {
             title: proj.title || 'Untitled',
             slug,
             description: proj.description || null,
-            coverImage: proj.coverImage || null,
+            coverImage: sanitizeUrl(proj.coverImage) || null,
             tags: proj.tags || [],
             sortOrder: proj.sortOrder || 0,
             content: {
@@ -447,7 +467,7 @@ export async function updatePortfolio(data: {
             displayMode: proj.displayMode || 'grid',
             showBackButton: proj.showBackButton !== false,
             backButtonLabel: proj.backButtonLabel || 'Back to Portfolio',
-            externalLink: proj.externalLink || null,
+            externalLink: sanitizeUrl(proj.externalLink) || null,
             linkLabel: proj.linkLabel || null,
           }
 
@@ -457,15 +477,15 @@ export async function updatePortfolio(data: {
             // For new projects: CREATE record first to get the REAL DB id
             const created = await prisma.projectPage.create({
               data: {
-                profileId: data.id,
+                profileId: own.id,
                 ...projectData,
               },
             })
             realProjectId = created.id
             keptProjectIds.add(realProjectId)
             savedProjects.push({ id: realProjectId, tempId: proj.id, slug, title: projectData.title })
-          } else {
-            // If project.id is a real UUID: do prisma.projectPage.update() + delete old items + create new ones
+          } else if (ownProjectIds.has(proj.id)) {
+            // Real id that belongs to THIS profile: update + replace items.
             const updated = await prisma.projectPage.update({
               where: { id: proj.id },
               data: projectData,
@@ -475,6 +495,9 @@ export async function updatePortfolio(data: {
             savedProjects.push({ id: realProjectId, slug, title: projectData.title })
 
             await prisma.projectItem.deleteMany({ where: { projectId: realProjectId } })
+          } else {
+            // Foreign or stale id — never touch another profile's project row.
+            continue
           }
 
           // Filter out any items where ALL of (externalUrl, textContent, imageUrl, workspaceItemId) are undefined/empty
@@ -486,9 +509,12 @@ export async function updatePortfolio(data: {
                   itemType = 'external_link'
                 }
 
-                const externalUrl = item.externalUrl || (item.linkType === 'page' ? item.linkedPageSlug : null) || null
+                const isPage = item.linkType === 'page'
+                const externalUrl = isPage
+                  ? (typeof item.linkedPageSlug === 'string' && item.linkedPageSlug.trim() ? item.linkedPageSlug.trim() : null)
+                  : (sanitizeUrl(item.externalUrl) || null)
                 const textContent = item.textContent || null
-                const imageUrl = item.imageUrl || null
+                const imageUrl = sanitizeUrl(item.imageUrl) || null
                 const workspaceItemId = item.workspaceItemId || null
 
                 return {
@@ -722,41 +748,58 @@ export async function updateProjectPage(id: string, data: any) {
   try {
     const user = await requireUserWithWorkspace()
 
+    // Ownership check: only the caller's own project page is writable.
+    const owned = await prisma.projectPage.findFirst({
+      where: { id, profile: { userId: user.id } },
+      select: { id: true },
+    })
+    if (!owned) {
+      return { success: false, error: 'Project page not found' }
+    }
+
     const { items, ...pageData } = data
 
     await prisma.projectPage.update({
-      where: { id },
+      where: { id: owned.id },
       data: pageData,
     })
 
     // Handle items: delete all existing and re-insert
     if (items !== undefined) {
-      await prisma.projectItem.deleteMany({ where: { projectId: id } })
+      await prisma.projectItem.deleteMany({ where: { projectId: owned.id } })
       if (items && items.length > 0) {
         await prisma.projectItem.createMany({
-          data: items.map((item: any, index: number) => ({
-            projectId: id,
-            type: item.linkType === 'page' ? 'page_link' : item.type,
-            workspaceItemId: item.workspaceItemId || null,
-            externalUrl: item.linkType === 'page' ? item.linkedPageSlug : item.externalUrl,
-            textContent: item.textContent || null,
-            imageUrl: item.imageUrl || null,
-            title: item.linkLabel || item.title || null,
-            sortOrder: item.sortOrder ?? index,
-          }))
+          data: items.map((item: any, index: number) => {
+            const isPage = item.linkType === 'page'
+            // URLs are sanitized on the server (http/https/mailto/tel or
+            // internal path only); legacy bare domains normalized silently.
+            const externalUrl = isPage
+              ? (typeof item.linkedPageSlug === 'string' && item.linkedPageSlug.trim() ? item.linkedPageSlug.trim() : null)
+              : (sanitizeUrl(item.externalUrl) || null)
+            return {
+              projectId: owned.id,
+              type: item.linkType === 'page' ? 'page_link' : item.type,
+              workspaceItemId: item.workspaceItemId || null,
+              externalUrl,
+              textContent: item.textContent || null,
+              imageUrl: sanitizeUrl(item.imageUrl) || null,
+              title: item.linkLabel || item.title || null,
+              sortOrder: item.sortOrder ?? index,
+            }
+          })
         })
       }
     }
 
     revalidatePath('/profile/builder')
-    const pp = await prisma.projectPage.findUnique({ where: { id }, include: { profile: true } })
+    const pp = await prisma.projectPage.findUnique({ where: { id: owned.id }, include: { profile: true } })
     if (pp) {
-      revalidatePath(`/u/${(pp as any).profile.username}/projects/${pp.slug}`)
+      revalidatePath(`/u/${pp.profile.username}/projects/${pp.slug}`)
     }
 
     // Return the updated page with items
     const updatedPage = await prisma.projectPage.findUnique({
-      where: { id },
+      where: { id: owned.id },
       include: { items: { orderBy: { sortOrder: 'asc' } } },
     })
 
@@ -770,7 +813,13 @@ export async function updateProjectPage(id: string, data: any) {
 export async function deleteProjectPage(id: string) {
   try {
     const user = await requireUserWithWorkspace()
-    await prisma.projectPage.delete({ where: { id } })
+    // deleteMany + ownership filter: a foreign/unknown id matches 0 rows.
+    const result = await prisma.projectPage.deleteMany({
+      where: { id, profile: { userId: user.id } },
+    })
+    if (result.count === 0) {
+      return { success: false, error: 'Project page not found' }
+    }
 
     revalidatePath('/profile/builder')
     return { success: true }

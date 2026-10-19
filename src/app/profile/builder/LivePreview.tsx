@@ -2,16 +2,25 @@
 'use client'
 
 import { ClassicTemplate } from '@/components/portfolio/templates/ClassicTemplate'
+import { getPortfolioLang } from '@/lib/portfolio-language'
 
-export function LivePreview({ profile, isFree = false }: { profile: any; isFree?: boolean }) {
-  const isAr = profile?.appearance?.defaultLanguage === 'ar'
+export function LivePreview({
+  profile,
+  isFree = false,
+  onThemeChange,
+}: {
+  profile: any
+  isFree?: boolean
+  onThemeChange?: (mode: 'light' | 'dark') => void
+}) {
+  const isAr = getPortfolioLang(profile?.appearance) === 'ar'
   return (
     <div
       className="relative w-full h-full overflow-hidden isolate"
       style={{ transform: 'translateZ(0)', contain: 'paint' }}
     >
       <div className="w-full h-full overflow-y-auto scrollbar-thin" dir={isAr ? 'rtl' : 'ltr'}>
-        <ClassicTemplate profile={profile} isFree={isFree} />
+        <ClassicTemplate profile={profile} isFree={isFree} preview onThemeChange={onThemeChange} />
       </div>
     </div>
   )

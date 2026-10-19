@@ -1,11 +1,20 @@
 import { ImageResponse } from 'next/og'
+import { getAppUrl } from '@/lib/urls'
 
 export const runtime = 'edge'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
-  const title = searchParams.get('title') ?? 'PortfolioHub'
-  const subtitle = searchParams.get('subtitle') ?? 'ابني بورتفوليو احترافي بنفسك'
+  // Clamp both params so an oversized/hostile query string cannot blow up
+  // the image render (values are rendered as text — React escapes them).
+  const title = (searchParams.get('title') || 'PortfolioHub').slice(0, 100)
+  const subtitle = (searchParams.get('subtitle') || 'ابني بورتفوليو احترافي بنفسك').slice(0, 160)
+  let footerHost = 'portfolio-hub.online'
+  try {
+    footerHost = new URL(getAppUrl()).host
+  } catch {
+    // keep the default host
+  }
 
   return new ImageResponse(
     (
@@ -53,7 +62,7 @@ export async function GET(req: Request) {
           color: '#D4A017',
           fontSize: '18px',
         }}>
-          portholiohub.pages.dev
+          {footerHost}
         </div>
       </div>
     ),

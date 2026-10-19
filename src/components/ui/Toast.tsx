@@ -144,6 +144,8 @@ export function ToastProvider({
     <ToastContext.Provider value={{ toast }}>
       {children}
       <div
+        aria-live="polite"
+        aria-atomic="false"
         className={`fixed z-50 flex flex-col gap-3 max-w-sm w-full px-4 pointer-events-none ${
           positionClasses[position] || positionClasses['top-center']
         }`}

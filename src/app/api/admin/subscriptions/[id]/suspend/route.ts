@@ -5,7 +5,7 @@ import { audit } from '@/lib/audit'
 // POST /api/admin/subscriptions/:id/suspend { reason? } — canceledAt set
 // (state → SUSPENDED, portfolio hidden).
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(req)
   if (!gate.ok) return gate.response
 
   const { id } = await params

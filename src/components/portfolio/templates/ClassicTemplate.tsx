@@ -1,13 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { trackPortfolioEvent } from '@/components/portfolio/TrackBeacon'
 import { normalizeWhatsappNumber } from '@/lib/whatsapp'
+import { sanitizeUrl } from '@/lib/urls'
+import { isSectionVisible } from '@/lib/section-visibility'
+import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
 import { TestimonialsSlider } from '@/components/portfolio/TestimonialsSlider'
 import { PortfolioBottomNav, type PortfolioNavTab } from '@/components/portfolio/PortfolioBottomNav'
-import { Moon, Sun, Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin, FileText } from 'lucide-react'
+import { Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin, FileText } from 'lucide-react'
 
 // Helper to lighten/darken a hex color
 function adjustColor(color: string, amount: number) {
@@ -30,12 +33,38 @@ function getIcon(name?: string, className?: string) {
   return Icon ? <Icon className={className} aria-hidden="true" /> : null
 }
 
-export function ClassicTemplate({ profile, isFree = false }: { profile: any; isFree?: boolean }) {
+// Fixed navbar labels per section TYPE (independent of the editable section
+// heading). Derived from each type's built-in default title, so renaming a
+// section only changes its on-page heading, never its nav link. Custom
+// sections have no per-type label and therefore always read "More".
+const SECTION_NAV_LABELS: Record<string, { en: string; ar: string }> = {
+  about: { en: 'About', ar: 'نبذة عني' },
+  skills: { en: 'Skills', ar: 'المهارات' },
+  experience: { en: 'Experience', ar: 'الخبرة' },
+  services: { en: 'Services', ar: 'الخدمات' },
+  projects: { en: 'Projects', ar: 'المشاريع' },
+  gallery: { en: 'Gallery', ar: 'معرض الأعمال' },
+  files: { en: 'Downloads', ar: 'الملفات' },
+  testimonials: { en: 'Testimonials', ar: 'آراء العملاء' },
+  contact: { en: 'Contact', ar: 'تواصل معي' },
+  footer: { en: 'Contact', ar: 'تواصل معي' },
+  custom: { en: 'More', ar: 'المزيد' },
+}
+
+export function ClassicTemplate({
+  profile,
+  isFree = false,
+}: {
+  profile: any
+  isFree?: boolean
+  preview?: boolean
+  onThemeChange?: (mode: 'light' | 'dark') => void
+}) {
   const appearance = profile.appearance || {}
   const localized = profile.localized || {}
   const contactLinks = profile.contactLinks || []
   
-  const defaultLangMode = appearance.defaultLanguage || 'en'
+  const defaultLangMode = getPortfolioLang(appearance)
   const defaultColorMode = appearance.colorMode || 'light'
 
   const [lang, setLang] = useState<'ar' | 'en'>(defaultLangMode === 'ar' ? 'ar' : 'en')
@@ -48,6 +77,14 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
     setLang(defaultLangMode === 'ar' ? 'ar' : 'en')
     setTheme(defaultColorMode)
   }
+
+  // The visitor-facing theme + language toggles were REMOVED from the
+  // portfolio output (owner request): the published portfolio always renders
+  // with the owner's saved defaults (`appearance.colorMode` /
+  // `getPortfolioLang`). No localStorage read/write, so a stale visitor
+  // preference can never override the owner's choice.
+
+
   const [isScrolled, setIsScrolled] = useState(false)
   const [activeId, setActiveId] = useState('hero')
 
@@ -90,9 +127,13 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
     return () => observer.disconnect()
   }, [])
   
-  const displayName = localized.displayName?.[lang] || profile.displayName || profile.username
-  const title = localized.professionalTitle?.[lang] || ''
-  const bio = localized.bio?.[lang] || ''
+  // Item 8: resolve every `{ar,en}` (or flat-string) user-content value for the
+  // visitor's language, falling back to the other language when a translation
+  // is empty. `t()` is the single bilingual resolver used across the template.
+  const t = (v: unknown): string => pickLang(v as never, lang)
+  const displayName = t(localized.displayName) || profile.displayName || profile.username
+  const title = t(localized.professionalTitle)
+  const bio = t(localized.bio)
   const rawSections = [...(profile.pages?.[0]?.sections || [])]
   const hasFooterSection = rawSections.some((s: any) => s.sectionType === 'footer')
   const sections = rawSections
@@ -127,8 +168,16 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
   const currentBorder = appearance.borderColor || (theme === 'dark' ? '#374151' : '#e5e7eb')
   const currentOutline = appearance.outlineColor || primary
   
-  const fontFam = appearance.font || 'Inter'
-  const fontLink = `https://fonts.googleapis.com/css2?family=${fontFam.replace(/ /g, '+')}:wght@400;500;600;700&display=swap`
+  // Font name is charset-guarded: only letters/digits/space/+/- may reach the
+  // Google Fonts URL. Anything else falls back to the default "Inter", so the
+  // value can never inject extra query params or break the stylesheet.
+  const fontFam =
+    typeof appearance.font === 'string' &&
+    /^[A-Za-z0-9 +-]+$/.test(appearance.font) &&
+    appearance.font.trim()
+      ? appearance.font.trim()
+      : 'Inter'
+  const fontLink = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontFam).replace(/%20/g, '+')}:wght@400;500;600;700&display=swap`
 
   // Dynamically inject Google Font
   useEffect(() => {
@@ -158,20 +207,8 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
     fontFamily: `"${fontFam}", system-ui, sans-serif`,
   } as React.CSSProperties
 
-  const isSectionVisible = (s: any) => {
-    if (s.visible === false) return false
-    if (s.visible === true) return true
-    if (s.settings) {
-      try {
-        const parsed = typeof s.settings === 'string' ? JSON.parse(s.settings) : s.settings
-        if (parsed?.isVisible === false || parsed?.isVisible === 'false') return false
-        if (parsed?.isVisible === true || parsed?.isVisible === 'true') return true
-      } catch {
-        // ignore parse error
-      }
-    }
-    return true
-  }
+  // Visibility comes from the shared helper so the page, the builder list and
+  // the publish check can never disagree on which sections are shown.
   const visibleSections = sections.filter(isSectionVisible)
 
   // Scroll-spy: highlight the nav link for the section currently in view.
@@ -252,6 +289,19 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
     return <Globe className="h-5 w-5" />
   }
 
+  const renderSectionDescription = (content: any) => {
+    const text = t(content?.description)
+    if (!text) return null
+    return (
+      <p
+        dir={lang === 'ar' ? 'rtl' : 'ltr'}
+        className="text-[var(--color-text-muted)] leading-relaxed max-w-2xl text-sm sm:text-base mb-6 text-pretty"
+      >
+        {text}
+      </p>
+    )
+  }
+
   const renderSection = (section: any, index: number) => {
     const c = section.content || {}
     const sectionBg = index % 2 === 1 ? 'var(--color-bg)' : 'var(--color-card)'
@@ -260,10 +310,10 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
     switch (section.sectionType) {
       case 'about':
         const aboutStats = c.stats || []
-        const bioVal = c.biography?.[lang] !== undefined ? c.biography[lang] : c.text?.[lang]
-        const biography = bioVal !== undefined ? bioVal : (lang === 'ar' ? 'لا يوجد نص' : 'No about text provided.')
+        const bioVal = t(c.biography) || t(c.text)
+        const biography = bioVal || (lang === 'ar' ? 'لا يوجد نص' : 'No about text provided.')
         const aboutBg = theme === 'dark' ? 'var(--color-card)' : '#FAF7F2'
-        const aboutImage = profile.avatarUrl || c.imageUrl
+        const aboutImage = sanitizeUrl(profile.avatarUrl) || sanitizeUrl(c.imageUrl)
         return (
           <section id="about" key={section.id} className="py-8 sm:py-16" style={{ backgroundColor: aboutBg }}>
             <div className="max-w-[1200px] mx-auto px-4 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
@@ -294,8 +344,9 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
               <div className="hidden md:block">
                 <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <UserIcon className="text-[var(--color-primary)]" />}
-                  {c.title?.[lang] || (lang === 'ar' ? 'نبذة عني' : 'About Me')}
+                  {t(c.title) || (lang === 'ar' ? 'نبذة عني' : 'About Me')}
                 </h2>
+                {renderSectionDescription(c)}
                 {aboutStats.length > 0 ? (
                   <div className="grid grid-cols-5 gap-8 items-start" dir="ltr">
                     <div className="col-span-3 text-[var(--color-text-muted)] leading-[1.75] whitespace-pre-wrap text-lg break-words text-left">
@@ -308,7 +359,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                             {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]') || <Trophy className="w-7 h-7 text-[var(--color-primary)]" />}
                           </div>
                           <div className="text-3xl font-bold text-[var(--color-primary)] mb-2">{stat.value}</div>
-                          <div className="text-sm text-[var(--color-text-muted)] font-medium">{stat.label}</div>
+                          <div className="text-sm text-[var(--color-text-muted)] font-medium">{t(stat.label)}</div>
                         </div>
                       ))}
                     </div>
@@ -328,7 +379,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                         {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]') || <Trophy className="w-7 h-7 text-[var(--color-primary)]" />}
                       </div>
                       <div className="text-3xl font-bold text-[var(--color-primary)] mb-2">{stat.value}</div>
-                      <div className="text-sm text-[var(--color-text-muted)] font-medium">{stat.label}</div>
+                      <div className="text-sm text-[var(--color-text-muted)] font-medium">{t(stat.label)}</div>
                     </div>
                   ))}
                 </div>
@@ -369,8 +420,9 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
-                {c.heading?.[lang] || c.title?.[lang] || (lang === 'ar' ? 'المهارات' : 'Skills & Expertise')}
+                {t(c.heading) || t(c.title) || (lang === 'ar' ? 'المهارات' : 'Skills & Expertise')}
               </h2>
+              {renderSectionDescription(c)}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-8">
                 {categories.map((cat, i) => (
                   <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group relative overflow-hidden rounded-[15px] border border-[var(--color-border)] p-4 sm:p-[30px] bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
@@ -435,12 +487,12 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
             ? `${formatExpDate(item.startDate)}${endLabel ? ` - ${endLabel}` : ''}`
             : ''
           const duration = item.startDate ? calcDuration(item.startDate, item.endDate, item.isCurrent) : ''
-          const bullets = (item.description || '').split('\n').filter((l: string) => l.trim())
+          const bullets = (t(item.description) || '').split('\n').filter((l: string) => l.trim())
           return (
             <div key={item.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm">
               <div className="flex items-start gap-4 mb-3">
                 {item.companyLogo ? (
-                  <img src={item.companyLogo} alt={item.companyName} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                  <img src={sanitizeUrl(item.companyLogo)} alt={t(item.companyName)} className="w-10 h-10 rounded-lg object-cover shrink-0" />
                 ) : (
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--color-primary)' }}>
                     {getIcon(item.icon, 'w-5 h-5 text-white') || <Briefcase className="w-5 h-5 text-white" />}
@@ -448,7 +500,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-lg break-words font-bold text-[var(--color-text)]">{item.jobTitle || (lang === 'ar' ? 'المسمى الوظيفي' : 'Job Title')}</h3>
+                    <h3 className="text-lg break-words font-bold text-[var(--color-text)]">{t(item.jobTitle) || (lang === 'ar' ? 'المسمى الوظيفي' : 'Job Title')}</h3>
                     {item.employmentType && (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full truncate max-w-full" style={{ backgroundColor: 'var(--color-primary)', color: '#fff' }}>
                         {item.employmentType}
@@ -456,16 +508,16 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                     )}
                   </div>
                   <p className="text-sm font-medium break-words" style={{ color: 'var(--color-primary)' }}>
-                    {item.companyName || (lang === 'ar' ? 'اسم الشركة' : 'Company Name')}
+                    {t(item.companyName) || (lang === 'ar' ? 'اسم الشركة' : 'Company Name')}
                   </p>
                 </div>
               </div>
-                              {(item.location || item.workMode) && (
+                              {(t(item.location) || item.workMode) && (
                                 <div className="flex items-center gap-3 text-[13px] text-[var(--color-text-muted)] font-medium mb-3 flex-wrap">
-                                  {item.location && (
+                                  {t(item.location) && (
                     <span className="flex items-start gap-1 max-w-full">
                       <MapPin className="w-3.5 h-3.5 shrink-0 mt-[2px]" />
-                      <span className="break-words min-w-0 flex-1">{item.location}</span>
+                      <span className="break-words min-w-0 flex-1">{t(item.location)}</span>
                     </span>
                   )}
                   {item.workMode && (
@@ -491,10 +543,10 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Briefcase className="text-[var(--color-primary)]" />}
-                {c.heading?.[lang] || (lang === 'ar' ? 'الخبرات العملية' : 'Work Experience')}
+                {t(c.heading) || (lang === 'ar' ? 'الخبرات العملية' : 'Work Experience')}
               </h2>
-              {c.description?.[lang] && (
-                <p className="text-[var(--color-text-muted)] leading-relaxed break-words mb-12 max-w-2xl text-lg">{c.description[lang]}</p>
+              {t(c.description) && (
+                <p className="text-[var(--color-text-muted)] leading-relaxed break-words mb-12 max-w-2xl text-lg">{t(c.description)}</p>
               )}
               {expItems.length > 0 ? (
                 expDisplayMode === 'timeline' ? (
@@ -509,7 +561,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                           ? `${formatExpDate(item.startDate)}${endLabel ? ` - ${endLabel}` : ''}`
                           : ''
                         const duration = item.startDate ? calcDuration(item.startDate, item.endDate, item.isCurrent) : ''
-                        const bullets = (item.description || '').split('\n').filter((l: string) => l.trim())
+                        const bullets = (t(item.description) || '').split('\n').filter((l: string) => l.trim())
                         return (
                           <div key={item.id} style={{ transitionDelay: `${Math.min(ei * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative transition-all duration-500">
                             <div
@@ -527,7 +579,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm">
                               <div className="flex items-start gap-4 mb-3">
                                 {item.companyLogo ? (
-                                  <img src={item.companyLogo} alt={item.companyName} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                                  <img src={sanitizeUrl(item.companyLogo)} alt={t(item.companyName)} className="w-10 h-10 rounded-lg object-cover shrink-0" />
                                 ) : (
                                   <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--color-primary)' }}>
                                     {getIcon(item.icon, 'w-5 h-5 text-white') || <Briefcase className="w-5 h-5 text-white" />}
@@ -535,7 +587,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                                 )}
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <h3 className="text-lg break-words font-bold text-[var(--color-text)]">{item.jobTitle || (lang === 'ar' ? 'المسمى الوظيفي' : 'Job Title')}</h3>
+                                    <h3 className="text-lg break-words font-bold text-[var(--color-text)]">{t(item.jobTitle) || (lang === 'ar' ? 'المسمى الوظيفي' : 'Job Title')}</h3>
                                     {item.employmentType && (
                                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full truncate max-w-full" style={{ backgroundColor: 'var(--color-primary)', color: '#fff' }}>
                                         {item.employmentType}
@@ -543,11 +595,11 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                                     )}
                                   </div>
                                   <p className="text-sm font-medium break-words" style={{ color: 'var(--color-primary)' }}>
-                                    {item.companyName || (lang === 'ar' ? 'اسم الشركة' : 'Company Name')}
+                                    {t(item.companyName) || (lang === 'ar' ? 'اسم الشركة' : 'Company Name')}
                                   </p>
                                 </div>
                               </div>
-                              {(dateLabel || item.location || item.workMode) && (
+                              {(dateLabel || t(item.location) || item.workMode) && (
                                 <div className="flex items-center gap-3 text-[13px] text-[var(--color-text-muted)] font-medium mb-3 flex-wrap">
                                   {dateLabel && (
                                     <span className="flex items-start gap-1 max-w-full">
@@ -555,10 +607,10 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                                       <span className="break-words min-w-0 flex-1">{dateLabel}{duration && ` · ${duration}`}</span>
                                     </span>
                                   )}
-                                  {item.location && (
+                                  {t(item.location) && (
                                     <span className="flex items-start gap-1 max-w-full">
                                       <MapPin className="w-3.5 h-3.5 shrink-0 mt-[2px]" />
-                                      <span className="break-words min-w-0 flex-1">{item.location}</span>
+                                      <span className="break-words min-w-0 flex-1">{t(item.location)}</span>
                                     </span>
                                   )}
                                   {item.workMode && (
@@ -607,11 +659,11 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
               <div className="mb-16">
                 <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Briefcase className="text-[var(--color-primary)]" />}
-                  {c.heading?.[lang] || c.title?.[lang] || (lang === 'ar' ? 'الخدمات' : 'Services')}
+                  {t(c.heading) || t(c.title) || (lang === 'ar' ? 'الخدمات' : 'Services')}
                 </h2>
-                {(c.description?.[lang]) && (
+                {(t(c.description)) && (
                   <p className="text-[var(--color-text-muted)] leading-relaxed break-words text-lg max-w-2xl">
-                    {c.description[lang]}
+                    {t(c.description)}
                   </p>
                 )}
               </div>
@@ -623,9 +675,9 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                       <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center mb-4 sm:mb-5 shadow-sm [&>*]:!text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
                         {getIcon(service.icon, 'w-5 h-5 text-white') || <Code className="w-5 h-5 text-white" />}
                       </div>
-                      <h3 className="text-base sm:text-xl break-words font-bold mb-2 sm:mb-3 text-[var(--color-text)] tracking-tight">{service.title}</h3>
-                      {service.description ? (
-                        <p className="text-[var(--color-text-muted)] text-[13px] sm:text-[15px] leading-relaxed break-words mb-4 sm:mb-5 line-clamp-3">{service.description}</p>
+                      <h3 className="text-base sm:text-xl break-words font-bold mb-2 sm:mb-3 text-[var(--color-text)] tracking-tight">{t(service.title)}</h3>
+                      {t(service.description) ? (
+                        <p className="text-[var(--color-text-muted)] text-[13px] sm:text-[15px] leading-relaxed break-words mb-4 sm:mb-5 line-clamp-3">{t(service.description)}</p>
                       ) : null}
                       {service.features && service.features.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
@@ -659,11 +711,11 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
               <div className="mb-12 text-center">
                 <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center justify-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <MessageCircle className="text-[var(--color-primary)]" />}
-                  {c.title?.[lang] || (lang === 'ar' ? 'آراء العملاء' : 'Testimonials')}
+                  {t(c.title) || (lang === 'ar' ? 'آراء العملاء' : 'Testimonials')}
                 </h2>
-                {(c.subtitle?.[lang] || c.description?.[lang]) && (
+                {(t(c.subtitle) || t(c.description)) && (
                   <p className="text-[var(--color-text-muted)] leading-relaxed break-words text-lg max-w-2xl mx-auto">
-                    {c.subtitle?.[lang] || c.description?.[lang]}
+                    {t(c.subtitle) || t(c.description)}
                   </p>
                 )}
               </div>
@@ -683,15 +735,16 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Palette className="text-[var(--color-primary)]" />}
-                {c.title?.[lang] || (lang === 'ar' ? 'المشاريع' : 'Featured Projects')}
+                {t(c.title) || (lang === 'ar' ? 'المشاريع' : 'Featured Projects')}
               </h2>
+              {renderSectionDescription(c)}
               {displayMode === 'list' ? (
                 <div className="flex flex-col gap-6">
                   {projects.map((proj: any) => (
                     <div key={proj.id} className="group flex flex-col sm:flex-row rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
                       {proj.coverImage ? (
                         <div className="w-full sm:w-[300px] h-[200px] sm:h-auto shrink-0 overflow-hidden bg-[var(--color-bg)]">
-                          <img src={proj.coverImage} alt={proj.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                          <img src={sanitizeUrl(proj.coverImage)} alt={proj.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                         </div>
                       ) : (
                         <div className="w-full sm:w-[300px] h-[200px] sm:h-auto shrink-0 bg-[var(--color-bg)] flex items-center justify-center border-b sm:border-b-0 sm:border-r border-[var(--color-border)]">
@@ -730,7 +783,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                             if (linkType === 'external' && proj.externalLink) {
                               return (
                                 <a
-                                  href={proj.externalLink}
+                                  href={sanitizeUrl(proj.externalLink)}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
@@ -764,7 +817,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                               return (
                                 <a
                                   key={i}
-                                  href={item.externalUrl}
+                                  href={sanitizeUrl(item.externalUrl)}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
@@ -790,7 +843,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                     <div key={proj.id} style={{ transitionDelay: `${Math.min(pi * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col">
                       {proj.coverImage ? (
                         <div className="h-[120px] sm:h-[200px] w-full overflow-hidden bg-[var(--color-bg)] shrink-0">
-                          <img src={proj.coverImage} alt={proj.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                          <img src={sanitizeUrl(proj.coverImage)} alt={proj.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                         </div>
                       ) : (
                         <div className="h-[120px] sm:h-[200px] w-full bg-[var(--color-bg)] flex items-center justify-center border-b border-[var(--color-border)]">
@@ -829,7 +882,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                             if (linkType === 'external' && proj.externalLink) {
                               return (
                                 <a
-                                  href={proj.externalLink}
+                                  href={sanitizeUrl(proj.externalLink)}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
@@ -863,7 +916,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                                 return (
                                   <a
                                     key={i}
-                                    href={item.externalUrl}
+                                    href={sanitizeUrl(item.externalUrl)}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
@@ -895,17 +948,18 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
-                {c.title?.[lang] || (lang === 'ar' ? 'معرض الأعمال' : 'Gallery')}
+                {t(c.title) || (lang === 'ar' ? 'معرض الأعمال' : 'Gallery')}
               </h2>
+              {renderSectionDescription(c)}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {galleryItems.map((item: any, i: number) => {
-                  const src = item.imageUrl || item.url || ''
+                  const src = sanitizeUrl(item.imageUrl || item.url || '')
                   if (!src) return null
                   return (
                     <figure key={item.id || i} className="group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm">
-                      <img src={src} alt={item.caption || ''} loading="lazy" className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500" />
-                      {item.caption ? (
-                        <figcaption className="px-4 py-3 text-sm text-[var(--color-text-muted)] break-words">{item.caption}</figcaption>
+                      <img src={src} alt={t(item.caption)} loading="lazy" className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500" />
+                      {t(item.caption) ? (
+                        <figcaption className="px-4 py-3 text-sm text-[var(--color-text-muted)] break-words">{t(item.caption)}</figcaption>
                       ) : null}
                     </figure>
                   )
@@ -923,11 +977,12 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <FileText className="h-7 w-7 text-[var(--color-primary)]" />}
-                {c.title?.[lang] || (lang === 'ar' ? 'ملفات للتحميل' : 'Downloads')}
+                {t(c.title) || (lang === 'ar' ? 'ملفات للتحميل' : 'Downloads')}
               </h2>
+              {renderSectionDescription(c)}
               <div className="flex flex-col gap-3 max-w-[800px]">
                 {fileItems.map((file: any, i: number) => {
-                  const href = file.url || file.externalUrl
+                  const href = sanitizeUrl(file.url || file.externalUrl)
                   return (
                     <a
                       key={file.id || i}
@@ -938,7 +993,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                       className="flex items-center justify-between gap-4 rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-4 shadow-sm hover:shadow-md transition-shadow"
                     >
                       <span className="text-sm font-medium text-[var(--color-text)] break-words">
-                        {file.label || file.title || href}
+                        {t(file.label) || t(file.title) || href}
                       </span>
                       <span className="shrink-0 rounded-full bg-[var(--color-primary)]/10 px-4 py-1.5 text-xs font-bold text-[var(--color-primary)]">
                         {lang === 'ar' ? 'تحميل' : 'Download'}
@@ -955,14 +1010,15 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
         // Own anchor (footer keeps #contact for back-compat); nav maps
         // contact-type sections here, footer stays untouched.
         const contactLinks = Array.isArray(c.links) ? c.links : []
-        if (contactLinks.length === 0 && !c.title?.[lang] && !c.headline?.[lang]) return null
+        if (contactLinks.length === 0 && !t(c.title) && !t(c.headline) && !t(c.description)) return null
         return (
           <section id="contact-info" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Mail className="h-7 w-7 text-[var(--color-primary)]" />}
-                {c.title?.[lang] || c.headline?.[lang] || (lang === 'ar' ? 'تواصل معي' : 'Contact')}
+                {t(c.title) || t(c.headline) || (lang === 'ar' ? 'تواصل معي' : 'Contact')}
               </h2>
+              {renderSectionDescription(c)}
               <div className="flex flex-col gap-3 max-w-[800px]">
                 {contactLinks.map((link: any, i: number) => {
                   const platform = link.platform || link.type || link.label || 'globe'
@@ -985,7 +1041,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                         {getSocialIcon(platform) || getContactIcon(platform)}
                       </span>
                       <span className="text-sm font-medium text-[var(--color-text)] break-words">
-                        {link.label || link.value || href}
+                        {t(link.label) || link.value || href}
                       </span>
                     </a>
                   )
@@ -997,16 +1053,17 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
       }
       case 'custom': {
         const paragraphs = Array.isArray(c.paragraphs) ? c.paragraphs.filter((p: any) => typeof p === 'string' && p.trim() !== '') : []
-        if (!c.title?.[lang] && paragraphs.length === 0) return null
+        if (!t(c.title) && paragraphs.length === 0 && !t(c.description)) return null
         return (
           <section id={`custom-${section.id}`} key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              {c.title?.[lang] ? (
+              {t(c.title) ? (
                 <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
-                  {c.title[lang]}
+                  {t(c.title)}
                 </h2>
               ) : null}
+              {renderSectionDescription(c)}
               <div className="max-w-[800px] space-y-4 text-[var(--color-text-muted)] leading-[1.75] text-lg break-words">
                 {paragraphs.map((p: string, i: number) => (
                   <p key={i} className="whitespace-pre-wrap">{p}</p>
@@ -1034,10 +1091,10 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
 
         // ── Column 1 · Identity — real profile data only ────────────────
         const heroSection = visibleSections.find((s: any) => s.sectionType === 'hero')
-        const heroSubtitle = heroSection?.content?.subtitle?.[lang] || ''
+        const heroSubtitle = t(heroSection?.content?.subtitle)
         const aboutSection = visibleSections.find((s: any) => s.sectionType === 'about')
         const aboutC = aboutSection?.content || {}
-        const aboutBioRaw = aboutC.biography?.[lang] ?? aboutC.text?.[lang] ?? ''
+        const aboutBioRaw = t(aboutC.biography) || t(aboutC.text)
         const bioShort = typeof aboutBioRaw === 'string'
           ? aboutBioRaw.replace(/\s+/g, ' ').trim().slice(0, 120)
           : ''
@@ -1048,7 +1105,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
         const quickLinks: { label: string; href: string }[] = visibleSections
           .filter((s: any) => s.sectionType !== 'footer')
           .map((s: any) => {
-            const customLabel = s.content?.title?.[lang]
+            const customLabel = t(s.content?.title)
             const fallback = footerSectionLabels[s.sectionType]
             return {
               label: customLabel || (fallback ? fallback[lang] : s.sectionType),
@@ -1065,8 +1122,8 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
         const contactArr = Array.isArray(c.links) && c.links.length > 0 ? c.links : (contactLinks || [])
         const findContact = (keys: string[]) =>
           contactArr.find((l: any) => {
-            const t = String(l.type || l.platform || l.label || '').toLowerCase()
-            return keys.some((k) => t.includes(k))
+            const kind = String(l.type || l.platform || l.label || '').toLowerCase()
+            return keys.some((k) => kind.includes(k))
           })
         const emailRaw = findContact(['email', 'mail'])
         const waRaw = findContact(['whatsapp'])
@@ -1078,14 +1135,24 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
         const waHref = waVal
           ? (waVal.startsWith('http') ? waVal : `https://wa.me/${normalizeWhatsappNumber(waVal)}`)
           : ''
-        const locVal = localized.location?.[lang] || profile.location || ''
+        const locVal = t(localized.location) || profile.location || ''
 
         // Saved footer headline/subheading — the exact fields the builder edits.
-        const heading = c.headline?.[lang] || ''
-        const subheading = c.subheading?.[lang] || ''
+        const heading = t(c.headline)
+        const subheading = t(c.subheading)
+        const footerDescription = t(c.description)
         const ctaHref = emailHref || waHref || '#contact'
 
-        const GOLD = '#D4A017'
+        // Footer sits on the site's PRIMARY colour and its ink is the site
+        // BACKGROUND colour (owner request): coloured band + background-toned
+        // text/borders. `appearance.footerText`, when set, is an explicit
+        // owner override and wins.
+        const footerOverride = appearance.footerText || ''
+        const footerText = footerOverride || 'var(--color-bg)'
+        const footerMuted = footerOverride || 'color-mix(in srgb, var(--color-bg) 78%, transparent)'
+        const footerBorder = 'color-mix(in srgb, var(--color-bg) 30%, transparent)'
+        const footerSocialBorder = 'color-mix(in srgb, var(--color-bg) 40%, transparent)'
+        const footerSocialBg = 'color-mix(in srgb, var(--color-bg) 15%, transparent)'
         const year = new Date().getFullYear()
         const cairoLink = 'https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap'
         return (
@@ -1094,10 +1161,11 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
             <footer
               id="contact"
               dir={lang === 'ar' ? 'rtl' : 'ltr'}
-              className="border-t border-white/15 pt-12 pb-8 sm:pt-16"
+              className="border-t pt-12 pb-8 sm:pt-16"
               style={{
-                background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
-                color: '#ffffff',
+                background: 'var(--color-primary)',
+                color: footerText,
+                borderTopColor: footerBorder,
                 fontFamily: lang === 'ar'
                   ? "'Cairo', system-ui, -apple-system, sans-serif"
                   : 'Inter, system-ui, -apple-system, sans-serif',
@@ -1109,24 +1177,29 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
 
                   {/* Column 1 · Identity */}
                   <div>
-                    <p className="break-words text-xl font-bold tracking-tight text-white sm:text-2xl">
+                    <p className="break-words text-xl font-bold tracking-tight sm:text-2xl" style={{ color: footerText }}>
                       {displayName}
                     </p>
                     {role && (
-                      <p className="mt-1.5 text-sm font-medium break-words" style={{ color: GOLD }}>
+                      <p className="mt-1.5 text-sm font-medium break-words" style={{ color: footerText }}>
                         {role}
                       </p>
                     )}
                     {shortBio && (
-                      <p className="mx-auto mt-4 max-w-sm text-sm leading-relaxed text-white/75 break-words md:mx-0">
+                      <p className="mx-auto mt-4 max-w-sm text-sm leading-relaxed break-words md:mx-0" style={{ color: footerMuted }}>
                         {shortBio}
+                      </p>
+                    )}
+                    {footerDescription && (
+                      <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed break-words md:mx-0" style={{ color: footerMuted }}>
+                        {footerDescription}
                       </p>
                     )}
                     {footerSocialLinks.length > 0 && (
                       <div className="mt-5 flex flex-wrap justify-center gap-3 md:justify-start">
                         {footerSocialLinks.map((link: any, idx: number) => {
                           const platform = link.platform || link.label || 'globe'
-                          const label = link.label || link.platform || (lang === 'ar' ? 'رابط' : 'Link')
+                          const label = t(link.label) || link.platform || (lang === 'ar' ? 'رابط' : 'Link')
                           const rawUrl = link.url || ''
                           const href = rawUrl.startsWith('http') || rawUrl.startsWith('mailto:') || rawUrl.startsWith('tel:')
                             ? rawUrl
@@ -1141,7 +1214,8 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                               rel="noopener noreferrer"
                               aria-label={label}
                               title={label}
-                              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition-all duration-200 hover:-translate-y-0.5 hover:border-[#D4A017] hover:bg-[#D4A017] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+                              className="flex h-11 w-11 items-center justify-center rounded-full border transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
+                              style={{ borderColor: footerSocialBorder, background: footerSocialBg, color: footerText }}
                             >
                               {getSocialIcon(platform) || getContactIcon(platform)}
                             </a>
@@ -1156,7 +1230,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                     <nav aria-label={lang === 'ar' ? 'روابط سريعة' : 'Quick links'}>
                       <h3
                         className="text-sm font-bold uppercase tracking-wider"
-                        style={{ color: GOLD }}
+                        style={{ color: footerText }}
                       >
                         {lang === 'ar' ? 'روابط سريعة' : 'Quick Links'}
                       </h3>
@@ -1165,13 +1239,15 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                           <li key={n.href}>
                             <a
                               href={n.href}
-                              className="group inline-flex min-h-[36px] items-center text-sm font-medium text-white/80 transition-colors hover:text-[#D4A017] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+                              className="group inline-flex min-h-[36px] items-center text-sm font-medium transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
+                              style={{ color: footerMuted }}
                             >
                               <span className="relative">
                                 {n.label}
                                 <span
                                   aria-hidden="true"
-                                  className="pointer-events-none absolute -bottom-0.5 left-0 h-px w-0 bg-[#D4A017] transition-all duration-200 group-hover:w-full"
+                                  className="pointer-events-none absolute -bottom-0.5 left-0 h-px w-0 transition-all duration-200 group-hover:w-full"
+                                  style={{ background: footerText }}
                                 />
                               </span>
                             </a>
@@ -1183,11 +1259,11 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
 
                   {/* Column 3 · Contact — driven by saved footer headline/subheading */}
                   <div>
-                    <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: GOLD }}>
+                    <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: footerText }}>
                       {heading || (lang === 'ar' ? 'تواصل معي' : 'Get In Touch')}
                     </h3>
                     {subheading && (
-                      <p className="mt-3 text-sm leading-relaxed text-white/75 break-words">
+                      <p className="mt-3 text-sm leading-relaxed break-words" style={{ color: footerMuted }}>
                         {subheading}
                       </p>
                     )}
@@ -1196,7 +1272,8 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                         <li>
                           <a
                             href={emailHref}
-                            className="inline-flex items-center gap-2.5 text-sm text-white/80 transition-colors hover:text-[#D4A017] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+                            className="inline-flex items-center gap-2.5 text-sm transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
+                            style={{ color: footerMuted }}
                           >
                             <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
                             <span className="break-all">{emailVal.replace(/^mailto:/, '')}</span>
@@ -1209,7 +1286,8 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                             href={waHref}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2.5 text-sm text-white/80 transition-colors hover:text-[#D4A017] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+                            className="inline-flex items-center gap-2.5 text-sm transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
+                            style={{ color: footerMuted }}
                           >
                             <MessageCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
                             <span>{lang === 'ar' ? 'واتساب' : 'WhatsApp'}</span>
@@ -1217,7 +1295,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                         </li>
                       )}
                       {locVal && (
-                        <li className="inline-flex items-center gap-2.5 text-sm text-white/80">
+                        <li className="inline-flex items-center gap-2.5 text-sm" style={{ color: footerMuted }}>
                           <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
                           <span className="break-words">{locVal}</span>
                         </li>
@@ -1226,8 +1304,8 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                     {(emailHref || waHref) && (
                       <a
                         href={ctaHref}
-                        className="mt-6 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold text-[#1a1a1a] shadow-sm transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
-                        style={{ background: GOLD }}
+                        className="mt-6 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold shadow-sm transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
+                        style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}
                       >
                         {lang === 'ar' ? 'تواصل معي' : 'Get in touch'}
                         <ArrowRight className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
@@ -1237,19 +1315,20 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                 </div>
 
                 {/* ── Bottom bar — always credits the owner + PortfolioHub ── */}
-                <div className="mt-12 border-t border-white/15 pt-5">
+                <div className="mt-12 border-t pt-5" style={{ borderTopColor: footerBorder }}>
                   <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-between sm:gap-4">
-                    <p className="text-xs text-white/80">
+                    <p className="text-xs" style={{ color: footerMuted }}>
                       © {year} · {displayName}
                     </p>
                     <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-5">
-                      <p className="text-xs text-white/80">
+                      <p className="text-xs" style={{ color: footerMuted }}>
                         © {year} · {lang === 'ar' ? 'بُني بواسطة' : 'Developed with'}{' '}
                         <a
                           href="https://portfolio-hub.online"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-semibold text-white underline decoration-white/40 underline-offset-2 transition-colors hover:text-[#D4A017] focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-white/90"
+                          className="font-semibold underline underline-offset-2 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
+                          style={{ color: footerText, textDecorationColor: footerSocialBorder }}
                         >
                           PortfolioHub
                         </a>
@@ -1258,7 +1337,8 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                         <button
                           type="button"
                           onClick={scrollToTop}
-                          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-white/80 transition-colors hover:text-[#D4A017] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+                          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
+                          style={{ color: footerMuted }}
                         >
                           <ArrowUp className="h-4 w-4" aria-hidden="true" />
                           {lang === 'ar' ? 'للأعلى' : 'Back to top'}
@@ -1293,36 +1373,27 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
       <div className="min-h-screen w-full transition-colors duration-300" style={style}>
         <div className="w-full min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] relative" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
           
-          {/* Navigation Bar */}
-          <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${isScrolled ? 'py-2.5 sm:py-3 shadow-md' : 'py-3 sm:py-5'}`} style={{ backgroundColor: isScrolled ? (theme === 'light' ? 'var(--color-bg)' : 'color-mix(in srgb, var(--color-bg) 90%, transparent)') : 'transparent', backdropFilter: isScrolled ? 'blur(10px)' : 'none', borderBottom: isScrolled ? '1px solid var(--color-border)' : 'none' }}>
+          {/* Navigation Bar — always carries a blurred, theme-tinted
+              background so it stays legible over any hero (incl. the
+              builder's desktop preview, which never scrolls). */}
+          <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${isScrolled ? 'py-2.5 sm:py-3 shadow-md' : 'py-3 sm:py-5'}`} style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 88%, transparent)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderBottom: '1px solid var(--color-border)' }}>
             <div className="max-w-[1200px] mx-auto px-4 sm:px-12">
-              {/* MOBILE (unchanged): bottom nav handles links; language pill stays right-aligned */}
-              <div className="md:hidden flex items-center justify-end">
-                {defaultLangMode === 'both' && (
-                  <div className={`flex items-center rounded-full border p-0.5 text-[11px] font-bold ${isScrolled && theme === 'light' ? 'border-[var(--color-border)] bg-[var(--color-card)]' : 'border-white/20 bg-white/5'}`}>
-                    <button
-                      type="button"
-                      onClick={() => setLang('ar')}
-                      className={`rounded-full px-2.5 py-1 transition-colors cursor-pointer ${lang === 'ar' ? 'bg-[#2563eb] text-white' : (isScrolled && theme === 'light' ? 'text-[var(--color-text-muted)]' : 'text-slate-300')}`}
-                    >
-                      AR
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLang('en')}
-                      className={`rounded-full px-2.5 py-1 transition-colors cursor-pointer ${lang === 'en' ? 'bg-[#2563eb] text-white' : (theme === 'light' ? 'text-[var(--color-text-muted)]' : 'text-slate-300')}`}
-                    >
-                      EN
-                    </button>
-                  </div>
-                )}
+              {/* MOBILE: bottom nav handles links; the top bar shows the
+                  owner's name (theme/language toggles removed by request). */}
+              <div className="md:hidden flex items-center justify-between gap-2">
+                <a
+                  href="#hero"
+                  className={`truncate max-w-[70vw] text-base font-bold tracking-tight transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${theme === 'light' ? 'text-[var(--color-text)] hover:text-[var(--color-primary)]' : 'text-white hover:text-white/80'}`}
+                >
+                  {displayName}
+                </a>
               </div>
 
               {/* DESKTOP (md+): 3-column split — name | links | contact */}
               <div className="hidden md:grid w-full items-center gap-6" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
                 <a
                   href="#hero"
-                  className={`justify-self-start truncate max-w-[240px] text-lg font-bold tracking-tight transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${isScrolled && theme === 'light' ? 'text-[var(--color-text)] hover:text-[var(--color-primary)]' : 'text-white hover:text-white/80'}`}
+                  className={`justify-self-start truncate max-w-[240px] text-lg font-bold tracking-tight transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${theme === 'light' ? 'text-[var(--color-text)] hover:text-[var(--color-primary)]' : 'text-white hover:text-white/80'}`}
                 >
                   {displayName}
                 </a>
@@ -1336,9 +1407,10 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                       const hasAnySkills = groups.some((g: any) => (g.skills || []).some((sk: any) => sk.name && sk.name.trim())) || fallback.some((f: any) => typeof f === 'string' && f.trim())
                       if (!hasAnySkills) return null
                     }
-                    const label = s.sectionType === 'footer'
-                      ? (lang === 'ar' ? 'تواصل معي' : 'Contact')
-                      : (s.content?.title?.[lang] || s.sectionType)
+                    const label =
+                      SECTION_NAV_LABELS[s.sectionType]?.[lang] ||
+                      t(s.content?.title) ||
+                      s.sectionType
                     const targetId = s.sectionType === 'footer'
                       ? 'contact'
                       : s.sectionType === 'contact'
@@ -1351,12 +1423,12 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                           aria-current={activeId === targetId ? 'location' : undefined}
                           className={`capitalize transition-colors relative group font-medium rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
                             activeId === targetId
-                              ? (isScrolled && theme === 'light' ? 'text-[var(--color-primary)]' : 'text-white')
-                              : (isScrolled && theme === 'light' ? 'text-[var(--color-text-muted)] hover:text-[var(--color-primary)]' : 'text-white/90 hover:text-white')
+                              ? (theme === 'light' ? 'text-[var(--color-primary)]' : 'text-white')
+                              : (theme === 'light' ? 'text-[var(--color-text-muted)] hover:text-[var(--color-primary)]' : 'text-white/90 hover:text-white')
                           }`}
                         >
                           {label}
-                          <span className={`absolute -bottom-1 start-0 h-0.5 transition-all duration-300 group-hover:w-full ${activeId === targetId ? 'w-full' : 'w-0'} ${isScrolled && theme === 'light' ? 'bg-[var(--color-primary)]' : 'bg-white'}`}></span>
+                          <span className={`absolute -bottom-1 start-0 h-0.5 transition-all duration-300 group-hover:w-full ${activeId === targetId ? 'w-full' : 'w-0'} ${theme === 'light' ? 'bg-[var(--color-primary)]' : 'bg-white'}`}></span>
                         </a>
                       </li>
                     )
@@ -1371,15 +1443,6 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                   >
                     {lang === 'ar' ? 'تواصل معي' : 'Contact Me'}
                   </a>
-                  {defaultLangMode === 'both' && (
-                    <button
-                      onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-                      className="h-9 px-3 inline-flex items-center justify-center rounded-full bg-white/10 border border-white/20 shadow-sm hover:scale-110 active:scale-95 transition-transform text-white text-xs font-bold uppercase cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-                      title="Switch language"
-                    >
-                      {lang === 'en' ? 'AR' : 'EN'}
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
@@ -1415,7 +1478,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
             {visibleSections.find((s:any) => s.sectionType === 'hero') && (() => {
               const heroSection = visibleSections.find((s:any) => s.sectionType === 'hero')
               const heroContent = heroSection?.content || {}
-              const bgImage = heroContent.backgroundImage
+              const bgImage = sanitizeUrl(heroContent.backgroundImage)
               const overlayOpacity = heroContent.overlayOpacity !== undefined ? Number(heroContent.overlayOpacity) : 0.5
 
               return (
@@ -1440,7 +1503,7 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                     {/* Avatar image — desktop only (hidden on mobile) */}
                     {profile.avatarUrl ? (
                       <div className="hidden md:block w-36 h-36 lg:w-44 lg:h-44 rounded-full overflow-hidden border-4 border-white shadow-2xl mb-6 hover:scale-105 transition-transform duration-500 bg-white shrink-0">
-                        <img src={profile.avatarUrl} alt={displayName} className="w-full h-full object-cover" />
+                        <img src={sanitizeUrl(profile.avatarUrl)} alt={displayName} className="w-full h-full object-cover" />
                       </div>
                     ) : (
                       <div className="hidden md:flex w-36 h-36 lg:w-44 lg:h-44 rounded-full overflow-hidden border-4 border-white shadow-2xl mb-6 hover:scale-105 transition-transform duration-500 bg-white/20 backdrop-blur-md items-center justify-center text-white text-4xl lg:text-5xl font-black select-none shrink-0">
@@ -1450,9 +1513,16 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
                     <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-2.5 sm:mb-4 text-center leading-snug whitespace-pre-line" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
                       {displayName}
                     </h1>
-                    <p className="text-sm sm:text-sm md:text-base text-white/90 max-w-xl leading-relaxed mb-5 sm:mb-7 font-normal text-center">
-                      {title || heroContent.subtitle?.[lang]}
-                    </p>
+                    {(title || t(heroContent.subtitle)) ? (
+                      <p className="text-sm sm:text-sm md:text-base text-white/90 max-w-xl leading-relaxed mb-5 sm:mb-7 font-normal text-center">
+                        {title || t(heroContent.subtitle)}
+                      </p>
+                    ) : null}
+                    {t(heroContent.description) && (
+                      <p className="text-xs sm:text-sm text-white/80 max-w-xl leading-relaxed mb-5 sm:mb-7 text-center">
+                        {t(heroContent.description)}
+                      </p>
+                    )}
                     <div className="flex flex-wrap justify-center items-center gap-2.5 sm:gap-4" dir="rtl">
                       <a 
                         href="#projects" 
@@ -1485,25 +1555,28 @@ export function ClassicTemplate({ profile, isFree = false }: { profile: any; isF
               hero background). */}
           {!visibleSections.some((s: any) => s.sectionType === 'footer') && (
             <div
-              className="w-full border-t border-white/15 py-5 px-4 text-white/80"
+              className="w-full border-t py-5 px-4"
               style={{
-                background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
+                background: 'var(--color-primary)',
+                color: 'var(--color-bg)',
+                borderTopColor: 'color-mix(in srgb, var(--color-bg) 30%, transparent)',
                 fontFamily: lang === 'ar'
                   ? "'Cairo', system-ui, -apple-system, sans-serif"
                   : 'Inter, system-ui, -apple-system, sans-serif',
               }}
             >
               <div className="mx-auto flex max-w-[1200px] flex-col items-center gap-2 text-xs sm:flex-row sm:justify-between">
-                <p className="text-xs text-white/80">
+                <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--color-bg) 78%, transparent)' }}>
                   © {new Date().getFullYear()} · {displayName}
                 </p>
-                <p className="text-xs text-white/80">
+                <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--color-bg) 78%, transparent)' }}>
                   © {new Date().getFullYear()} · {lang === 'ar' ? 'بُني بواسطة' : 'Developed with'}{' '}
                   <a
                     href="https://portfolio-hub.online"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-semibold text-white underline decoration-white/40 underline-offset-2 transition-colors hover:text-[#D4A017] focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-white/90"
+                    className="font-semibold underline underline-offset-2 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-[var(--color-bg)]"
+                    style={{ color: 'var(--color-bg)', textDecorationColor: 'color-mix(in srgb, var(--color-bg) 40%, transparent)' }}
                   >
                     PortfolioHub
                   </a>

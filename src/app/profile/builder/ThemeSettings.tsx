@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { uploadToCloudinary } from '@/lib/cloudinary'
+import { getPortfolioLang } from '@/lib/portfolio-language'
 
 function ColorField({
   label,
@@ -19,6 +21,7 @@ function ColorField({
   onChange: (val: string) => void
   hint?: string
 }) {
+  const uid = useId()
   // Normalize for swatch display: if user types "60a5fa" or "#60a5fa", format to valid hex
   const clean = (raw: string) => {
     if (!raw) return defaultValue
@@ -31,7 +34,7 @@ function ColorField({
 
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium text-[var(--color-text-secondary)]">{label}</label>
+      <label htmlFor={uid} className="text-xs font-medium text-[var(--color-text-secondary)]">{label}</label>
       <div className="flex gap-2 items-center">
         <div
           className="h-9 w-9 shrink-0 rounded-lg border border-[var(--color-border)] shadow-sm relative overflow-hidden cursor-pointer"
@@ -39,10 +42,12 @@ function ColorField({
           title="Click to open color picker"
         >
           <input
+            id={uid}
             type="color"
             value={swatchColor}
             onChange={(e) => onChange(e.target.value)}
             className="absolute inset-[-10px] w-[50px] h-[50px] cursor-pointer opacity-0"
+            aria-label={label}
           />
         </div>
         <Input
@@ -73,6 +78,15 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
     updateProfile((p: any) => ({
       ...p,
       appearance: { ...p.appearance, [key]: value }
+    }))
+  }
+
+  // Portfolio language is persisted under both keys so old readers
+  // (`defaultLanguage`) and new readers (`n`) always agree — no migration.
+  const handleLanguageChange = (value: string) => {
+    updateProfile((p: any) => ({
+      ...p,
+      appearance: { ...p.appearance, n: value, defaultLanguage: value }
     }))
   }
 
@@ -115,8 +129,9 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
         </div>
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-[var(--color-text-secondary)]">Username (URL)</label>
+            <label htmlFor="theme-username" className="text-xs text-[var(--color-text-secondary)]">Username (URL)</label>
             <Input 
+              id="theme-username"
               value={profile.username || ''} 
               onChange={e => updateProfile((p:any) => ({...p, username: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '')}))} 
               className="mt-1" 
@@ -126,11 +141,12 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
           </div>
 
           <div>
-            <label className="text-xs text-[var(--color-text-secondary)]">Default Color Mode</label>
+            <label htmlFor="theme-color-mode" className="text-xs text-[var(--color-text-secondary)]">Default Color Mode</label>
             <select 
+              id="theme-color-mode"
               value={appearance.colorMode || 'light'} 
               onChange={e => handleAppearanceChange('colorMode', e.target.value)}
-              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
             >
               <option value="light">Light</option>
               <option value="dark">Dark</option>
@@ -138,11 +154,12 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
           </div>
 
           <div>
-            <label className="text-xs text-[var(--color-text-secondary)]">Font Family</label>
+            <label htmlFor="theme-font" className="text-xs text-[var(--color-text-secondary)]">Font Family</label>
             <select 
+              id="theme-font"
               value={appearance.font || 'Inter'} 
               onChange={e => handleAppearanceChange('font', e.target.value)}
-              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
             >
               <option value="Inter">Inter</option>
               <option value="Poppins">Poppins</option>
@@ -234,11 +251,12 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
       <div className="border-t border-[var(--color-border)] pt-6">
         <h3 className="text-sm font-semibold mb-3">Language & Direction</h3>
         <div>
-          <label className="text-xs text-[var(--color-text-secondary)]">Portfolio Language</label>
+          <label htmlFor="theme-language" className="text-xs text-[var(--color-text-secondary)]">Portfolio Language</label>
           <select
-            value={appearance.defaultLanguage || 'en'}
-            onChange={(e) => handleAppearanceChange('defaultLanguage', e.target.value)}
-            className="mt-1 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-xs text-[var(--color-text-primary)] focus:border-[var(--color-primary)] focus:outline-none cursor-pointer"
+            id="theme-language"
+            value={getPortfolioLang(appearance)}
+            onChange={(e) => handleLanguageChange(e.target.value)}
+            className="mt-1 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-xs text-[var(--color-text-primary)] focus-visible:border-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] cursor-pointer"
           >
             <option value="en">English (LTR)</option>
             <option value="ar">العربية (RTL)</option>
@@ -255,17 +273,18 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
         <h3 className="text-sm font-semibold mb-3">Branding</h3>
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-[var(--color-text-secondary)]">Logo Image</label>
+            <label htmlFor="theme-logo-url" className="text-xs text-[var(--color-text-secondary)]">Logo Image</label>
             <div className="flex gap-2 mt-1">
               <Input
-                value={appearance.logoUrl || ''}
+                id="theme-logo-url"
+                value={appearance.logoUrl || ''} 
                 onChange={e => handleAppearanceChange('logoUrl', e.target.value)}
                 placeholder="Image URL"
                 className="flex-1"
               />
               <div className="relative overflow-hidden shrink-0">
-                <Button variant="secondary" className="h-9 px-3" disabled={uploadingLogo}>
-                  {uploadingLogo ? '...' : 'Upload'}
+                <Button variant="secondary" className="h-9 px-3" disabled={uploadingLogo} aria-label="Upload logo image">
+                  {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Upload'}
                 </Button>
                 <input
                   type="file"
@@ -300,11 +319,15 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
         <h3 className="text-sm font-semibold mb-3">Floating Buttons</h3>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <label className="text-xs text-[var(--color-text-secondary)]">Show Scroll to Top Button</label>
+            <label htmlFor="theme-show-scroll-top" className="text-xs text-[var(--color-text-secondary)]">Show Scroll to Top Button</label>
             <button
               type="button"
+              id="theme-show-scroll-top"
+              role="switch"
+              aria-checked={(appearance.actionButtons || {}).showScrollToTop !== false}
+              aria-label="Show scroll to top button"
               onClick={() => handleActionButtonChange('showScrollToTop', !((appearance.actionButtons || {}).showScrollToTop !== false))}
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
                 (appearance.actionButtons || {}).showScrollToTop !== false ? 'bg-[var(--color-primary)]' : 'bg-gray-300 dark:bg-gray-600'
               }`}
             >
@@ -318,11 +341,15 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs text-[var(--color-text-secondary)]">Show WhatsApp Floating Button</label>
+              <label htmlFor="theme-show-whatsapp" className="text-xs text-[var(--color-text-secondary)]">Show WhatsApp Floating Button</label>
               <button
                 type="button"
+                id="theme-show-whatsapp"
+                role="switch"
+                aria-checked={(appearance.actionButtons || {}).showWhatsapp !== false}
+                aria-label="Show WhatsApp floating button"
                 onClick={() => handleActionButtonChange('showWhatsapp', !((appearance.actionButtons || {}).showWhatsapp !== false))}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
                   (appearance.actionButtons || {}).showWhatsapp !== false ? 'bg-[var(--color-primary)]' : 'bg-gray-300 dark:bg-gray-600'
                 }`}
               >
@@ -334,8 +361,12 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
               </button>
             </div>
             <div>
-              <label className="text-xs text-[var(--color-text-secondary)]">WhatsApp Phone Number</label>
+              <label htmlFor="theme-whatsapp-number" className="text-xs text-[var(--color-text-secondary)]">WhatsApp Phone Number</label>
               <Input
+                id="theme-whatsapp-number"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 value={(appearance.actionButtons || {}).whatsappNumber || ''}
                 onChange={e => handleActionButtonChange('whatsappNumber', e.target.value)}
                 placeholder="+201234567890"

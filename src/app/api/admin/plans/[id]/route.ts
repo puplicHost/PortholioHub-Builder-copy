@@ -5,7 +5,7 @@ import { audit } from '@/lib/audit'
 // PATCH /api/admin/plans/:id — partial update (same validation rules as
 // create; reuse by forwarding normalized fields).
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(req)
   if (!gate.ok) return gate.response
 
   const { id } = await params
@@ -68,7 +68,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 // DELETE /api/admin/plans/:id — refused when subscriptions exist
 // (deactivate instead); deletes only unused plans.
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(_req)
   if (!gate.ok) return gate.response
 
   const { id } = await params

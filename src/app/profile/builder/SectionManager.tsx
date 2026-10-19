@@ -4,6 +4,8 @@
 import { useState } from 'react'
 import { GripVertical, Eye, EyeOff, ChevronDown, ChevronRight, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
+import { isSectionVisible, withSectionVisibility } from '@/lib/section-visibility'
+import { getPortfolioLang } from '@/lib/portfolio-language'
 
 export function SectionManager({ profile, updateProfile }: { profile: any, updateProfile: any }) {
   const sections = profile.pages?.[0]?.sections || []
@@ -13,12 +15,9 @@ export function SectionManager({ profile, updateProfile }: { profile: any, updat
   const toggleVisibility = (sectionId: string) => {
     updateProfile((p: any) => {
       const newPages = [...p.pages]
-      const newSections = newPages[0].sections.map((s: any) => {
-        if (s.id === sectionId) {
-          return { ...s, settings: { ...s.settings, isVisible: !s.settings.isVisible } }
-        }
-        return s
-      })
+      const newSections = newPages[0].sections.map((s: any) =>
+        s.id === sectionId ? withSectionVisibility(s, !isSectionVisible(s)) : s,
+      )
       newPages[0].sections = newSections
       return { ...p, pages: newPages }
     })
@@ -99,7 +98,7 @@ export function SectionManager({ profile, updateProfile }: { profile: any, updat
   }
 
   const renderContentFields = (section: any) => {
-    const langMode = appearance.defaultLanguage || 'en'
+    const langMode = getPortfolioLang(appearance)
     const showEn = langMode === 'en' || langMode === 'both'
     const showAr = langMode === 'ar' || langMode === 'both'
     const c = section.content || {}
@@ -109,12 +108,12 @@ export function SectionManager({ profile, updateProfile }: { profile: any, updat
         {section.sectionType === 'hero' && (
           <>
             {showEn && <div>
-              <label className="text-[var(--color-text-secondary)]">Subtitle (EN)</label>
-              <Input value={c.subtitle?.en || ''} onChange={e => updateSectionContent(section.id, 'subtitle', 'en', e.target.value)} className="h-8 mt-1" />
+              <label htmlFor={`sec-${section.id}-subtitle-en`} className="text-[var(--color-text-secondary)]">Subtitle (EN)</label>
+              <Input id={`sec-${section.id}-subtitle-en`} value={c.subtitle?.en || ''} onChange={e => updateSectionContent(section.id, 'subtitle', 'en', e.target.value)} className="h-8 mt-1" />
             </div>}
             {showAr && <div dir="rtl">
-              <label className="text-[var(--color-text-secondary)]">Subtitle (AR)</label>
-              <Input value={c.subtitle?.ar || ''} onChange={e => updateSectionContent(section.id, 'subtitle', 'ar', e.target.value)} className="h-8 mt-1 text-right" />
+              <label htmlFor={`sec-${section.id}-subtitle-ar`} className="text-[var(--color-text-secondary)]">Subtitle (AR)</label>
+              <Input id={`sec-${section.id}-subtitle-ar`} value={c.subtitle?.ar || ''} onChange={e => updateSectionContent(section.id, 'subtitle', 'ar', e.target.value)} className="h-8 mt-1 text-right" />
             </div>}
           </>
         )}
@@ -122,38 +121,73 @@ export function SectionManager({ profile, updateProfile }: { profile: any, updat
         {section.sectionType === 'about' && (
           <>
             {showEn && <div>
-              <label className="text-[var(--color-text-secondary)]">About Text (EN)</label>
-              <textarea value={c.text?.en || ''} onChange={e => updateSectionContent(section.id, 'text', 'en', e.target.value)} className="w-full mt-1 border border-[var(--color-border)] rounded p-2 bg-[var(--color-surface)]" rows={3} />
+              <label htmlFor={`sec-${section.id}-text-en`} className="text-[var(--color-text-secondary)]">About Text (EN)</label>
+              <textarea id={`sec-${section.id}-text-en`} value={c.text?.en || ''} onChange={e => updateSectionContent(section.id, 'text', 'en', e.target.value)} className="w-full mt-1 border border-[var(--color-border)] rounded p-2 bg-[var(--color-surface)]" rows={3} />
             </div>}
             {showAr && <div dir="rtl">
-              <label className="text-[var(--color-text-secondary)]">About Text (AR)</label>
-              <textarea value={c.text?.ar || ''} onChange={e => updateSectionContent(section.id, 'text', 'ar', e.target.value)} className="w-full mt-1 border border-[var(--color-border)] rounded p-2 bg-[var(--color-surface)] text-right" rows={3} />
+              <label htmlFor={`sec-${section.id}-text-ar`} className="text-[var(--color-text-secondary)]">About Text (AR)</label>
+              <textarea id={`sec-${section.id}-text-ar`} value={c.text?.ar || ''} onChange={e => updateSectionContent(section.id, 'text', 'ar', e.target.value)} className="w-full mt-1 border border-[var(--color-border)] rounded p-2 bg-[var(--color-surface)] text-right" rows={3} />
             </div>}
           </>
         )}
 
-        {(section.sectionType === 'projects' || section.sectionType === 'contact' || section.sectionType === 'skills' || section.sectionType === 'services' || section.sectionType === 'testimonials' || section.sectionType === 'gallery' || section.sectionType === 'files') && (
+        {(section.sectionType === 'projects' || section.sectionType === 'contact' || section.sectionType === 'skills' || section.sectionType === 'services' || section.sectionType === 'testimonials' || section.sectionType === 'gallery' || section.sectionType === 'files' || section.sectionType === 'custom') && (
           <>
             {showEn && <div>
-              <label className="text-[var(--color-text-secondary)]">Section Title (EN)</label>
-              <Input value={c.title?.en || ''} onChange={e => updateSectionContent(section.id, 'title', 'en', e.target.value)} className="h-8 mt-1" />
+              <label htmlFor={`sec-${section.id}-title-en`} className="text-[var(--color-text-secondary)]">Section Title (EN)</label>
+              <Input id={`sec-${section.id}-title-en`} value={c.title?.en || ''} onChange={e => updateSectionContent(section.id, 'title', 'en', e.target.value)} className="h-8 mt-1" />
             </div>}
             {showAr && <div dir="rtl">
-              <label className="text-[var(--color-text-secondary)]">Section Title (AR)</label>
-              <Input value={c.title?.ar || ''} onChange={e => updateSectionContent(section.id, 'title', 'ar', e.target.value)} className="h-8 mt-1 text-right" />
+              <label htmlFor={`sec-${section.id}-title-ar`} className="text-[var(--color-text-secondary)]">Section Title (AR)</label>
+              <Input id={`sec-${section.id}-title-ar`} value={c.title?.ar || ''} onChange={e => updateSectionContent(section.id, 'title', 'ar', e.target.value)} className="h-8 mt-1 text-right" />
             </div>}
           </>
         )}
 
         {section.sectionType === 'skills' && (
           <div>
-            <label className="text-[var(--color-text-secondary)]">Skills (comma separated)</label>
+            <label htmlFor={`sec-${section.id}-skills`} className="text-[var(--color-text-secondary)]">Skills (comma separated)</label>
             <Input 
+              id={`sec-${section.id}-skills`}
               value={(c.skills || []).join(', ')} 
               onChange={e => updateSectionContentRaw(section.id, 'skills', e.target.value.split(',').map((s:string) => s.trim()).filter(Boolean))} 
               className="h-8 mt-1" 
               placeholder="React, Next.js, CSS"
             />
+          </div>
+        )}
+
+        {/* Optional short description — available on every section type
+            (experience/services have their own richer description field in the
+            right-hand editor). Rendered under the heading when non-empty. */}
+        {section.sectionType !== 'experience' && section.sectionType !== 'services' && (
+          <div className="space-y-2">
+            <label htmlFor={`sec-${section.id}-description-${showEn ? 'en' : 'ar'}`} className="text-[var(--color-text-secondary)]">
+              Section Description (optional)
+            </label>
+            {showEn && (
+              <Input
+                id={`sec-${section.id}-description-en`}
+                aria-label="Section description (English)"
+                maxLength={300}
+                value={c.description?.en || ''}
+                onChange={e => updateSectionContent(section.id, 'description', 'en', e.target.value)}
+                className="h-8"
+                placeholder="Short summary shown under the heading"
+              />
+            )}
+            {showAr && (
+              <Input
+                id={`sec-${section.id}-description-ar`}
+                aria-label="Section description (Arabic)"
+                dir="rtl"
+                maxLength={300}
+                value={c.description?.ar || ''}
+                onChange={e => updateSectionContent(section.id, 'description', 'ar', e.target.value)}
+                className="h-8 text-right"
+                placeholder="ملخص قصير يظهر أسفل العنوان"
+              />
+            )}
           </div>
         )}
       </div>
@@ -166,16 +200,19 @@ export function SectionManager({ profile, updateProfile }: { profile: any, updat
       <p className="text-xs text-[var(--color-text-muted)] mb-4">Reorder sections, toggle visibility, and edit content.</p>
       
       <div className="space-y-2">
-        {sections.map((section: any, idx: number) => (
+        {sections.map((section: any, idx: number) => {
+          const visible = isSectionVisible(section)
+          return (
           <div key={section.id} className="flex flex-col p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
             <div className="flex items-center gap-3">
               <div className="flex flex-col gap-1 text-[var(--color-text-muted)]">
-                <button onClick={() => moveSection(idx, -1)} disabled={idx === 0} className="disabled:opacity-30 hover:text-[var(--color-text-primary)]">▲</button>
-                <button onClick={() => moveSection(idx, 1)} disabled={idx === sections.length - 1} className="disabled:opacity-30 hover:text-[var(--color-text-primary)]">▼</button>
+                <button onClick={() => moveSection(idx, -1)} disabled={idx === 0} aria-label={`Move ${section.sectionType} section up`} className="min-h-[24px] min-w-[24px] disabled:opacity-30 hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] rounded">▲</button>
+                <button onClick={() => moveSection(idx, 1)} disabled={idx === sections.length - 1} aria-label={`Move ${section.sectionType} section down`} className="min-h-[24px] min-w-[24px] disabled:opacity-30 hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] rounded">▼</button>
               </div>
               
               <button 
-                className="flex-1 text-left flex items-center justify-between"
+                className="flex-1 text-left flex items-center justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] rounded"
+                aria-expanded={expandedSection === section.id}
                 onClick={() => setExpandedSection(expandedSection === section.id ? null : section.id)}
               >
                 <p className="text-sm font-medium capitalize">{section.sectionType}</p>
@@ -184,15 +221,18 @@ export function SectionManager({ profile, updateProfile }: { profile: any, updat
               
               <button 
                 onClick={() => toggleVisibility(section.id)}
-                className={`p-1.5 rounded-md transition-colors ${section.settings.isVisible ? 'text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)]' : 'text-[var(--color-text-muted)]'}`}
+                aria-label={visible ? `Hide ${section.sectionType} section` : `Show ${section.sectionType} section`}
+                aria-pressed={visible}
+                className={`flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${visible ? 'text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)]' : 'text-[var(--color-text-muted)]'}`}
               >
-                {section.settings.isVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                {visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
               </button>
             </div>
             
             {expandedSection === section.id && renderContentFields(section)}
           </div>
-        ))}
+          )
+        })}
       </div>
 
       <div className="flex gap-2 pt-1">

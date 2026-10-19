@@ -77,8 +77,8 @@ export function TestimonialsEditor({
     <div className="space-y-6">
       <FormCard title="Section Content" subtitle="Icon, heading, and description">
         <div className="space-y-4">
-          <div>
-            <label className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
+          <div role="group" aria-labelledby={`${sectionId}-section-icon-label`}>
+            <label id={`${sectionId}-section-icon-label`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
               Section Icon
             </label>
             <IconPicker
@@ -88,20 +88,22 @@ export function TestimonialsEditor({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
+              <label htmlFor={`${sectionId}-heading-en`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
                 Heading (EN)
               </label>
               <Input
+                id={`${sectionId}-heading-en`}
                 value={c.title?.en || 'Testimonials'}
                 onChange={(e) => updateSectionContent(sectionId, 'title', 'en', e.target.value)}
                 className="h-[44px] min-h-[44px] w-full px-[12px] py-[10px] text-[15px]"
               />
             </div>
             <div dir="rtl">
-              <label className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
+              <label htmlFor={`${sectionId}-heading-ar`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
                 العنوان (AR)
               </label>
               <Input
+                id={`${sectionId}-heading-ar`}
                 value={c.title?.ar || ''}
                 onChange={(e) => updateSectionContent(sectionId, 'title', 'ar', e.target.value)}
                 className="h-[44px] min-h-[44px] w-full px-[12px] py-[10px] text-right text-[15px]"
@@ -110,24 +112,26 @@ export function TestimonialsEditor({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
+              <label htmlFor={`${sectionId}-description-en`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
                 Description (EN)
               </label>
               <textarea
+                id={`${sectionId}-description-en`}
                 value={c.subtitle?.en || c.description?.en || ''}
                 onChange={(e) => updateSectionContent(sectionId, 'subtitle', 'en', e.target.value)}
-                className="min-h-[80px] w-full resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                className="min-h-[80px] w-full resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                 placeholder="What clients say..."
               />
             </div>
             <div dir="rtl">
-              <label className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
+              <label htmlFor={`${sectionId}-description-ar`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
                 الوصف (AR)
               </label>
               <textarea
+                id={`${sectionId}-description-ar`}
                 value={c.subtitle?.ar || c.description?.ar || ''}
                 onChange={(e) => updateSectionContent(sectionId, 'subtitle', 'ar', e.target.value)}
-                className="min-h-[80px] w-full resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-right text-[15px] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                className="min-h-[80px] w-full resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-right text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
               />
             </div>
           </div>
@@ -144,7 +148,7 @@ export function TestimonialsEditor({
             >
               <div className="mt-2 flex flex-col gap-4">
                 <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
+                  <label htmlFor={`${sectionId}-photo-${idx}`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
                     Client Photo
                   </label>
                   <div className="flex items-center gap-3">
@@ -160,6 +164,7 @@ export function TestimonialsEditor({
                       </div>
                     )}
                     <Input
+                      id={`${sectionId}-photo-${idx}`}
                       value={item.photoUrl || ''}
                       onChange={(e) => updateItem(idx, { photoUrl: e.target.value })}
                       placeholder="https://... or upload"
@@ -191,7 +196,8 @@ export function TestimonialsEditor({
                       type="button"
                       onClick={() => moveItem(idx, -1)}
                       disabled={idx === 0}
-                      className="rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 cursor-pointer"
+                      aria-label="Move testimonial up"
+                      className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                       title="Move up"
                     >
                       <ChevronUp className="h-4 w-4" />
@@ -200,7 +206,8 @@ export function TestimonialsEditor({
                       type="button"
                       onClick={() => moveItem(idx, 1)}
                       disabled={idx === items.length - 1}
-                      className="rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 cursor-pointer"
+                      aria-label="Move testimonial down"
+                      className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                       title="Move down"
                     >
                       <ChevronDown className="h-4 w-4" />

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { sanitizeUrl } from '@/lib/urls'
 
 // Portfolio content validation (plan Phase 5 §14–19, mass assignment §12).
 // Envelope + per-type content are `.strict()`; key sets cover every shape
@@ -31,6 +32,23 @@ const lstring = (max: number) =>
 // Accept both so saves never fail on the shape the UI actually sends.
 const lstringOrText = (max: number) => z.union([lstring(max), plainText(max)]);
 
+// Optional per-section description (Round 3, item 7): trimmed, length-capped,
+// plain text only. Bilingual like other content strings so it travels with the
+// rest of the section's {ar,en} data.
+const descText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max, `at most ${max} characters`)
+    .refine((s) => !/[<>]/.test(s), 'Plain text only (no HTML)');
+const ldesc = (max: number) =>
+  z
+    .object({
+      ar: descText(max).optional(),
+      en: descText(max).optional(),
+    })
+    .strict();
+
 const url = z
   .string()
   .max(500)
@@ -59,7 +77,7 @@ const experienceItem = z
     jobTitle: lstringOrText(120).optional(),
     company: lstringOrText(120).optional(),
     // Builder key names (ClassicTemplate renders these flat strings).
-    companyName: plainText(120).optional(),
+    companyName: lstringOrText(120).optional(),
     companyLogo: urlOrEmpty.optional(),
     location: lstringOrText(120).optional(),
     startDate: z.string().max(30).optional(),
@@ -75,8 +93,8 @@ const experienceItem = z
 
 const serviceItem = z
   .object({
-    title: plainText(120),
-    description: plainText(500).optional(),
+    title: lstringOrText(120),
+    description: lstringOrText(500).optional(),
     price: plainText(60).optional(),
   })
   .strict();
@@ -86,8 +104,8 @@ const testimonialItem = z
     id: z.string().max(120).optional(),
     // Builder photo-card shape (TestimonialsEditor + TestimonialsSlider
     // read name/title/photoUrl/text/rating).
-    name: plainText(120).optional(),
-    title: plainText(120).optional(),
+    name: lstringOrText(120).optional(),
+    title: lstringOrText(120).optional(),
     photoUrl: urlOrEmpty.optional(),
     text: lstring(1000).optional(),
     rating: z.number().min(0).max(5).optional(),
@@ -115,7 +133,7 @@ const contactLink = z
     ]),
     platform: plainText(60).optional(),
     value: z.string().max(500),
-    label: plainText(60).optional(),
+    label: lstringOrText(60).optional(),
     url: url.optional(),
   })
   .strict()
@@ -146,7 +164,7 @@ const footerLink = z
   .object({
     id: z.string().max(120).optional(),
     platform: plainText(60).optional(),
-    label: plainText(60).optional(),
+    label: lstringOrText(60).optional(),
     url: urlOrEmpty.optional(),
   })
   .strict();
@@ -157,7 +175,7 @@ const galleryItem = z
     mediaId: z.string().max(200).optional(),
     imageUrl: urlOrEmpty.optional(),
     url: urlOrEmpty.optional(),
-    caption: plainText(200).optional(),
+    caption: lstringOrText(200).optional(),
   })
   .strict();
 
@@ -165,7 +183,7 @@ const fileItem = z
   .object({
     id: z.string().max(120).optional(),
     mediaId: z.string().max(200).optional(),
-    label: plainText(120).optional(),
+    label: lstringOrText(120).optional(),
     url: urlOrEmpty.optional(),
     externalUrl: urlOrEmpty.optional(),
   })
@@ -177,8 +195,8 @@ const fileItem = z
 const builderServiceItem = z
   .object({
     icon: plainText(40).optional(),
-    title: plainText(120).optional(),
-    description: plainText(500).optional(),
+    title: lstringOrText(120).optional(),
+    description: lstringOrText(500).optional(),
     features: z.array(plainText(120)).max(50).optional(),
   })
   .strict();
@@ -189,6 +207,7 @@ const heroContent = z
   .object({
     title: lstring(120).optional(),
     subtitle: lstring(500).optional(),
+    description: ldesc(300).optional(),
     name: lstring(120).optional(),
     jobTitle: lstring(120).optional(),
     avatarMediaId: z.string().max(200).optional(),
@@ -207,12 +226,13 @@ const aboutContent = z
     icon: plainText(40).optional(),
     text: lstring(2000).optional(),
     biography: lstring(2000).optional(),
+    description: ldesc(300).optional(),
     stats: z
       .array(
         z
           .object({
             value: plainText(60),
-            label: plainText(60),
+            label: lstringOrText(60),
             icon: plainText(40).optional(),
           })
           .strict(),
@@ -227,6 +247,7 @@ const skillsContent = z
     title: lstring(120).optional(),
     icon: plainText(40).optional(),
     heading: lstring(120).optional(),
+    description: ldesc(300).optional(),
     skills: z.array(plainText(60)).max(50).optional(),
     groups: z
       .array(
@@ -278,6 +299,7 @@ const galleryContent = z
   .object({
     title: lstring(120).optional(),
     icon: plainText(40).optional(),
+    description: ldesc(300).optional(),
     items: z.array(galleryItem).max(60).optional(),
   })
   .strict();
@@ -286,6 +308,7 @@ const filesContent = z
   .object({
     title: lstring(120).optional(),
     icon: plainText(40).optional(),
+    description: ldesc(300).optional(),
     items: z.array(fileItem).max(60).optional(),
   })
   .strict();
@@ -295,6 +318,7 @@ const testimonialsContent = z
     title: lstring(120).optional(),
     subtitle: lstring(500).optional(),
     icon: plainText(40).optional(),
+    description: ldesc(300).optional(),
     items: z.array(testimonialItem).max(30).optional(),
   })
   .strict();
@@ -305,6 +329,7 @@ const contactContent = z
     headline: lstring(120).optional(),
     subheading: lstring(500).optional(),
     icon: plainText(40).optional(),
+    description: ldesc(300).optional(),
     links: z.array(contactLink).max(20).optional(),
   })
   .strict();
@@ -314,6 +339,7 @@ const footerContent = z
     headline: lstring(120).optional(),
     subheading: lstring(500).optional(),
     title: lstring(120).optional(),
+    description: ldesc(300).optional(),
     links: z.array(footerLink).max(20).optional(),
   })
   .strict();
@@ -322,6 +348,7 @@ const customContent = z
   .object({
     title: lstring(120).optional(),
     icon: plainText(40).optional(),
+    description: ldesc(300).optional(),
     paragraphs: z.array(plainText(2000)).max(20).optional(),
   })
   .strict();
@@ -421,4 +448,118 @@ export function validateProjects(projects: unknown): ContentCheck {
     return { ok: false, error: 'projects: at most 50 projects allowed' };
   }
   return { ok: true };
+}
+
+// ---------- profile extras: appearance / localized / contactLinks ----------
+// These three fields are stored as JSON and read by every template. Legacy
+// rows can hold arbitrary shapes, so validation stays lenient: known keys are
+// clamped, unsafe values fall back to the template default (undefined), unknown
+// legacy keys are preserved, and parse NEVER throws / rejects a save.
+
+// Colors: keep only hex or rgb()/hsl() with alpha. Anything else → undefined
+// (the template then uses its own default), so a bad legacy value can neither
+// break the page nor smuggle CSS.
+const safeColor = z
+  .string()
+  .max(64)
+  .refine((s) => /^#([0-9a-fA-F]{3,8})$/.test(s) || /^(rgb|hsl)a?\([0-9.,%\s]+\)$/.test(s))
+  .optional()
+  .catch(undefined);
+
+// Font family: letters/digits/space/plus/hyphen only (a real Google font name).
+// Anything else falls back to the default font — never injected into the URL.
+const safeFont = z
+  .string()
+  .max(60)
+  .refine((s) => /^[A-Za-z0-9 +-]+$/.test(s) && s.trim().length > 0)
+  .optional()
+  .catch('Inter');
+
+const safeStr = (max: number) => z.string().max(max).optional().catch(undefined);
+
+const safeUrl = z
+  .string()
+  .max(1000)
+  .transform((s) => sanitizeUrl(s))
+  .optional()
+  .catch(undefined);
+
+const appearanceSchema = z
+  .object({
+    colorMode: z.enum(['light', 'dark']).optional().catch(undefined),
+    theme: safeStr(60),
+    font: safeFont,
+    primaryColor: safeColor,
+    bgColorLight: safeColor,
+    bgColorDark: safeColor,
+    textColorLight: safeColor,
+    textColorDark: safeColor,
+    borderColor: safeColor,
+    outlineColor: safeColor,
+    footerBg: safeColor,
+    footerText: safeColor,
+    logoUrl: safeUrl,
+    defaultLanguage: z.enum(['ar', 'en', 'both']).optional().catch(undefined),
+    n: z.enum(['ar', 'en', 'both']).optional().catch(undefined),
+    actionButtons: z.record(z.string(), z.unknown()).optional().catch(undefined),
+  })
+  .catchall(z.unknown());
+
+const lstringLoose = z
+  .object({
+    ar: safeStr(5000),
+    en: safeStr(5000),
+  })
+  .catchall(z.unknown());
+
+const localizedSchema = z
+  .object({
+    displayName: lstringLoose.optional().catch(undefined),
+    bio: lstringLoose.optional().catch(undefined),
+    professionalTitle: lstringLoose.optional().catch(undefined),
+    location: lstringLoose.optional().catch(undefined),
+  })
+  .catchall(z.unknown());
+
+const contactLinkLoose = z
+  .object({
+    id: safeStr(120),
+    label: safeStr(120),
+    platform: safeStr(60),
+    type: safeStr(60),
+    value: safeStr(500),
+    url: safeUrl,
+  })
+  .catchall(z.unknown());
+
+const contactLinksSchema = z.array(contactLinkLoose).max(60).optional().catch(undefined);
+
+export interface ProfileExtras {
+  appearance?: unknown;
+  localized?: unknown;
+  contactLinks?: unknown;
+}
+
+// Sanitizes the profile extras with a per-field silent fallback. If a field is
+// missing it stays missing; on any unexpected parse failure the raw legacy
+// value is preserved so an old profile is never rejected.
+export function validateProfileExtras(data: {
+  appearance?: unknown;
+  localized?: unknown;
+  contactLinks?: unknown;
+}): ProfileExtras {
+  const out: ProfileExtras = {};
+  if (data.appearance !== undefined) {
+    const r = appearanceSchema.safeParse(data.appearance);
+    out.appearance = r.success ? r.data : data.appearance;
+  }
+  if (data.localized !== undefined) {
+    const r = localizedSchema.safeParse(data.localized);
+    out.localized = r.success ? r.data : data.localized;
+  }
+  if (data.contactLinks !== undefined) {
+    const r = contactLinksSchema.safeParse(data.contactLinks);
+    out.contactLinks = r.success ? r.data : data.contactLinks;
+  }
+  return out;
 }

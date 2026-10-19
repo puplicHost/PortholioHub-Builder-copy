@@ -60,7 +60,7 @@ export function VerifyRequiredCard({ maskedEmail }: { maskedEmail: string }) {
           </p>
 
           {sent ? (
-            <p className="mt-5 text-sm font-medium text-[var(--color-success)]">
+            <p role="status" className="mt-5 text-sm font-medium text-[var(--color-success)]">
               ✅ اتبعت الإيميل! تحقق من بريدك الوارد.
             </p>
           ) : (
@@ -77,7 +77,7 @@ export function VerifyRequiredCard({ maskedEmail }: { maskedEmail: string }) {
             </Button>
           )}
           {failed && !sent && (
-            <p className="mt-3 text-xs text-[var(--color-danger)]">حصل خطأ، حاول تاني</p>
+            <p role="alert" className="mt-3 text-xs text-[var(--color-danger)]">حصل خطأ، حاول تاني</p>
           )}
 
           <Link

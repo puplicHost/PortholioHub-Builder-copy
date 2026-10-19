@@ -14,3 +14,19 @@ export function getSafeRedirect(target: string | null | undefined, fallback: str
   if (target.startsWith('//')) return fallback
   return target
 }
+
+// Sanitizes a user-supplied URL for use in href/src.
+// - Allows http/https/mailto/tel and site-relative paths (`/…`) and anchors (`#…`).
+// - Rejects dangerous schemes (javascript:, data:, vbscript:, file:, …) with ''.
+// - Normalizes legacy bare domains (`example.com` → `https://example.com`).
+// Returns '' when there is nothing safe to render.
+export function sanitizeUrl(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  const s = raw.trim()
+  if (!s) return ''
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s)) {
+    return /^(https?:|mailto:|tel:)/i.test(s) ? s : ''
+  }
+  if (s.startsWith('/') || s.startsWith('#')) return s
+  return `https://${s}`
+}

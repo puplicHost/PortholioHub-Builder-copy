@@ -1,11 +1,21 @@
 import { prisma } from '@/lib/prisma'
 import { requireAdminApi } from '@/lib/admin-guard'
 import { audit } from '@/lib/audit'
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
 
 // POST /api/admin/users/:id/send-email — send an administrative notification email to a user
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(req)
   if (!gate.ok) return gate.response
+
+  // Throttle per admin + IP to prevent any account being used to spam users.
+  const rl = await checkRateLimit(`admin-email:${gate.adminId}:${getClientIp(req)}`, 20, 60 * 60 * 1000)
+  if (!rl.allowed) {
+    return Response.json(
+      { code: 'RATE_LIMITED', message: 'Too many emails sent. Try again later.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfterMs / 1000)) } },
+    )
+  }
 
   const { id } = await params
   const body = await req.json().catch(() => null)
@@ -27,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const user = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, email: true, displayName: true },
+    select: { id: true, email: true },
   })
 
   if (!user) {
@@ -35,8 +45,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   // Send email (transactional delivery or server log)
-  console.log(`[admin-email] To: ${user.email} (${user.displayName || 'No Name'}), Subject: ${subject.trim()}`)
-  console.log(`[admin-email-body] ${bodyText.trim()}`)
+  // Send email (transactional delivery or server log).
+  // NOTE: recipient address and body are deliberately NOT written to stdout —
+  // they remain in the admin audit log only (see audit() below).
+  console.log(`[admin-email] notification email sent (userId=${user.id})`)
 
   // Also record in Notification table if available so the user sees it in-app
   try {

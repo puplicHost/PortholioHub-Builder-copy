@@ -35,7 +35,9 @@ import { useToast } from '@/components/ui/Toast'
 import { useI18n } from '@/components/I18nProvider'
 import { getFriendlyErrorMessage } from '@/lib/validations/error-messages'
 import { isSectionLockedForFree, stripLockedSectionsForFree } from '@/lib/free-sections'
+import { isSectionVisible, withSectionVisibility } from '@/lib/section-visibility'
 import { getWhatsAppLink, digitsOnly } from '@/lib/whatsapp'
+import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
 import { useRouter } from 'next/navigation'
 import { updatePortfolio, createProjectPage, updateProjectPage, deleteProjectPage, publishProfile, unpublishProfile, getOrCreateProfile } from '@/lib/actions/portfolio'
 import { uploadToCloudinary } from '@/lib/cloudinary'
@@ -78,7 +80,9 @@ function IconPicker({ value, onChange }: { value?: string; onChange: (key: strin
           key={key}
           type="button"
           onClick={() => onChange(value === key ? undefined : key)}
-          className={`p-1.5 rounded-md border transition-all cursor-pointer flex items-center justify-center ${
+          aria-label={`Use ${key} icon`}
+          aria-pressed={value === key}
+          className={`p-1.5 rounded-md border transition-colors cursor-pointer flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
             value === key
               ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
               : 'border-[var(--color-border)] bg-transparent text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text-primary)]'
@@ -92,7 +96,8 @@ function IconPicker({ value, onChange }: { value?: string; onChange: (key: strin
         <button
           type="button"
           onClick={() => onChange(undefined)}
-          className="p-1.5 rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 transition-all cursor-pointer flex items-center justify-center"
+          aria-label="Clear icon"
+          className="p-1.5 rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 transition-colors cursor-pointer flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
           title="Clear icon"
         >
           <X className="h-3.5 w-3.5" />
@@ -104,7 +109,7 @@ function IconPicker({ value, onChange }: { value?: string; onChange: (key: strin
 
 function ProjectPagePreview({ profile, projectPage }: { profile: any; projectPage: any }) {
   const appearance = profile.appearance || {}
-  const defaultLangMode = appearance.defaultLanguage || 'en'
+  const defaultLangMode = getPortfolioLang(appearance)
   const defaultColorMode = appearance.colorMode || 'light'
   const [lang, setLang] = useState<'ar' | 'en'>(defaultLangMode === 'ar' ? 'ar' : 'en')
   const [theme, setTheme] = useState<'light' | 'dark'>(defaultColorMode)
@@ -269,10 +274,11 @@ function ProjectPagePreview({ profile, projectPage }: { profile: any; projectPag
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer — matches the public project page: primary-colour band with
+            background-toned ink (owner request); owner overrides win. */}
         <footer
           className="py-16"
-          style={{ backgroundColor: appearance.footerBg || '#0f172a', color: appearance.footerText || '#94a3b8' }}
+          style={{ backgroundColor: appearance.footerBg || 'var(--color-primary)', color: appearance.footerText || 'var(--color-bg)' }}
         >
           <div className="max-w-[1200px] mx-auto px-6 sm:px-12">
             <div className="text-center text-sm opacity-60">
@@ -289,6 +295,100 @@ function adjustColor(color: string, amount: number) {
   return '#' + color.replace(/^#/, '').replace(/../g, color => ('0'+Math.min(255, Math.max(0, parseInt(color, 16) + amount)).toString(16)).substr(-2))
 }
 
+// True-desktop preview for narrow (phone) viewports. The inline <LivePreview>
+// is bound to the real browser viewport, so on a phone it can only ever show a
+// mobile layout — making the device toggle look dead. This renders the same
+// saved portfolio in a fixed 1080px-wide iframe and scales it to fit the
+// available box, so "Desktop" always shows an actual desktop layout on any
+// device. (Project-page previews stay inline and draft-driven; only the home
+// portfolio uses this.)
+function ScaledDesktopPreview({ refreshKey, onRefresh }: { refreshKey: string; onRefresh: () => void }) {
+  const DESKTOP_W = 1080
+  const boxRef = useRef<HTMLDivElement | null>(null)
+  const [box, setBox] = useState({ w: DESKTOP_W, h: 800 })
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    const update = () => setBox({ w: el.clientWidth || DESKTOP_W, h: el.clientHeight || 800 })
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const scale = box.w > 0 ? Math.min(1, box.w / DESKTOP_W) : 1
+  return (
+    <div ref={boxRef} className="relative w-full h-full overflow-hidden bg-[var(--color-page)]">
+      <iframe
+        key={refreshKey}
+        src="/profile/builder/preview"
+        title="Desktop portfolio preview"
+        width={DESKTOP_W}
+        height={Math.round(box.h / scale)}
+        style={{ border: 'none', width: DESKTOP_W, height: box.h / scale, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+        className="block bg-white"
+      />
+      <button
+        type="button"
+        onClick={onRefresh}
+        title="Reload desktop preview"
+        aria-label="Reload desktop preview"
+        className="absolute bottom-4 end-4 z-10 flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)] shadow-lg hover:text-[var(--color-primary)] transition-colors cursor-pointer"
+      >
+        <RefreshCw className="h-4 w-4" />
+      </button>
+    </div>
+  )
+}
+
+
+// Item 8: one labelled text field that, in bilingual mode, renders a second
+// `{en,ar}` input — stored in the existing shape item fields already validate
+// (lstringOrText). Flat legacy strings show in the EN box and upgrade to
+// `{en}` on first edit; the renderer falls back to the other language.
+function BiField({ idBase, label, value, showEn, showAr, onChange, multiline, placeholderEn, placeholderAr }: {
+  idBase: string
+  label: string
+  value: any
+  showEn: boolean
+  showAr: boolean
+  onChange: (lang: 'ar' | 'en', val: string) => void
+  multiline?: boolean
+  placeholderEn?: string
+  placeholderAr?: string
+}) {
+  const obj = value && typeof value === 'object' ? value : {}
+  // Legacy flat strings must never be hidden: a single-language portfolio
+  // (showAr only, say) would otherwise render the stored value in the hidden
+  // EN box. Fall the flat value into whichever box is visible.
+  const flat = typeof value === 'string' ? value : ''
+  const en = obj.en || flat
+  const ar = obj.ar || flat
+  const base = 'w-full rounded-lg border border-[var(--color-border)] bg-transparent text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]'
+  return (
+    <div className="space-y-3">
+      {showEn && (
+        <div>
+          <label htmlFor={`${idBase}-en`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showAr ? `${label} (English)` : label}</label>
+          {multiline ? (
+            <textarea id={`${idBase}-en`} value={en} onChange={e => onChange('en', e.target.value)} placeholder={placeholderEn} className={`${base} min-h-[100px] resize-y p-3`} />
+          ) : (
+            <Input id={`${idBase}-en`} value={en} onChange={e => onChange('en', e.target.value)} placeholder={placeholderEn} className={`${base} min-h-[44px] h-[44px] px-[12px] py-[10px]`} />
+          )}
+        </div>
+      )}
+      {showAr && (
+        <div dir="rtl">
+          <label htmlFor={`${idBase}-ar`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showEn ? `${label} (عربي)` : label}</label>
+          {multiline ? (
+            <textarea id={`${idBase}-ar`} value={ar} onChange={e => onChange('ar', e.target.value)} placeholder={placeholderAr} className={`${base} min-h-[100px] resize-y p-3 text-right`} />
+          ) : (
+            <Input id={`${idBase}-ar`} value={ar} onChange={e => onChange('ar', e.target.value)} placeholder={placeholderAr} className={`${base} min-h-[44px] h-[44px] px-[12px] py-[10px] text-right`} />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function FormCard({ children, title, subtitle, action }: { children: React.ReactNode, title?: string, subtitle?: string, action?: React.ReactNode }) {
   return (
@@ -332,12 +432,19 @@ function ItemCard({ children, title, subtitle, onRemove, onEdit }: { children: R
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {onEdit && (
-            <button onClick={onEdit} className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] bg-white dark:bg-gray-700 rounded-md border border-[var(--color-border)] shadow-sm">
+            <button aria-label="Edit item" onClick={onEdit} className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] bg-[var(--color-surface)] rounded-md border border-[var(--color-border)] shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
               <PenTool className="w-3.5 h-3.5" />
             </button>
           )}
           {onRemove && (
-            <button onClick={onRemove} className="p-1.5 text-[var(--color-text-muted)] hover:text-red-500 bg-white dark:bg-gray-700 rounded-md border border-[var(--color-border)] shadow-sm">
+            <button
+              aria-label="Remove item"
+              onClick={() => {
+                // Destructive + irreversible (UI/UX #9): confirm before removing.
+                if (window.confirm('Remove this item? This cannot be undone.')) onRemove()
+              }}
+              className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] bg-[var(--color-surface)] rounded-md border border-[var(--color-border)] shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+            >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
@@ -409,7 +516,8 @@ function SortableSectionItem({
             {...attributes}
             {...listeners}
             onClick={(e) => e.stopPropagation()}
-            className="cursor-grab active:cursor-grabbing p-1 -ml-1 rounded hover:bg-black/5 dark:hover:bg-white/10 touch-none flex items-center justify-center shrink-0"
+            aria-label="Drag to reorder"
+            className="cursor-grab active:cursor-grabbing p-1 -ml-1 rounded hover:bg-black/5 dark:hover:bg-white/10 touch-none flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
             title="Drag to reorder"
           >
             <GripVertical className="h-3.5 w-3.5 text-[var(--color-text-muted)] opacity-60 group-hover:opacity-100 shrink-0" />
@@ -431,7 +539,9 @@ function SortableSectionItem({
             {/* Eye visibility toggle */}
             <button
               onClick={onToggleVisibility}
-              className={`p-1 rounded hover:bg-[var(--color-surface-hover)] transition-colors cursor-pointer ${
+              aria-label={isVisible ? `Hide ${sec.sectionType} section` : `Show ${sec.sectionType} section`}
+              aria-pressed={isVisible}
+              className={`p-1 rounded hover:bg-[var(--color-surface-hover)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
                 isVisible ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-muted)] opacity-50'
               }`}
               title={isVisible ? 'Hide Section' : 'Show Section'}
@@ -530,6 +640,10 @@ type BuilderLabelKey = keyof (typeof BUILDER_LABELS)['en']
 type BuilderLabels = Record<BuilderLabelKey, string>
 
 const BUILDER_DARK_KEY = 'portfoliohub-builder-dark'
+
+// Local-only draft autosave (Phase 2): protects against losing unsaved work
+// on refresh/close. Per-profile, stored in localStorage, never sent to server.
+const BUILDER_DRAFT_PREFIX = 'portfoliohub-builder-draft:'
 
 // Shown when the mobile "Go Live" button is tapped before publishing.
 const PUBLISH_NOT_READY_TOAST = 'انشر البورتفوليو أولاً'
@@ -696,6 +810,12 @@ export function BuilderClient({
   }, [toast, lockedToastAction])
 
   const handleLogout = async () => {
+    // Privacy on shared devices: never leave this user's unsaved draft behind.
+    try {
+      if (profile?.id) window.localStorage.removeItem(`${BUILDER_DRAFT_PREFIX}${profile.id}`)
+    } catch {
+      /* storage unavailable — ignore */
+    }
     try {
       await fetch('/api/auth/logout', { method: 'POST' })
     } catch {
@@ -755,9 +875,21 @@ export function BuilderClient({
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [activePage, setActivePage] = useState<'home' | string>('home')
   const [creatingProjectPage, setCreatingProjectPage] = useState(false)
-  // Mobile iframe preview reload key: bumped on save + via the manual
-  // refresh button so the true-390px render stays in sync with edits.
+  // Mobile preview iframe reload key: bumped on save + via the manual
+  // refresh button so the true-390px frame re-fetches the latest portfolio.
   const [mobileRefreshKey, setMobileRefreshKey] = useState(0)
+  // Device-toggle root cause: the "desktop" branch renders <LivePreview>
+  // INLINE in this document, so its responsive breakpoints resolve against
+  // the real browser viewport. On a narrow (phone) window that inline canvas
+  // is also narrow, so desktop and mobile modes converge — the toggle looks
+  // dead. When the viewport itself is too narrow for a desktop layout we swap
+  // the desktop branch to a fixed-width, scale-to-fit iframe so it still
+  // shows a TRUE desktop layout on any device.
+  const [narrowViewport, setNarrowViewport] = useState(false)
+  // True on real phones (< md / 768px). Forces the mobile preview frame.
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
+  // Desktop iframe reload key (mirrors `mobileRefreshKey`).
+  const [desktopRefreshKey, setDesktopRefreshKey] = useState(0)
   // Mobile publish button feedback: idle → busy (spinner) → done (✓) → idle.
   const [publishState, setPublishState] = useState<
     'idle' | 'publishing' | 'unpublishing' | 'published' | 'unpublished'
@@ -794,9 +926,107 @@ export function BuilderClient({
     }
   }, [])
 
+  // Track whether the real viewport can natively render a desktop layout.
+  // 1024px ≈ Tailwind's `lg`; below it the inline desktop canvas would fall
+  // back to a mobile/tablet layout, defeating the device toggle.
+  // `isMobileViewport` (< md / 768px) additionally FORCES the phone preview:
+  // on a real phone the device switcher is hidden, so a "desktop" preview
+  // would be a 1080px scaled-down frame — i.e. a desktop layout on a phone.
+  // Under 768px we always render the 390px mobile frame instead.
+  useEffect(() => {
+    const check = () => {
+      setNarrowViewport(window.innerWidth < 1024)
+      setIsMobileViewport(window.innerWidth < 768)
+    }
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
   const isDirty = useMemo(() => {
     return getProfileSnapshot(profile) !== savedSnapshot
   }, [profile, savedSnapshot])
+
+  // ---- Local draft autosave (Phase 2) -------------------------------------
+  // Draft lives ONLY in localStorage (per profile) and is cleared on every
+  // successful server save; nothing here touches the network.
+  const draftKey = profile?.id ? `${BUILDER_DRAFT_PREFIX}${profile.id}` : null
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null)
+  const draftRestoredRef = useRef(false)
+
+  // Restore a pending local draft once on mount (only if it differs from the
+  // server snapshot, so a clean reload never re-applies anything).
+  // LocalStorage is unavailable during SSR, so this client-only restore cannot
+  // be derived during render without a hydration mismatch — hence the setState
+  // here (the one legitimate case the compiler rule does not cover).
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (draftRestoredRef.current || !draftKey) return
+    draftRestoredRef.current = true
+    // Shared-device privacy: drop any draft belonging to a different account.
+    try {
+      for (let i = window.localStorage.length - 1; i >= 0; i--) {
+        const k = window.localStorage.key(i)
+        if (k && k.startsWith(BUILDER_DRAFT_PREFIX) && k !== draftKey) {
+          window.localStorage.removeItem(k)
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      const raw = window.localStorage.getItem(draftKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as { snapshot?: string; ts?: number }
+      if (!parsed?.snapshot || typeof parsed.snapshot !== 'string') {
+        window.localStorage.removeItem(draftKey)
+        return
+      }
+      if (parsed.snapshot === getProfileSnapshot(profile)) {
+        window.localStorage.removeItem(draftKey)
+        return
+      }
+      const d = JSON.parse(parsed.snapshot)
+      setProfile((p: any) => ({
+        ...p,
+        avatarUrl: d.avatarUrl ?? p.avatarUrl,
+        appearance: d.appearance ?? p.appearance,
+        localized: d.localized ?? p.localized,
+        contactLinks: d.contactLinks ?? p.contactLinks,
+        pages: p.pages?.length
+          ? [{ ...p.pages[0], sections: d.sections ?? p.pages[0]?.sections }, ...p.pages.slice(1)]
+          : p.pages,
+        projectPages: d.projectPages ?? p.projectPages,
+      }))
+      setDraftSavedAt(typeof parsed.ts === 'number' ? parsed.ts : Date.now())
+      toast('info', 'تم استرجاع مسودتك غير المحفوظة. اضغط "حفظ التغييرات" لتثبيتها.')
+    } catch {
+      try {
+        window.localStorage.removeItem(draftKey)
+      } catch {
+        /* ignore */
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Debounced autosave of the dirty snapshot to localStorage.
+  useEffect(() => {
+    if (!draftKey || !isDirty) return
+    const t = setTimeout(() => {
+      try {
+        window.localStorage.setItem(
+          draftKey,
+          JSON.stringify({ snapshot: getProfileSnapshot(profile), ts: Date.now() }),
+        )
+        setDraftSavedAt(Date.now())
+      } catch {
+        /* storage full/unavailable — ignore */
+      }
+    }, 2500)
+    return () => clearTimeout(t)
+  }, [profile, isDirty, draftKey])
 
   const handleSaveChanges = async (forceVersion?: number): Promise<boolean> => {
     if (saveStatus === 'saving') return false
@@ -815,6 +1045,15 @@ export function BuilderClient({
       })
       if (res.success) {
         setLastSaved(new Date())
+        // Server state is now authoritative — drop the local draft.
+        if (draftKey) {
+          try {
+            window.localStorage.removeItem(draftKey)
+          } catch {
+            /* ignore */
+          }
+        }
+        setDraftSavedAt(null)
         let nextProfile = profile
         if (typeof (res as any).version === 'number') {
           nextProfile = { ...nextProfile, version: (res as any).version }
@@ -1004,9 +1243,18 @@ export function BuilderClient({
   }, [isDirty])
 
   // State updater
-  const updateProfile = useCallback((updater: (prev: any) => any) => {
+  const updateProfile = (updater: (prev: any) => any) => {
     setProfile(updater)
-  }, [])
+  }
+
+  // Theme toggle from inside the live preview canvas: persists the choice to
+  // the owner's saved `appearance.colorMode` (survives reload).
+  const handlePreviewThemeChange = (mode: 'light' | 'dark') => {
+    updateProfile((p: any) => ({
+      ...p,
+      appearance: { ...p.appearance, colorMode: mode },
+    }))
+  }
 
   // Sections from profile, sorted for display.
   const sections = useMemo(() => {
@@ -1055,34 +1303,14 @@ export function BuilderClient({
     updateProfile((p: any) => {
       const newPages = [...(p.pages || [])]
       if (!newPages[0]) return p
-
+      // Write BOTH representations (top-level `visible` + `settings.isVisible`)
+      // through the shared helper so every reader agrees on the state.
       const currentSections = newPages[0].sections || []
-      const newSections = currentSections.map((s: any) => {
-        if (s.id === sectionId || s.sectionType === sectionId) {
-          let currentVisible = true
-          if (s.visible === false) {
-            currentVisible = false
-          } else if (s.visible === true) {
-            currentVisible = true
-          } else if (s.settings) {
-            try {
-              const parsed = typeof s.settings === 'string' ? JSON.parse(s.settings) : s.settings
-              currentVisible = parsed?.isVisible !== false
-            } catch {
-              currentVisible = true
-            }
-          }
-          const nextVisible = !currentVisible
-
-          const prevSettings = typeof s.settings === 'string' ? JSON.parse(s.settings) : (s.settings || {})
-          return { 
-            ...s, 
-            visible: nextVisible,
-            settings: { ...prevSettings, isVisible: nextVisible } 
-          }
-        }
-        return s
-      })
+      const newSections = currentSections.map((s: any) =>
+        s.id === sectionId || s.sectionType === sectionId
+          ? withSectionVisibility(s, !isSectionVisible(s))
+          : s
+      )
 
       newPages[0] = {
         ...newPages[0],
@@ -1129,22 +1357,6 @@ export function BuilderClient({
     })
   }
 
-  // Move section up or down
-  const moveSection = (index: number, direction: -1 | 1, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (index + direction < 0 || index + direction >= sections.length) return
-    updateProfile((p: any) => {
-      const newPages = [...(p.pages || [])]
-      const newSections = [...(newPages[0]?.sections || [])]
-      const temp = newSections[index]
-      newSections[index] = newSections[index + direction]
-      newSections[index + direction] = temp
-      newSections.forEach((s: any, i: number) => { s.sectionOrder = i + 1 })
-      newPages[0].sections = newSections
-      return { ...p, pages: newPages }
-    })
-  }
-
   // Section content updater
   const updateSectionContent = (sectionId: string, field: string, lang: 'en' | 'ar', value: any) => {
     updateProfile((p: any) => {
@@ -1187,51 +1399,10 @@ export function BuilderClient({
     })
   }
 
-  // Localized profile updater
-  const handleLocalizedChange = (field: string, lang: 'en' | 'ar', value: string) => {
-    updateProfile((p: any) => ({
-      ...p,
-      localized: {
-        ...p.localized,
-        [field]: { ...p.localized?.[field], [lang]: value }
-      }
-    }))
-  }
-
-  // Contact links helpers
-  const handleSocialChange = (index: number, key: string, value: string) => {
-    const newLinks = [...(profile.contactLinks || [])]
-    newLinks[index] = { ...newLinks[index], [key]: value }
-    updateProfile((p: any) => ({ ...p, contactLinks: newLinks }))
-  }
-
-  const handleAddSocial = () => {
-    const current = profile.contactLinks || []
-    updateProfile((p: any) => ({
-      ...p,
-      contactLinks: [...current, { label: 'LinkedIn', url: '' }]
-    }))
-  }
-
-  const handleRemoveSocial = (index: number) => {
-    const newLinks = [...(profile.contactLinks || [])]
-    newLinks.splice(index, 1)
-    updateProfile((p: any) => ({ ...p, contactLinks: newLinks }))
-  }
-
-  const langMode = 'en'
-  const showEn = true
-  const showAr = false
-
   // Project page handlers
   const projectPages = useMemo(() => {
     return [...(profile.projectPages || [])].sort((a, b) => a.sortOrder - b.sortOrder)
   }, [profile.projectPages])
-
-  const selectedProjectPage = useMemo(() => {
-    if (activePage === 'home') return null
-    return projectPages.find((p: any) => p.id === activePage) || null
-  }, [projectPages, activePage])
 
   const editingProjectPage = useMemo(() => {
     if (activePage === 'home') return null
@@ -1403,6 +1574,8 @@ export function BuilderClient({
   }
 
   const handleDeleteProjectPage = async (pageId: string) => {
+    // Destructive + irreversible on the server (UI/UX #9): confirm first.
+    if (!window.confirm('Delete this project page? This cannot be undone.')) return
     try {
       const res = await deleteProjectPage(pageId)
       if (res.success) {
@@ -1434,8 +1607,9 @@ export function BuilderClient({
           <FormCard title="Page Configuration">
             <div className="space-y-4">
               <div>
-                <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Page Title</label>
+                <label htmlFor={`pp-title-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Page Title</label>
                 <Input
+                  id={`pp-title-${pp.id}`}
                   value={pp.title || ''}
                   onChange={(e) => {
                     updateProjectPageField(pp.id, 'title', e.target.value)
@@ -1447,12 +1621,13 @@ export function BuilderClient({
                 />
               </div>
               <div>
-                <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">URL Slug</label>
+                <label htmlFor={`pp-slug-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">URL Slug</label>
                 <div className="flex">
                   <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-[var(--color-text-muted)] text-xs">
                     /u/{profile.username}/projects/
                   </span>
                   <Input
+                    id={`pp-slug-${pp.id}`}
                     value={pp.slug || ''}
                     onChange={(e) => updateProjectPageField(pp.id, 'slug', e.target.value.replace(/[^a-z0-9-]/g, '').replace(/(^-|-$)/g, ''))}
                     className="h-[44px] min-h-[44px] text-[15px] px-[12px] py-[10px] rounded-l-none flex-1"
@@ -1460,7 +1635,7 @@ export function BuilderClient({
                 </div>
               </div>
               <div>
-                <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Link to Project</label>
+                <label htmlFor={`pp-link-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Link to Project</label>
                 {(() => {
                   const linkingCard = (projectPages || []).find((proj: any) => {
                     const linked = (proj as any).linkedPageSlug || (proj as any).content?.linkedPageSlug
@@ -1469,12 +1644,13 @@ export function BuilderClient({
                   return (
                     <>
                       <select
+                        id={`pp-link-${pp.id}`}
                         value={linkingCard ? linkingCard.id : ''}
                         onChange={(e) => {
                           if (e.target.value) linkCardToPage(e.target.value, pp.slug)
                           else unlinkPageFromCards(pp.slug)
                         }}
-                        className="w-full min-h-[44px] h-[44px] rounded-lg border border-[var(--color-border)] bg-transparent px-[12px] text-[15px] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                        className="w-full min-h-[44px] h-[44px] rounded-lg border border-[var(--color-border)] bg-transparent px-[12px] text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
                       >
                         <option value="">Not linked to a project</option>
                         {(projectPages || []).map((proj: any) => (
@@ -1491,8 +1667,9 @@ export function BuilderClient({
                 })()}
               </div>
               <div>
-                <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Back Button Label</label>
+                <label htmlFor={`pp-back-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Back Button Label</label>
                 <Input
+                  id={`pp-back-${pp.id}`}
                   value={pp.backButtonLabel || 'Back to Portfolio'}
                   onChange={(e) => updateProjectPageField(pp.id, 'backButtonLabel', e.target.value)}
                   className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
@@ -1504,9 +1681,10 @@ export function BuilderClient({
           <FormCard title="Page Header" subtitle="Cover image and description">
             <div className="space-y-4">
               <div>
-                <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Cover Image URL</label>
+                <label htmlFor={`pp-cover-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Cover Image URL</label>
                 <div className="flex gap-2">
                   <Input
+                    id={`pp-cover-${pp.id}`}
                     value={pp.coverImage || ''}
                     onChange={(e) => updateProjectPageField(pp.id, 'coverImage', e.target.value)}
                     className="flex-1 min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
@@ -1538,11 +1716,12 @@ export function BuilderClient({
                 )}
               </div>
               <div>
-                <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Description</label>
+                <label htmlFor={`pp-desc-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Description</label>
                 <textarea
+                  id={`pp-desc-${pp.id}`}
                   value={pp.description || ''}
                   onChange={(e) => updateProjectPageField(pp.id, 'description', e.target.value)}
-                  className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                  className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
                 />
               </div>
             </div>
@@ -1551,8 +1730,8 @@ export function BuilderClient({
           <FormCard title="Project Items" subtitle="Manage layout and items">
             <div className="space-y-4">
               <div>
-                <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Display Mode</label>
-                <div className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
+                <label id={`pp-display-mode-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Display Mode</label>
+                <div role="group" aria-labelledby={`pp-display-mode-${pp.id}`} className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
                   <button
                     type="button"
                     onClick={() => updateProjectPageField(pp.id, 'displayMode', 'grid')}
@@ -1591,8 +1770,9 @@ export function BuilderClient({
                   >
                     <div className="flex flex-col gap-4 mt-2">
                       <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Title</label>
+                        <label htmlFor={`pp-item-${item.id}-title`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Title</label>
                         <Input
+                          id={`pp-item-${item.id}-title`}
                           value={item.title || ''}
                           onChange={(e) => {
                             const newItems = [...(pp.items || [])]
@@ -1603,21 +1783,23 @@ export function BuilderClient({
                         />
                       </div>
                       <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Description</label>
+                        <label htmlFor={`pp-item-${item.id}-desc`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Description</label>
                         <textarea
+                          id={`pp-item-${item.id}-desc`}
                           value={item.textContent || ''}
                           onChange={(e) => {
                             const newItems = [...(pp.items || [])]
                             newItems[idx].textContent = e.target.value
                             updateProjectPageField(pp.id, 'items', newItems)
                           }}
-                          className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                          className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
                         />
                       </div>
                       <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Image URL</label>
+                        <label htmlFor={`pp-item-${item.id}-image`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Image URL</label>
                         <div className="flex gap-2">
                           <Input
+                            id={`pp-item-${item.id}-image`}
                             value={item.imageUrl || ''}
                             onChange={(e) => {
                               const newItems = [...(pp.items || [])]
@@ -1651,8 +1833,9 @@ export function BuilderClient({
                         </div>
                       </div>
                       <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">External Link</label>
+                        <label htmlFor={`pp-item-${item.id}-link`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">External Link</label>
                         <Input
+                          id={`pp-item-${item.id}-link`}
                           value={item.externalUrl || ''}
                           onChange={(e) => {
                             const newItems = [...(pp.items || [])]
@@ -1698,6 +1881,12 @@ export function BuilderClient({
 
     const c = selectedSection.content || {}
     const loc = profile.localized || {}
+    // Item 8: when the portfolio is bilingual, every profile text field gets a
+    // second input for the other language, stored in the SAME `localized`
+    // structure the renderer already reads ({ar,en}); empty values fall back.
+    const langMode = getPortfolioLang(profile.appearance)
+    const showEn = langMode === 'en' || langMode === 'both'
+    const showAr = langMode === 'ar' || langMode === 'both'
 
     switch (selectedSectionType) {
       case 'hero':
@@ -1755,9 +1944,10 @@ export function BuilderClient({
             <FormCard title="Background Image" subtitle="Optional backdrop image with dark overlay">
               <div className="space-y-4">
                 <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Background Image URL</label>
+                  <label htmlFor={`bg-image-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Background Image URL</label>
                   <div className="flex gap-2">
                     <Input
+                      id={`bg-image-${selectedSection.id}`}
                       value={c.backgroundImage || ''}
                       onChange={(e) => updateSectionContentRaw(selectedSection.id, 'backgroundImage', e.target.value)}
                       placeholder="https://..."
@@ -1803,12 +1993,13 @@ export function BuilderClient({
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-[13px] font-semibold text-[var(--color-text-primary)]">Overlay Opacity</label>
+                    <label htmlFor={`overlay-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)]">Overlay Opacity</label>
                     <span className="text-xs font-mono font-medium text-[var(--color-text-muted)]">
                       {Math.round((c.overlayOpacity !== undefined ? Number(c.overlayOpacity) : 0.5) * 100)}%
                     </span>
                   </div>
                   <input
+                    id={`overlay-${selectedSection.id}`}
                     type="range"
                     min="0"
                     max="1"
@@ -1826,44 +2017,97 @@ export function BuilderClient({
 
             <FormCard title="Hero Content" subtitle="Display Name and Job Title">
               <div className="space-y-4">
-                <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Display Name</label>
-                  <Input
-                    value={loc.displayName?.en || profile.displayName || ''}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      updateProfile((p: any) => ({
-                        ...p,
-                        displayName: val,
-                        localized: {
-                          ...(p.localized || {}),
-                          displayName: { ...(p.localized?.displayName || {}), en: val }
-                        }
-                      }))
-                    }}
-                    className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                    placeholder="e.g. John Doe"
-                  />
+                <div className="space-y-3">
+                  {showEn && (
+                    <div>
+                      <label htmlFor={`hero-display-name-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showAr ? 'Display Name (English)' : 'Display Name'}</label>
+                      <Input
+                        id={`hero-display-name-${selectedSection.id}`}
+                        value={loc.displayName?.en || profile.displayName || ''}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          updateProfile((p: any) => ({
+                            ...p,
+                            displayName: val,
+                            localized: {
+                              ...(p.localized || {}),
+                              displayName: { ...(p.localized?.displayName || {}), en: val }
+                            }
+                          }))
+                        }}
+                        className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
+                        placeholder="e.g. John Doe"
+                      />
+                    </div>
+                  )}
+                  {showAr && (
+                    <div dir="rtl">
+                      <label htmlFor={`hero-display-name-ar-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showEn ? 'الاسم المعروض (عربي)' : 'الاسم المعروض'}</label>
+                      <Input
+                        id={`hero-display-name-ar-${selectedSection.id}`}
+                        value={loc.displayName?.ar || profile.displayName || ''}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          updateProfile((p: any) => ({
+                            ...p,
+                            localized: {
+                              ...(p.localized || {}),
+                              displayName: { ...(p.localized?.displayName || {}), ar: val }
+                            }
+                          }))
+                        }}
+                        className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px] text-right"
+                        placeholder="مثال: أحمد علي"
+                      />
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Job Title</label>
-                  <Input
-                    value={loc.professionalTitle?.en || c.subtitle?.en || ''}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      updateProfile((p: any) => ({
-                        ...p,
-                        localized: {
-                          ...(p.localized || {}),
-                          professionalTitle: { ...(p.localized?.professionalTitle || {}), en: val }
-                        }
-                      }))
-                      updateSectionContent(selectedSection.id, 'subtitle', 'en', val)
-                    }}
-                    className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                    placeholder="e.g. Full Stack Developer"
-                  />
+                <div className="space-y-3">
+                  {showEn && (
+                    <div>
+                      <label htmlFor={`hero-job-title-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showAr ? 'Job Title (English)' : 'Job Title'}</label>
+                      <Input
+                        id={`hero-job-title-${selectedSection.id}`}
+                        value={loc.professionalTitle?.en || c.subtitle?.en || ''}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          updateProfile((p: any) => ({
+                            ...p,
+                            localized: {
+                              ...(p.localized || {}),
+                              professionalTitle: { ...(p.localized?.professionalTitle || {}), en: val }
+                            }
+                          }))
+                          updateSectionContent(selectedSection.id, 'subtitle', 'en', val)
+                        }}
+                        className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
+                        placeholder="e.g. Full Stack Developer"
+                      />
+                    </div>
+                  )}
+                  {showAr && (
+                    <div dir="rtl">
+                      <label htmlFor={`hero-job-title-ar-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showEn ? 'المسمى الوظيفي (عربي)' : 'المسمى الوظيفي'}</label>
+                      <Input
+                        id={`hero-job-title-ar-${selectedSection.id}`}
+                        value={loc.professionalTitle?.ar || c.subtitle?.ar || ''}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          updateProfile((p: any) => ({
+                            ...p,
+                            localized: {
+                              ...(p.localized || {}),
+                              professionalTitle: { ...(p.localized?.professionalTitle || {}), ar: val }
+                            }
+                          }))
+                          updateSectionContent(selectedSection.id, 'subtitle', 'ar', val)
+                        }}
+                        className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px] text-right"
+                        placeholder="مثال: مطوّر ويب"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </FormCard>
@@ -1876,8 +2120,8 @@ export function BuilderClient({
           <div className="space-y-6">
             <FormCard title="Section Content" subtitle="Icon, Heading, and Biography">
               <div className="space-y-4">
-                <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Icon</label>
+                <div role="group" aria-labelledby={`about-icon-label-${selectedSection.id}`}>
+                  <label id={`about-icon-label-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Icon</label>
                   <IconPicker
                     value={c.icon}
                     onChange={(val) => updateSectionContentRaw(selectedSection.id, 'icon', val)}
@@ -1885,8 +2129,9 @@ export function BuilderClient({
                 </div>
                 
                 <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Heading</label>
+                  <label htmlFor={`about-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Heading</label>
                   <Input
+                    id={`about-heading-${selectedSection.id}`}
                     value={c.title?.en || 'About Me'}
                     onChange={(e) => updateSectionContent(selectedSection.id, 'title', 'en', e.target.value)}
                     className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
@@ -1894,11 +2139,12 @@ export function BuilderClient({
                 </div>
 
                 <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Detailed Biography</label>
+                  <label htmlFor={`about-bio-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Detailed Biography</label>
                   <textarea
+                    id={`about-bio-${selectedSection.id}`}
                     value={c.biography?.en !== undefined ? c.biography.en : (c.text?.en || '')}
                     onChange={(e) => updateSectionContent(selectedSection.id, 'biography', 'en', e.target.value)}
-                    className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                    className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
                     placeholder="Write your comprehensive biography..."
                   />
                 </div>
@@ -1931,8 +2177,9 @@ export function BuilderClient({
                     </div>
                     <div className="flex flex-col gap-3">
                       <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Value</label>
+                        <label htmlFor={`stat-${selectedSection.id}-${idx}-value`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Value</label>
                         <Input
+                          id={`stat-${selectedSection.id}-${idx}-value`}
                           value={stat.value}
                           onChange={(e) => {
                             const newStats = [...aboutStats]
@@ -1944,8 +2191,9 @@ export function BuilderClient({
                         />
                       </div>
                       <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Label</label>
+                        <label htmlFor={`stat-${selectedSection.id}-${idx}-label`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Label</label>
                         <Input
+                          id={`stat-${selectedSection.id}-${idx}-label`}
                           value={stat.label}
                           onChange={(e) => {
                             const newStats = [...aboutStats]
@@ -1982,16 +2230,17 @@ case 'skills':
           <div className="space-y-6">
             <FormCard title="Section Content" subtitle="Icon and Heading">
               <div className="space-y-4">
-                <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Icon</label>
+                <div role="group" aria-labelledby={`skills-icon-label-${selectedSection.id}`}>
+                  <label id={`skills-icon-label-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Icon</label>
                   <IconPicker
                     value={c.icon}
                     onChange={(val) => updateSectionContentRaw(selectedSection.id, 'icon', val)}
                   />
                 </div>
                 <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Heading</label>
+                  <label htmlFor={`skills-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Heading</label>
                   <Input
+                    id={`skills-heading-${selectedSection.id}`}
                     value={c.heading?.en || 'Skills & Expertise'}
                     onChange={(e) => updateSectionContent(selectedSection.id, 'heading', 'en', e.target.value)}
                     className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
@@ -2012,8 +2261,9 @@ case 'skills':
                     }}
                   >
                     <div>
-                      <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Group Name</label>
+                      <label htmlFor={`skill-group-${selectedSection.id}-${gIdx}-name`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Group Name</label>
                       <Input
+                        id={`skill-group-${selectedSection.id}-${gIdx}-name`}
                         value={group.name}
                         onChange={(e) => {
                           const newGroups = [...skillGroups]
@@ -2026,7 +2276,7 @@ case 'skills':
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-2 mt-4">
-                        <label className="text-xs font-semibold text-[var(--color-text-primary)]">Skills in Group</label>
+                        <label id={`skill-group-${selectedSection.id}-${gIdx}-skills-label`} className="text-xs font-semibold text-[var(--color-text-primary)]">Skills in Group</label>
                         <button
                           type="button"
                           onClick={() => {
@@ -2039,7 +2289,7 @@ case 'skills':
                           + Add Skill
                         </button>
                       </div>
-                      <div className="space-y-3">
+                      <div className="space-y-3" role="group" aria-labelledby={`skill-group-${selectedSection.id}-${gIdx}-skills-label`}>
                         {(group.skills || []).map((skill: any, sIdx: number) => (
                           <div key={sIdx} className="flex items-center gap-2">
                             <Input
@@ -2064,7 +2314,7 @@ case 'skills':
                                   newGroups[gIdx].skills[sIdx].percentage = isNaN(val) ? 0 : val
                                   updateSectionContentRaw(selectedSection.id, 'groups', newGroups)
                                 }}
-                                className="w-full rounded-lg border border-[var(--color-border)] bg-transparent px-[12px] py-[10px] min-h-[44px] h-[44px] text-[15px] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] pr-7"
+                                className="w-full rounded-lg border border-[var(--color-border)] bg-transparent px-[12px] py-[10px] min-h-[44px] h-[44px] text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] pr-7"
                               />
                               <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--color-text-muted)] pointer-events-none">%</span>
                             </div>
@@ -2112,15 +2362,24 @@ case 'skills':
       case 'experience':
         const experienceItems = c.items || []
         const expDisplayMode = c.displayMode || 'timeline'
+        // Bilingual setter for item sub-fields: keeps the `{en,ar}` shape and
+        // upgrades legacy flat strings on first edit (item 8).
+        const setExpField = (i: number, field: string, l: 'ar' | 'en', val: string) => {
+          const newItems = [...experienceItems]
+          const cur = newItems[i][field]
+          const obj = (cur && typeof cur === 'object') ? cur : { en: typeof cur === 'string' ? cur : '' }
+          newItems[i] = { ...newItems[i], [field]: { ...obj, [l]: val } }
+          updateSectionContentRaw(selectedSection.id, 'items', newItems)
+        }
         return (
           <div className="space-y-6">
             <FormCard title="Section Settings" subtitle="Display mode and icon">
               <div className="space-y-4">
                 <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
+                  <label id={`exp-display-mode-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
                     Display Mode
                   </label>
-                  <div className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
+                  <div role="group" aria-labelledby={`exp-display-mode-${selectedSection.id}`} className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
                     {['timeline', 'grid', 'list'].map((mode) => (
                       <button
                         key={mode}
@@ -2138,8 +2397,8 @@ case 'skills':
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
+                <div role="group" aria-labelledby={`exp-section-icon-label-${selectedSection.id}`}>
+                  <label id={`exp-section-icon-label-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
                     Section Icon
                   </label>
                   <IconPicker
@@ -2153,8 +2412,9 @@ case 'skills':
             <FormCard title="Section Content" subtitle="Heading and Description">
               <div className="space-y-4">
                 <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Heading</label>
+                  <label htmlFor={`exp-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Heading</label>
                   <Input
+                    id={`exp-heading-${selectedSection.id}`}
                     value={c.heading?.en || 'Work Experience'}
                     onChange={(e) => updateSectionContent(selectedSection.id, 'heading', 'en', e.target.value)}
                     className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
@@ -2162,11 +2422,12 @@ case 'skills':
                 </div>
 
                 <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Description (Optional)</label>
+                  <label htmlFor={`exp-desc-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Description (Optional)</label>
                   <textarea
+                    id={`exp-desc-${selectedSection.id}`}
                     value={c.description?.en || ''}
                     onChange={(e) => updateSectionContent(selectedSection.id, 'description', 'en', e.target.value)}
-                    className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                    className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
                   />
                 </div>
               </div>
@@ -2177,43 +2438,36 @@ case 'skills':
                 {experienceItems.map((item: any, idx: number) => (
                   <ItemCard
                     key={item.id}
-                    title={item.jobTitle || 'New Role'}
-                    subtitle={item.companyName || 'Company'}
+                    title={pickLang(item.jobTitle, 'en') || 'New Role'}
+                    subtitle={pickLang(item.companyName, 'en') || 'Company'}
                     onRemove={() => {
                       const newItems = [...experienceItems]
                       newItems.splice(idx, 1)
                       updateSectionContentRaw(selectedSection.id, 'items', newItems)
                     }}
                   >
-                    <div className="flex flex-col gap-4 mt-3">
-                      <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Job Title</label>
-                        <Input
-                          value={item.jobTitle || ''}
-                          onChange={(e) => {
-                            const newItems = [...experienceItems]
-                            newItems[idx].jobTitle = e.target.value
-                            updateSectionContentRaw(selectedSection.id, 'items', newItems)
-                          }}
-                          className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px] font-medium"
+                      <div className="flex flex-col gap-4 mt-3">
+                        <BiField
+                          idBase={`exp-${item.id}-job`}
+                          label="Job Title"
+                          value={item.jobTitle}
+                          showEn={showEn}
+                          showAr={showAr}
+                          onChange={(l, v) => setExpField(idx, 'jobTitle', l, v)}
                         />
-                      </div>
-                      <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Company Name</label>
-                        <Input
-                          value={item.companyName || ''}
-                          onChange={(e) => {
-                            const newItems = [...experienceItems]
-                            newItems[idx].companyName = e.target.value
-                            updateSectionContentRaw(selectedSection.id, 'items', newItems)
-                          }}
-                          className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
+                        <BiField
+                          idBase={`exp-${item.id}-company`}
+                          label="Company Name"
+                          value={item.companyName}
+                          showEn={showEn}
+                          showAr={showAr}
+                          onChange={(l, v) => setExpField(idx, 'companyName', l, v)}
                         />
-                      </div>
                       <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Company Logo URL</label>
+                        <label htmlFor={`exp-${item.id}-logo`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Company Logo URL</label>
                         <div className="flex gap-2">
                           <Input
+                            id={`exp-${item.id}-logo`}
                             value={item.companyLogo || ''}
                             onChange={(e) => {
                               const newItems = [...experienceItems]
@@ -2249,8 +2503,9 @@ case 'skills':
                       </div>
                       
                       <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Start Date</label>
+                        <label htmlFor={`exp-${item.id}-start`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Start Date</label>
                         <input
+                          id={`exp-${item.id}-start`}
                           type="month"
                           value={item.startDate || ''}
                           onChange={(e) => {
@@ -2258,12 +2513,13 @@ case 'skills':
                             newItems[idx].startDate = e.target.value
                             updateSectionContentRaw(selectedSection.id, 'items', newItems)
                           }}
-                          className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px] rounded-lg border border-[var(--color-border)] bg-transparent text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                          className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px] rounded-lg border border-[var(--color-border)] bg-transparent text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
                         />
                       </div>
                       <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">End Date</label>
+                        <label htmlFor={`exp-${item.id}-end`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">End Date</label>
                         <input
+                          id={`exp-${item.id}-end`}
                           type="month"
                           value={item.endDate || ''}
                           onChange={(e) => {
@@ -2271,7 +2527,7 @@ case 'skills':
                             newItems[idx].endDate = e.target.value
                             updateSectionContentRaw(selectedSection.id, 'items', newItems)
                           }}
-                          className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px] rounded-lg border border-[var(--color-border)] bg-transparent text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-50"
+                          className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px] rounded-lg border border-[var(--color-border)] bg-transparent text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] disabled:opacity-50"
                           disabled={item.isCurrent}
                         />
                         <div className="flex items-center gap-2 mt-2">
@@ -2293,29 +2549,27 @@ case 'skills':
                         </div>
                       </div>
 
+                      <BiField
+                        idBase={`exp-${item.id}-location`}
+                        label="Location"
+                        value={item.location}
+                        showEn={showEn}
+                        showAr={showAr}
+                        onChange={(l, v) => setExpField(idx, 'location', l, v)}
+                        placeholderEn="e.g. London, UK"
+                        placeholderAr="مثال: القاهرة، مصر"
+                      />
                       <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Location</label>
-                        <Input
-                          value={item.location || ''}
-                          onChange={(e) => {
-                            const newItems = [...experienceItems]
-                            newItems[idx].location = e.target.value
-                            updateSectionContentRaw(selectedSection.id, 'items', newItems)
-                          }}
-                          className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                          placeholder="e.g. London, UK"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Work Mode</label>
+                        <label htmlFor={`exp-${item.id}-mode`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Work Mode</label>
                         <select
+                          id={`exp-${item.id}-mode`}
                           value={item.workMode || ''}
                           onChange={(e) => {
                             const newItems = [...experienceItems]
                             newItems[idx].workMode = e.target.value
                             updateSectionContentRaw(selectedSection.id, 'items', newItems)
                           }}
-                          className="w-full min-h-[44px] h-[44px] rounded-lg border border-[var(--color-border)] bg-transparent px-[12px] py-[10px] text-[15px] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                          className="w-full min-h-[44px] h-[44px] rounded-lg border border-[var(--color-border)] bg-transparent px-[12px] py-[10px] text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
                         >
                           <option value="">Select Mode</option>
                           <option value="Remote">Remote</option>
@@ -2325,15 +2579,16 @@ case 'skills':
                       </div>
 
                       <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Description (Bullets)</label>
+                        <label htmlFor={`exp-${item.id}-desc`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Description (Bullets)</label>
                         <textarea
+                          id={`exp-${item.id}-desc`}
                           value={item.description || ''}
                           onChange={(e) => {
                             const newItems = [...experienceItems]
                             newItems[idx].description = e.target.value
                             updateSectionContentRaw(selectedSection.id, 'items', newItems)
                           }}
-                          className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                          className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
                           placeholder="Enter each achievement on a new line..."
                         />
                       </div>
@@ -2366,12 +2621,19 @@ case 'skills':
         )
       case 'services':
         const services = c.services || []
+        const setServiceField = (i: number, field: string, l: 'ar' | 'en', val: string) => {
+          const newServices = [...services]
+          const cur = newServices[i][field]
+          const obj = (cur && typeof cur === 'object') ? cur : { en: typeof cur === 'string' ? cur : '' }
+          newServices[i] = { ...newServices[i], [field]: { ...obj, [l]: val } }
+          updateSectionContentRaw(selectedSection.id, 'services', newServices)
+        }
         return (
           <div className="space-y-6">
             <FormCard title="Section Content" subtitle="Icon, Heading, and Description">
               <div className="space-y-4">
-                <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
+                <div role="group" aria-labelledby={`services-icon-label-${selectedSection.id}`}>
+                  <label id={`services-icon-label-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
                     Section Icon
                   </label>
                   <IconPicker
@@ -2381,10 +2643,11 @@ case 'skills':
                 </div>
 
                 <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
+                  <label htmlFor={`services-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
                     Section Heading
                   </label>
                   <Input
+                    id={`services-heading-${selectedSection.id}`}
                     value={c.title?.en || 'Services'}
                     onChange={(e) => updateSectionContent(selectedSection.id, 'title', 'en', e.target.value)}
                     className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
@@ -2392,13 +2655,14 @@ case 'skills':
                 </div>
 
                 <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
+                  <label htmlFor={`services-desc-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
                     Section Description
                   </label>
                   <textarea
+                    id={`services-desc-${selectedSection.id}`}
                     value={c.description?.en || ''}
                     onChange={(e) => updateSectionContent(selectedSection.id, 'description', 'en', e.target.value)}
-                    className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                    className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                     placeholder="Brief description of your services..."
                   />
                 </div>
@@ -2410,15 +2674,15 @@ case 'skills':
                 {services.map((service: any, idx: number) => (
                   <ItemCard
                     key={idx}
-                    title={service.title || 'New Service'}
+                    title={pickLang(service.title, 'en') || 'New Service'}
                     onRemove={() => {
                       const newServices = services.filter((_: any, i: number) => i !== idx)
                       updateSectionContentRaw(selectedSection.id, 'services', newServices)
                     }}
                   >
                     <div className="flex flex-col gap-4 mt-2">
-                      <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Service Icon</label>
+                      <div role="group" aria-labelledby={`service-${idx}-icon-label`}>
+                        <label id={`service-${idx}-icon-label`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Service Icon</label>
                         <IconPicker
                           value={service.icon}
                           onChange={(val) => {
@@ -2428,35 +2692,30 @@ case 'skills':
                           }}
                         />
                       </div>
-                      <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Service Title</label>
-                        <Input
-                          value={service.title}
-                          onChange={(e) => {
-                            const newServices = [...services]
-                            newServices[idx] = { ...newServices[idx], title: e.target.value }
-                            updateSectionContentRaw(selectedSection.id, 'services', newServices)
-                          }}
-                          placeholder="Service title"
-                          className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px] font-semibold"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Service Description</label>
-                        <textarea
-                          value={service.description}
-                          onChange={(e) => {
-                            const newServices = [...services]
-                            newServices[idx] = { ...newServices[idx], description: e.target.value }
-                            updateSectionContentRaw(selectedSection.id, 'services', newServices)
-                          }}
-                          placeholder="Short description"
-                          className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                        />
-                      </div>
+                      <BiField
+                        idBase={`service-${idx}-title`}
+                        label="Service Title"
+                        value={service.title}
+                        showEn={showEn}
+                        showAr={showAr}
+                        onChange={(l, v) => setServiceField(idx, 'title', l, v)}
+                        placeholderEn="Service title"
+                        placeholderAr="عنوان الخدمة"
+                      />
+                      <BiField
+                        idBase={`service-${idx}-desc`}
+                        label="Service Description"
+                        value={service.description}
+                        showEn={showEn}
+                        showAr={showAr}
+                        multiline
+                        onChange={(l, v) => setServiceField(idx, 'description', l, v)}
+                        placeholderEn="Short description"
+                        placeholderAr="وصف مختصر"
+                      />
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <label className="text-xs font-semibold text-[var(--color-text-primary)]">Features</label>
+                          <label id={`service-${idx}-features-label`} className="text-xs font-semibold text-[var(--color-text-primary)]">Features</label>
                           <button
                             type="button"
                             onClick={() => {
@@ -2470,7 +2729,7 @@ case 'skills':
                             + Add Feature
                           </button>
                         </div>
-                        <div className="space-y-3">
+                      <div className="space-y-3" role="group" aria-labelledby={`service-${idx}-features-label`}>
                           {(service.features || []).map((feature: string, fi: number) => (
                             <div key={fi} className="flex items-center gap-2">
                               <Input
@@ -2487,13 +2746,15 @@ case 'skills':
                               />
                               <button
                                 type="button"
+                                aria-label="Remove feature"
                                 onClick={() => {
+                                  if (!window.confirm('Remove this feature?')) return
                                   const newServices = [...services]
                                   const features = (newServices[idx].features || []).filter((_: any, i: number) => i !== fi)
                                   newServices[idx] = { ...newServices[idx], features }
                                   updateSectionContentRaw(selectedSection.id, 'services', newServices)
                                 }}
-                                className="p-2 text-[var(--color-danger)] hover:opacity-80 cursor-pointer"
+                                className="p-2 text-[var(--color-danger)] hover:opacity-80 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] rounded-md"
                                 title="Remove feature"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -2532,10 +2793,10 @@ case 'skills':
             <FormCard title="Section Settings" subtitle="Display mode and icon">
               <div className="space-y-4">
                 <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
+                  <label id={`projects-display-mode-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
                     Display Mode
                   </label>
-                  <div className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
+                  <div role="group" aria-labelledby={`projects-display-mode-${selectedSection.id}`} className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
                     <button
                       type="button"
                       onClick={() => updateSectionContentRaw(selectedSection.id, 'displayMode', 'grid')}
@@ -2561,8 +2822,8 @@ case 'skills':
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
+                <div role="group" aria-labelledby={`projects-icon-label-${selectedSection.id}`}>
+                  <label id={`projects-icon-label-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
                     Section Icon
                   </label>
                   <IconPicker
@@ -2575,8 +2836,9 @@ case 'skills':
 
             <FormCard title="Section Content" subtitle="Heading">
               <div>
-                <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Section Heading</label>
+                <label htmlFor={`projects-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Section Heading</label>
                 <Input
+                  id={`projects-heading-${selectedSection.id}`}
                   value={c.title?.en || 'Featured Projects'}
                   onChange={(e) => updateSectionContent(selectedSection.id, 'title', 'en', e.target.value)}
                   className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
@@ -2597,8 +2859,9 @@ case 'skills':
             <FormCard title="Footer Content" subtitle="Headline and subheading">
               <div className="space-y-4">
                 <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Headline</label>
+                  <label htmlFor={`footer-headline-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Headline</label>
                   <Input
+                    id={`footer-headline-${selectedSection.id}`}
                     value={c.headline?.en ?? (typeof c.headline === 'string' ? c.headline : 'Work with me')}
                     onChange={(e) => updateSectionContent(selectedSection.id, 'headline', 'en', e.target.value)}
                     className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
@@ -2607,8 +2870,9 @@ case 'skills':
                 </div>
 
                 <div>
-                  <label className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Subheading (Optional)</label>
+                  <label htmlFor={`footer-subheading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Subheading (Optional)</label>
                   <Input
+                    id={`footer-subheading-${selectedSection.id}`}
                     value={c.subheading?.en ?? (typeof c.subheading === 'string' ? c.subheading : '')}
                     onChange={(e) => updateSectionContent(selectedSection.id, 'subheading', 'en', e.target.value)}
                     className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
@@ -2630,7 +2894,7 @@ case 'skills':
                         updateProfile((p: any) => ({ ...p, contactLinks: newLinks }))
                         updateSectionContentRaw(selectedSection.id, 'links', newLinks)
                       }}
-                      className="w-32 rounded-lg border border-[var(--color-border)] bg-transparent px-3 h-[44px] min-h-[44px] text-[15px] font-medium focus:outline-none"
+                      className="w-32 rounded-lg border border-[var(--color-border)] bg-transparent px-3 h-[44px] min-h-[44px] text-[15px] font-medium text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                     >
                       <option value="LinkedIn">LinkedIn</option>
                       <option value="GitHub">GitHub</option>
@@ -2655,12 +2919,14 @@ case 'skills':
                       className="flex-1 min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
                     />
                     <button
+                      aria-label="Remove link"
                       onClick={() => {
+                        if (!window.confirm('Remove this link?')) return
                         const newLinks = footerLinks.filter((_: any, i: number) => i !== idx)
                         updateProfile((p: any) => ({ ...p, contactLinks: newLinks }))
                         updateSectionContentRaw(selectedSection.id, 'links', newLinks)
                       }}
-                      className="p-2 text-[var(--color-danger)] hover:opacity-80 cursor-pointer"
+                      className="p-2 text-[var(--color-danger)] hover:opacity-80 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] rounded-md"
                       title="Remove link"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -2778,13 +3044,18 @@ case 'skills':
         ? L.unpublish
         : L.publish
 
+  // Canvas preview mode. On a real phone (<768px) the device switcher is
+  // hidden, so we always show the mobile frame — otherwise the "desktop" mode
+  // would render a 1080px scaled frame (desktop layout) on a phone screen.
+  const effectivePreviewMode: 'desktop' | 'mobile' = isMobileViewport ? 'mobile' : previewMode
+
   return (
     <div className={`builder-root flex h-[100dvh] w-full max-w-[100vw] flex-col overflow-hidden overflow-x-hidden bg-[var(--color-page)] select-none ${builderDarkMode ? 'dark' : ''}`} data-theme={builderDarkMode ? 'dark' : 'light'}>
       {/* FREE plan upgrade banner — sticky at the very top for free users */}
       {isFreePlan && (
         <div
           className="flex shrink-0 items-center justify-center gap-2 px-3 py-2 text-center text-xs font-bold sticky top-0 z-40"
-          style={{ backgroundColor: '#D4A017', color: '#0D1B3E' }}
+          style={{ backgroundColor: 'var(--color-primary)', color: 'var(--on-primary)' }}
           role="note"
           aria-label="ترقية للخطة المدفوعة"
         >
@@ -2794,7 +3065,7 @@ case 'skills':
             href={upgradeHref}
             target={hasWhatsapp ? '_blank' : undefined}
             rel={hasWhatsapp ? 'noreferrer' : undefined}
-            className="shrink-0 rounded-full bg-[#0D1B3E] px-3 py-1 text-[11px] font-bold text-white hover:opacity-90 transition-opacity min-h-[32px] inline-flex items-center"
+            className="shrink-0 rounded-full bg-[var(--color-surface)] px-3 py-1 text-[11px] font-bold text-[var(--color-text-primary)] hover:opacity-90 transition-opacity min-h-[32px] inline-flex items-center"
           >
             ترقية الآن عبر واتساب
           </a>
@@ -2827,33 +3098,22 @@ case 'skills':
       {/* ─────────────────────────────────────────────────────────────
           1. TOP BAR (Height: 52px, border-b, bg white / dark card)
       ────────────────────────────────────────────────────────────── */}
-      <header className="flex h-[52px] shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 sm:px-4 z-30 max-w-[100vw] overflow-visible">
-        {/* Left: Back Link & Title */}
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-1.5 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 sm:px-4 z-30 max-w-[100vw]">
+        {/* Left: mobile nav toggle + brand title */}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <button
             onClick={() => setLeftDrawerOpen(true)}
-            className="md:hidden flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
+            className="md:hidden flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
             aria-label="Open navigation"
           >
             <Menu className="h-5 w-5" />
           </button>
-          <Link
-            href={`/u/${profile.username}`}
-            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-            aria-label="View live portfolio"
-          >
-            <ArrowLeft className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">View Live Portfolio</span>
-          </Link>
-          <div className="h-3.5 w-px shrink-0 bg-[var(--color-border)]" />
-          <div className="flex min-w-0 items-center gap-1.5">
-            <h1 className="truncate text-xs sm:text-sm font-semibold text-[var(--color-text-primary)] tracking-tight">
-              {L.builderTitle}
-            </h1>
-          </div>
+          <h1 className="truncate text-xs sm:text-sm font-semibold tracking-tight text-[var(--color-text-primary)]">
+            {L.builderTitle}
+          </h1>
         </div>
 
-        {/* Center: Undo / Redo & Save Status */}
+        {/* Center (md+): undo/redo + save status */}
         <div className="hidden md:flex items-center gap-3">
           <div className="flex items-center gap-0.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
             <button
@@ -2897,20 +3157,12 @@ case 'skills':
           </div>
         </div>
 
-        {/* Right: Device Switcher & Action Buttons — icons only on mobile */}
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
-          <ProfileMenu
-            displayName={profile.displayName || profile.username || 'User'}
-            lang={lang}
-            onToggleLang={() => setLang(lang === 'ar' ? 'en' : 'ar')}
-            dark={builderDarkMode}
-            onToggleDark={() => setBuilderDarkMode(!builderDarkMode)}
-            onLogout={handleLogout}
-          />
-          <div className="hidden sm:flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5" aria-label="Preview mode">
+        {/* Right: device switcher + account + actions */}
+        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+          <div className="hidden md:flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5" aria-label="Preview mode">
             <button
               onClick={() => setPreviewMode('desktop')}
-              className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-1.5 transition-colors cursor-pointer ${
+              className={`flex h-9 w-9 min-h-[36px] min-w-[36px] items-center justify-center rounded-md transition-colors cursor-pointer ${
                 previewMode === 'desktop'
                   ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
@@ -2923,7 +3175,7 @@ case 'skills':
             </button>
             <button
               onClick={() => setPreviewMode('mobile')}
-              className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-1.5 transition-colors cursor-pointer ${
+              className={`flex h-9 w-9 min-h-[36px] min-w-[36px] items-center justify-center rounded-md transition-colors cursor-pointer ${
                 previewMode === 'mobile'
                   ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
@@ -2943,10 +3195,10 @@ case 'skills':
             editingProjectPage.id?.startsWith('new-')) ? (
             <span
               title="Save first"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-transparent px-2.5 py-1.5 text-xs font-medium text-[var(--color-text-muted)] opacity-50 cursor-not-allowed select-none"
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md border border-[var(--color-border)] bg-transparent px-2.5 text-xs font-medium text-[var(--color-text-muted)] opacity-50 cursor-not-allowed select-none"
             >
               <ExternalLink className="h-3.5 w-3.5" />
-              <span>View Live</span>
+              <span className="hidden sm:inline">View Live</span>
             </span>
           ) : (
             <a
@@ -2959,28 +3211,40 @@ case 'skills':
               }
               target="_blank"
               rel="noreferrer"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-transparent px-2.5 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)] transition-colors"
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md border border-[var(--color-border)] bg-transparent px-2.5 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
             >
               <ExternalLink className="h-3.5 w-3.5" />
-              <span>View Live</span>
+              <span className="hidden sm:inline">View Live</span>
             </a>
           )}
 
+          <ProfileMenu
+            displayName={profile.displayName || profile.username || 'User'}
+            lang={lang}
+            onToggleLang={() => setLang(lang === 'ar' ? 'en' : 'ar')}
+            dark={builderDarkMode}
+            onToggleDark={() => setBuilderDarkMode(!builderDarkMode)}
+            onLogout={handleLogout}
+          />
+
           <NotificationBell />
+
+          {/* Publish lives in the header on desktop; the mobile bottom bar
+              carries its own Go Live / Save actions, so it is hidden there. */}
           <Button
             variant="primary"
             size="sm"
-            className="h-[44px] min-h-[44px] min-w-[44px] px-3 text-xs gap-1.5 font-medium"
+            className="hidden sm:inline-flex h-[36px] min-h-[36px] px-3 text-xs gap-1.5 font-medium"
             onClick={handlePublish}
             aria-label={profile.status === 'PUBLISHED' ? 'Unpublish portfolio' : 'Publish portfolio'}
           >
             <Globe className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">{profile.status === 'PUBLISHED' ? 'Unpublish' : 'Publish'}</span>
+            <span className="hidden lg:inline">{profile.status === 'PUBLISHED' ? 'Unpublish' : 'Publish'}</span>
           </Button>
 
           <button
             onClick={() => setRightSheetOpen(true)}
-            className="md:hidden flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
+            className="md:hidden flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] cursor-pointer"
             aria-label="Open settings"
           >
             <Sliders className="h-5 w-5" />
@@ -3025,29 +3289,36 @@ case 'skills':
         <main className="flex-1 min-h-0 min-w-0 max-w-[100vw] bg-[var(--color-page)] relative overflow-hidden overflow-x-hidden flex items-center justify-center p-2 md:p-4">
           <div
             className={`transition-all duration-300 ease-in-out bg-[var(--color-surface)] overflow-hidden flex flex-col max-w-full ${
-              previewMode === 'mobile'
+              effectivePreviewMode === 'mobile'
                 ? 'w-full h-full min-h-0 min-w-0 items-center justify-center bg-transparent shadow-none border-0'
                 : 'w-full h-full max-w-[1080px] min-w-0 rounded-[12px] shadow-md border border-black/5 dark:border-white/10'
             }`}
           >
-            {previewMode === 'mobile' ? (
-              <div className="w-[390px] max-w-full h-full max-h-full mx-auto overflow-hidden rounded-[2.5rem] border-4 border-gray-800 shadow-2xl bg-white flex flex-col">
+            {effectivePreviewMode === 'mobile' ? (
+              <div className="w-[398px] max-w-full h-full max-h-full mx-auto overflow-hidden rounded-[2.5rem] border-4 border-gray-800 shadow-2xl bg-white flex flex-col">
                 <div className="h-5 w-full bg-gray-800 flex items-center justify-center shrink-0">
                   <div className="h-3 w-20 bg-black/60 rounded-full" />
                 </div>
+                {/* True 390px viewport simulation via a SAME-ORIGIN iframe.
+                    A separate document is required: rendering the template
+                    inline would resolve its responsive breakpoints against the
+                    real (desktop) viewport and show the desktop layout, not the
+                    mobile one. The `src` is site-relative, so it hits the
+                    current origin (localhost:3000 in dev, the Vercel domain in
+                    prod) — never a hardcoded localhost. Framing used to be
+                    blocked by `X-Frame-Options: DENY`, which is why this iframe
+                    was blank / "refused to connect"; middleware now returns
+                    `SAMEORIGIN` for this route only. `?t=` cache-busts so the
+                    frame reloads with the latest saved portfolio. */}
                 <div className="flex-1 min-h-0 overflow-y-auto w-full relative">
-                  {/* True 390px viewport simulation: the iframe's own viewport
-                      is exactly 390px wide, so all responsive breakpoints render
-                      exactly as on a real phone (iPhone 14: 390x844).
-                      Reloads on every save + manual refresh. */}
                   <iframe
                     key={`mobile-preview-${lastSaved?.getTime() ?? 0}-${mobileRefreshKey}`}
-                    src="/profile/builder/preview"
+                    src={`/profile/builder/preview?t=${lastSaved?.getTime() ?? 0}-${mobileRefreshKey}`}
                     title="Mobile portfolio preview"
                     width="390"
                     height="844"
                     style={{ border: 'none' }}
-                    className="block w-[390px] max-w-none bg-white"
+                    className="block w-[390px] max-w-full bg-white"
                   />
                   <button
                     type="button"
@@ -3064,8 +3335,17 @@ case 'skills':
               <div className="flex-1 w-full min-h-0 overflow-hidden relative">
                 {activePage !== 'home' && editingProjectPage && !selectedSection ? (
                   <ProjectPagePreview profile={profile} projectPage={editingProjectPage} />
+                ) : narrowViewport ? (
+                  <ScaledDesktopPreview
+                    refreshKey={`desktop-preview-${lastSaved?.getTime() ?? 0}-${desktopRefreshKey}`}
+                    onRefresh={() => setDesktopRefreshKey((k) => k + 1)}
+                  />
                 ) : (
-                  <LivePreview profile={previewProfile} isFree={isFreePlan} />
+                  <LivePreview
+                    profile={previewProfile}
+                    isFree={isFreePlan}
+                    onThemeChange={handlePreviewThemeChange}
+                  />
                 )}
               </div>
             )}
@@ -3077,7 +3357,10 @@ case 'skills':
         ────────────────────────────────────────────────────────────── */}
         {/* Desktop sidebar */}
         <aside className="hidden md:flex w-[320px] lg:w-[470px] lg:min-w-[470px] min-w-0 shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
-          {renderRightPanelWrapper()}
+          {/* Only mount the desktop panel while the mobile sheet is closed:
+              the sheet renders the same form, so mounting both at once would
+              duplicate every field id in the document. */}
+          {!rightSheetOpen && renderRightPanelWrapper()}
         </aside>
 
         {/* Mobile bottom sheet */}
@@ -3188,10 +3471,12 @@ case 'skills':
         {/* Pill Tabs at Top - only show on home page */}
         {activePage === 'home' && (
           <div className="p-3 border-b border-[var(--color-border)] bg-transparent">
-            <div className="flex rounded-full bg-[var(--color-surface-secondary)] p-1 border border-[var(--color-border)]/60">
+            <div role="tablist" aria-label={L.sections} className="flex rounded-full bg-[var(--color-surface-secondary)] p-1 border border-[var(--color-border)]/60">
               <button
+                role="tab"
+                aria-selected={leftTab === 'sections'}
                 onClick={() => setLeftTab('sections')}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-full transition-all text-center cursor-pointer ${
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-full transition-colors text-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
                   leftTab === 'sections'
                     ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm'
                     : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
@@ -3208,7 +3493,9 @@ case 'skills':
                   setLeftTab('pages')
                 }}
                 title={isFreePlan ? '🔒 صفحات المشاريع للمشتركين فقط' : undefined}
-                className={`flex-1 py-1.5 min-h-[44px] text-xs font-semibold rounded-full transition-all text-center flex items-center justify-center gap-1 ${
+                role="tab"
+                aria-selected={leftTab === 'pages' && !isFreePlan}
+                className={`flex-1 py-1.5 min-h-[44px] text-xs font-semibold rounded-full transition-colors text-center flex items-center justify-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
                   isFreePlan
                     ? 'cursor-not-allowed opacity-50 text-[var(--color-text-muted)]'
                     : 'cursor-pointer'
@@ -3280,19 +3567,7 @@ case 'skills':
                     {sections.map((sec: any) => {
                       const isSelected = selectedSectionId === sec.id
                       const isLocked = isFreePlan && isSectionLockedForFree(sec.sectionType)
-                      let isVisible = true
-                      if (sec.visible === false) {
-                        isVisible = false
-                      } else if (sec.visible === true) {
-                        isVisible = true
-                      } else if (sec.settings) {
-                        try {
-                          const parsed = typeof sec.settings === 'string' ? JSON.parse(sec.settings) : sec.settings
-                          isVisible = parsed?.isVisible !== false
-                        } catch {
-                          isVisible = true
-                        }
-                      }
+                      const isVisible = isSectionVisible(sec)
                       return (
                         <SortableSectionItem
                           key={sec.id}
@@ -3461,7 +3736,7 @@ case 'skills':
                 className="w-full flex min-h-[44px] items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-not-allowed opacity-50 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)]"
               >
                 <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span>{(profile?.appearance as any)?.defaultLanguage === 'ar' ? 'الإحصائيات' : 'Analytics'}</span>
+                <span>{getPortfolioLang(profile?.appearance) === 'ar' ? 'الإحصائيات' : 'Analytics'}</span>
               </button>
             ) : (
               <Link
@@ -3469,7 +3744,7 @@ case 'skills':
                 className="w-full flex min-h-[44px] items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-primary)]"
               >
                 <BarChart3 className="h-3.5 w-3.5" />
-                <span>{(profile?.appearance as any)?.defaultLanguage === 'ar' ? 'الإحصائيات' : 'Analytics'}</span>
+                <span>{getPortfolioLang(profile?.appearance) === 'ar' ? 'الإحصائيات' : 'Analytics'}</span>
               </Link>
             )}
             <button
@@ -3553,6 +3828,11 @@ case 'skills':
               <span className="inline-flex items-center gap-1.5 text-[var(--color-text-muted)]">
                 <span className="h-2 w-2 rounded-full bg-amber-500" />
                 <span className="text-[11px] font-medium">Unsaved changes</span>
+                {draftSavedAt ? (
+                  <span className="text-[11px] opacity-70" title="Draft saved locally">
+                    · مسودة محفوظة
+                  </span>
+                ) : null}
               </span>
             ) : saveStatus === 'saved' ? (
               <span className="inline-flex items-center gap-1 text-[var(--color-success)]">

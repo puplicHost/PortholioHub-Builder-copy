@@ -40,7 +40,7 @@ export async function GET(req: Request) {
 // POST /api/admin/subscriptions/grant { userId/email, planId, amountEgp?, note? }
 // Manual grant: same A4 date rules as approve (continues ACTIVE periods).
 export async function POST(req: Request) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(req)
   if (!gate.ok) return gate.response
 
   const body = await req.json().catch(() => null)

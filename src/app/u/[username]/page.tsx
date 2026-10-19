@@ -7,6 +7,7 @@ import { getSubscriptionState } from '@/lib/subscriptions'
 import { stripLockedSectionsForFree } from '@/lib/free-sections'
 import { toPublicProfile } from '@/lib/public-profile'
 import { getAppUrl } from '@/lib/urls'
+import { getPortfolioLang } from '@/lib/portfolio-language'
 import { Metadata } from 'next'
 
 // Shared within a single request: generateMetadata and the page below
@@ -47,8 +48,9 @@ const getPublicProfile = cache(async (username: string) => {
 })
 
 function contentLocale(profile: { appearance?: unknown }): 'ar' | 'en' {
-  const appearance = (profile.appearance ?? {}) as Record<string, unknown>
-  return appearance['defaultLanguage'] === 'ar' ? 'ar' : 'en'
+  // Single source of truth: reads `n` with a `defaultLanguage` fallback.
+  // `both` (multilingual) resolves to English for the <html lang>/OG locale.
+  return getPortfolioLang(profile.appearance) === 'ar' ? 'ar' : 'en'
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }): Promise<Metadata> {

@@ -4,7 +4,7 @@ import { audit } from '@/lib/audit'
 
 // PATCH /api/admin/announcements/:id
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(req)
   if (!gate.ok) return gate.response
 
   const { id } = await params
@@ -44,7 +44,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 // DELETE /api/admin/announcements/:id
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(_req)
   if (!gate.ok) return gate.response
 
   const { id } = await params

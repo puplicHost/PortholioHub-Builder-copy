@@ -27,7 +27,7 @@ export async function GET() {
 
 // PATCH /api/admin/settings { key, value } — registry-validated, audited.
 export async function PATCH(req: Request) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(req)
   if (!gate.ok) return gate.response
 
   const body = await req.json().catch(() => null)

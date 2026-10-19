@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Monitor, Tablet, Smartphone, ExternalLink, ShieldAlert, Globe } from 'lucide-react'
 import { StatusBadge } from './StatusBadge'
 import { ClassicTemplate } from '@/components/portfolio/templates/ClassicTemplate'
+import { getPortfolioLang } from '@/lib/portfolio-language'
 
 interface BuilderPreviewClientProps {
   userId: string
@@ -22,7 +23,7 @@ export function BuilderPreviewClient({
 }: BuilderPreviewClientProps) {
   const [device, setDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop')
 
-  const isAr = profile?.appearance?.defaultLanguage === 'ar'
+  const isAr = getPortfolioLang(profile?.appearance) === 'ar'
 
   return (
     <div className="flex flex-col min-h-screen bg-[var(--color-page)] text-[var(--color-text-primary)]">

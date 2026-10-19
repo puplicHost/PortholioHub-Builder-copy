@@ -16,7 +16,7 @@ export async function GET() {
 
 // POST /api/admin/announcements
 export async function POST(req: Request) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(req)
   if (!gate.ok) return gate.response
 
   const body = await req.json().catch(() => null)

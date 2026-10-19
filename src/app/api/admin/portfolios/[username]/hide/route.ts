@@ -5,7 +5,7 @@ import { audit } from '@/lib/audit'
 // POST /api/admin/portfolios/:username/hide { reason } — hides the public
 // page immediately (gating) and notifies via audit trail.
 export async function POST(req: Request, { params }: { params: Promise<{ username: string }> }) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(req)
   if (!gate.ok) return gate.response
 
   const { username } = await params

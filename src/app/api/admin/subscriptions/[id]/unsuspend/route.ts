@@ -4,7 +4,7 @@ import { audit } from '@/lib/audit'
 
 // POST /api/admin/subscriptions/:id/unsuspend — clears canceledAt.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requireAdminApi()
+  const gate = await requireAdminApi(_req)
   if (!gate.ok) return gate.response
 
   const { id } = await params
