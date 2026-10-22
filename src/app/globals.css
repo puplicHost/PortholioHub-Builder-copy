@@ -3,6 +3,45 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Six+Caps&display=swap');
 @import "tailwindcss";
 
+/* Container-query breakpoints for the portfolio template. They mirror the
+   viewport `sm`/`md`/`lg` widths (640/768/1024px) but resolve against the
+   enclosing preview box (375px phone frame, 1080px canvas) when one exists.
+   On the public page (wrapper carries `.no-cq`) there is no query container,
+   so the same utilities fall back to real viewport media queries — the
+   published page keeps document scrolling and viewport-fixed nav bars.
+   Named `cq-*` on purpose: overriding the `--container-*` scale would also
+   resize every `max-w-sm/md/lg/...` utility in the app. */
+@custom-variant cq-sm {
+  @media (min-width: 40rem) {
+    .no-cq & {
+      @slot;
+    }
+  }
+  @container (min-width: 40rem) {
+    @slot;
+  }
+}
+@custom-variant cq-md {
+  @media (min-width: 48rem) {
+    .no-cq & {
+      @slot;
+    }
+  }
+  @container (min-width: 48rem) {
+    @slot;
+  }
+}
+@custom-variant cq-lg {
+  @media (min-width: 64rem) {
+    .no-cq & {
+      @slot;
+    }
+  }
+  @container (min-width: 64rem) {
+    @slot;
+  }
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {

@@ -89,7 +89,10 @@ const experienceItem = z
     icon: plainText(60).optional(),
     description: lstringOrText(1000).optional(),
   })
-  .strict();
+  // Legacy rows may carry extra keys (old builder versions). Unknown keys must
+  // never block a save, so the item is validated loosely while every known
+  // field keeps its constraints.
+  .passthrough();
 
 const serviceItem = z
   .object({

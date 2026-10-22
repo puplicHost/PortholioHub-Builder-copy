@@ -81,7 +81,7 @@ export function TestimonialsSlider({
             return (
               <div
                 key={t.id || i}
-                className="w-full shrink-0 px-2.5 sm:w-1/2 lg:w-1/3"
+                className="w-full shrink-0 px-2.5 cq-sm:w-1/2 cq-lg:w-1/3"
               >
                 <div
                   onClick={() => setLightboxIndex(i)}
@@ -163,7 +163,7 @@ export function TestimonialsSlider({
               <button
                 type="button"
                 onClick={() => setLightboxIndex(null)}
-                className="absolute -top-3 -right-3 flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white backdrop-blur-md transition-colors hover:bg-black/90 cursor-pointer sm:-top-4 sm:-right-4 sm:h-9 sm:w-9"
+                className="absolute -top-3 -right-3 flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white backdrop-blur-md transition-colors hover:bg-black/90 cursor-pointer cq-sm:-top-4 cq-sm:-right-4 cq-sm:h-9 cq-sm:w-9"
                 aria-label="Close lightbox"
               >
                 <X className="h-4 w-4" />

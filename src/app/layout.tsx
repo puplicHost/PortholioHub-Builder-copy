@@ -82,7 +82,6 @@ export default async function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" />
         <script
           dangerouslySetInnerHTML={{
             __html: `try{var l=localStorage.getItem('portfoliohub-lang');if(l==='en'){document.documentElement.lang='en';document.documentElement.dir='ltr';document.cookie='portfoliohub-lang=en; path=/; max-age=31536000; samesite=lax'}else{document.documentElement.lang='ar';document.documentElement.dir='rtl';document.cookie='portfoliohub-lang=ar; path=/; max-age=31536000; samesite=lax'}}catch(e){}`,

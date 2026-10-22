@@ -46,14 +46,11 @@ function withSecurityHeaders(response: NextResponse, pathname: string): NextResp
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
 
-  // X-Frame-Options: same-origin framing is granted ONLY to the surfaces the
-  // builder embeds in an <iframe> — the public portfolio page (/u/...) and the
-  // builder's device-preview route. `DENY` (the previous blanket value) blocks
-  // framing even from the same origin, which is exactly why the builder's
-  // desktop/mobile preview iframes came back blank / "refused to connect".
-  // Every other route keeps the strict `DENY`.
-  const frameable =
-    pathname === '/profile/builder/preview' || pathname.startsWith('/u/')
+  // X-Frame-Options: same-origin framing is granted only to the public
+  // portfolio page (opt-in embedding). The builder preview is rendered inline
+  // now, so it no longer needs a frame exception. Every other route keeps the
+  // strict `DENY`.
+  const frameable = pathname.startsWith('/u/')
   response.headers.set('X-Frame-Options', frameable ? 'SAMEORIGIN' : 'DENY')
 
   if (process.env.NODE_ENV === 'production') {

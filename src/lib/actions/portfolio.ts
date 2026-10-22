@@ -2,6 +2,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { ensurePersonalWorkspace } from '@/lib/workspaces'
@@ -285,13 +286,17 @@ export async function updatePortfolio(data: {
   expectedVersion?: number,
 }) {
   try {
-    const user = await requireUserWithWorkspace()
+    // Hot path: a workspace is only needed to CREATE a profile, never to save
+    // an existing one. Skipping the bootstrap removes a remote lookup from
+    // every single save.
+    const user = await getCurrentUser()
+    if (!user) throw new Error('Unauthorized')
 
     // Ownership anchor: never trust the client-supplied `data.id`. Every
     // relation write is scoped to THIS user's own profile row.
     const own = await prisma.userProfile.findUnique({
       where: { userId: user.id },
-      select: { id: true },
+      select: { id: true, username: true, version: true },
     })
     if (!own) {
       return { success: false, error: 'Profile not found' }
@@ -304,20 +309,9 @@ export async function updatePortfolio(data: {
       contactLinks: data.contactLinks,
     })
 
-    // Optimistic concurrency: reject stale writers with their conflict
-    // surfaced (full 409 modal lands in Sprint F).
-    if (data.expectedVersion !== undefined) {
-      const current = await prisma.userProfile.findUnique({
-        where: { userId: user.id },
-        select: { version: true },
-      })
-      if (current && current.version !== data.expectedVersion) {
-        return { success: false, conflict: true, currentVersion: current.version, error: 'Someone else saved changes. Reload to get the latest version.' }
-      }
-    }
-
-    // Content validation (Sprint F1): strict per-type schemas with field
-    // paths; rejects unknown keys, bad URLs, oversize text, overfull arrays.
+    // Content validation (Sprint F1): per-type schemas with field paths;
+    // rejects bad URLs, oversize text and overfull arrays while tolerating
+    // legacy unknown keys so old drafts never block a save.
     const sectionsCheck = validateSections(data.sections)
     if (!sectionsCheck.ok) {
       return { success: false, error: sectionsCheck.error || 'Invalid sections' }
@@ -328,12 +322,15 @@ export async function updatePortfolio(data: {
     }
 
     const username = data.username?.toLowerCase().trim() || undefined
-    if (username) {
+    if (username && username !== own.username) {
       const problem = validateUsername(username)
       if (problem) {
         return { success: false, error: problem }
       }
-      const existing = await prisma.userProfile.findUnique({ where: { username } })
+      const existing = await prisma.userProfile.findUnique({
+        where: { username },
+        select: { userId: true },
+      })
       if (existing && existing.userId !== user.id) {
         return { success: false, error: 'Username is already taken' }
       }
@@ -347,177 +344,206 @@ export async function updatePortfolio(data: {
       return { success: false, error: 'Content exceeds safety caps (30 sections / 50 projects)' }
     }
 
-    // Update profile (version bump keeps concurrent writers ordered)
-    let updated: { version: number }
+    // Without `expectedVersion` the save is an unconditional overwrite.
+    // Optimistic concurrency is enforced by a single guarded UPDATE at the
+    // END of the transaction: a stale writer bumps 0 rows, throws, and every
+    // prior write in this transaction rolls back — so the version can never
+    // advance without the content it describes (the old failure mode that
+    // left clients stuck in the conflict modal).
+    const conflictError = (currentVersion?: number) => {
+      const err = new Error('VERSION_CONFLICT')
+      ;(err as Error & { currentVersion?: number }).currentVersion = currentVersion
+      return err
+    }
+
+    let savedSections: { id: string; tempId?: string }[] = []
+    let savedProjects: { id: string; tempId?: string; slug: string; title: string }[] = []
+    let version = own.version
+
     try {
-      updated = await prisma.userProfile.update({
-        where: { userId: user.id },
-        data: {
-          username,
-          avatarUrl: data.avatarUrl,
-          appearance: extras.appearance as Prisma.InputJsonValue,
-          localized: extras.localized as Prisma.InputJsonValue,
-          contactLinks: extras.contactLinks as Prisma.InputJsonValue,
-          version: { increment: 1 },
-        },
-        select: { version: true },
-      })
-    } catch (err: any) {
-      // Unique-race on username between precheck and write (NOT a version
-      // conflict — no modal, just an error toast).
-      if (err?.code === 'P2002') {
-        return { success: false, error: 'Username is already taken' }
-      }
-      throw err
-    }
+      const result = await prisma.$transaction(async (tx) => {
+        const sectionsOut: { id: string; tempId?: string }[] = []
+        const projectsOut: { id: string; tempId?: string; slug: string; title: string }[] = []
 
-    // Update sections if provided
-    // (home page only for now). Client temp ids (`new-…`, same convention
-    // as project pages) are CREATED; everything else is updated in place.
-    // The id mapping is returned so the client swaps temp ids for real ones
-    // (otherwise every save would duplicate the new sections).
-    const savedSections: { id: string; tempId?: string }[] = []
-    if (data.sections && data.sections.length > 0) {
-      const homePage = await prisma.profilePage.findFirst({
-        where: { profileId: own.id, slug: 'home' },
-        select: { id: true },
-      })
-      for (const sec of data.sections) {
-        if (!sec.id) continue
-        const secSettings = (sec.settings as any) || {}
-        if (sec.visible !== undefined) {
-          secSettings.isVisible = sec.visible
-        }
-        if (typeof sec.id === 'string' && sec.id.startsWith('new-') && homePage) {
-          const created = await prisma.pageSection.create({
-            data: {
-              pageId: homePage.id,
-              sectionType: sec.sectionType || 'custom',
-              sectionOrder: sec.sectionOrder ?? 0,
-              content: sec.content ?? {},
-              settings: secSettings,
-            },
+        // ---- Sections ---------------------------------------------------
+        // (home page only for now). Client temp ids (`new-…`, same convention
+        // as project pages) are CREATED; everything else is updated in place.
+        // Unchanged rows are skipped so a one-field edit writes one row.
+        if (data.sections && data.sections.length > 0) {
+          const homePage = await tx.profilePage.findFirst({
+            where: { profileId: own.id, slug: 'home' },
+            select: { id: true },
           })
-          savedSections.push({ id: created.id, tempId: sec.id })
-        } else if (!(typeof sec.id === 'string' && sec.id.startsWith('new-'))) {
-          // Scoped to the caller's own page — a foreign section id is skipped.
-          await prisma.pageSection.updateMany({
-            where: { id: sec.id, page: { profileId: own.id } },
-            data: {
-              sectionOrder: sec.sectionOrder,
-              content: sec.content,
-              settings: secSettings,
+          if (homePage) {
+            const existingSections = await tx.pageSection.findMany({
+              where: { pageId: homePage.id },
+            })
+            const byId = new Map(existingSections.map((s) => [s.id, s]))
+
+            for (const sec of data.sections) {
+              if (!sec.id) continue
+              const secSettings = (sec.settings as any) || {}
+              if (sec.visible !== undefined) {
+                secSettings.isVisible = sec.visible
+              }
+
+              if (typeof sec.id === 'string' && sec.id.startsWith('new-')) {
+                const created = await tx.pageSection.create({
+                  data: {
+                    pageId: homePage.id,
+                    sectionType: sec.sectionType || 'custom',
+                    sectionOrder: sec.sectionOrder ?? 0,
+                    content: sec.content ?? {},
+                    settings: secSettings,
+                  },
+                })
+                sectionsOut.push({ id: created.id, tempId: sec.id })
+                continue
+              }
+
+              const prev = byId.get(sec.id)
+              // Scoped to the caller's own page — a foreign section id is skipped.
+              if (!prev) continue
+
+              const nextOrder = sec.sectionOrder ?? prev.sectionOrder
+              const unchanged =
+                prev.sectionOrder === nextOrder &&
+                JSON.stringify(prev.content ?? {}) === JSON.stringify(sec.content ?? {}) &&
+                JSON.stringify(prev.settings ?? {}) === JSON.stringify(secSettings)
+              if (unchanged) continue
+
+              await tx.pageSection.updateMany({
+                where: { id: sec.id, page: { profileId: own.id } },
+                data: {
+                  sectionOrder: sec.sectionOrder,
+                  content: sec.content,
+                  settings: secSettings,
+                },
+              })
             }
-          })
+          }
         }
-      }
-    }
 
-    // Update projects if provided
-    const savedProjects: { id: string; tempId?: string; slug: string; title: string }[] = []
+        // ---- Project pages (cards + content pages) ----------------------
+        if (data.projects) {
+          const VALID_TYPES = [
+            'workspace_strategy',
+            'workspace_content',
+            'workspace_media',
+            'external_link',
+            'external_text',
+            'external_image',
+          ]
 
-    if (data.projects) {
-      const VALID_TYPES = [
-        'workspace_strategy',
-        'workspace_content',
-        'workspace_media',
-        'external_link',
-        'external_text',
-        'external_image',
-      ]
+          const existingProjects = await tx.projectPage.findMany({
+            where: { profileId: own.id },
+            select: { id: true },
+          })
+          const ownProjectIds = new Set(existingProjects.map((p) => p.id))
 
-      const existingProjects = await prisma.projectPage.findMany({ where: { profileId: own.id } })
-      const ownProjectIds = new Set(existingProjects.map((p) => p.id))
-      const keptProjectIds = new Set<string>()
-      const usedSlugs = new Set<string>()
-
-      for (const proj of data.projects) {
-        if (proj.id) {
-          const isTempId = typeof proj.id === 'string' && proj.id.startsWith('new-')
-          const existingContent = (proj.content as any) || {}
-          const baseSlug = (
-            proj.title
-              ? proj.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')
-              : (proj.slug || `project-${Date.now()}`)
-          ).replace(/^-|-$/g, '') || 'project'
-
-          let slug = proj.slug && !proj.slug.startsWith('project-new-') && !proj.slug.startsWith('new-')
-            ? proj.slug.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-            : baseSlug
-
-          let counter = 1
-          while (usedSlugs.has(slug)) {
-            slug = `${baseSlug}-${counter}`
-            counter++
-          }
-          usedSlugs.add(slug)
-
-          const projectData = {
-            title: proj.title || 'Untitled',
-            slug,
-            description: proj.description || null,
-            coverImage: sanitizeUrl(proj.coverImage) || null,
-            tags: proj.tags || [],
-            sortOrder: proj.sortOrder || 0,
-            content: {
-              ...existingContent,
-              linkType: proj.linkType || 'none',
-              linkedPageSlug: proj.linkedPageSlug || null,
-            } as Prisma.InputJsonValue,
-            displayMode: proj.displayMode || 'grid',
-            showBackButton: proj.showBackButton !== false,
-            backButtonLabel: proj.backButtonLabel || 'Back to Portfolio',
-            externalLink: sanitizeUrl(proj.externalLink) || null,
-            linkLabel: proj.linkLabel || null,
-          }
-
-          let realProjectId: string
-
-          if (isTempId) {
-            // For new projects: CREATE record first to get the REAL DB id
-            const created = await prisma.projectPage.create({
-              data: {
-                profileId: own.id,
-                ...projectData,
-              },
+          const planned = data.projects
+            .map((proj: any) => {
+              const isTempId = typeof proj.id === 'string' && proj.id.startsWith('new-')
+              // Foreign or stale id — never touch another profile's project row.
+              if (proj.id && !isTempId && !ownProjectIds.has(proj.id)) return null
+              return { proj, isTempId }
             })
-            realProjectId = created.id
-            keptProjectIds.add(realProjectId)
-            savedProjects.push({ id: realProjectId, tempId: proj.id, slug, title: projectData.title })
-          } else if (ownProjectIds.has(proj.id)) {
-            // Real id that belongs to THIS profile: update + replace items.
-            const updated = await prisma.projectPage.update({
-              where: { id: proj.id },
-              data: projectData,
-            })
-            realProjectId = updated.id
-            keptProjectIds.add(realProjectId)
-            savedProjects.push({ id: realProjectId, slug, title: projectData.title })
+            .filter((p: { proj: any; isTempId: boolean } | null): p is { proj: any; isTempId: boolean } => !!p)
 
-            await prisma.projectItem.deleteMany({ where: { projectId: realProjectId } })
-          } else {
-            // Foreign or stale id — never touch another profile's project row.
-            continue
+          // Deletions first: frees slugs before any insert/update below.
+          const keptRealIds = new Set(
+            planned.filter((p) => !p.isTempId).map((p) => p.proj.id)
+          )
+          const removedIds = [...ownProjectIds].filter((id) => !keptRealIds.has(id))
+          if (removedIds.length > 0) {
+            await tx.projectPage.deleteMany({
+              where: { profileId: own.id, id: { in: removedIds } },
+            })
           }
 
-          // Filter out any items where ALL of (externalUrl, textContent, imageUrl, workspaceItemId) are undefined/empty
-          if (proj.items && proj.items.length > 0) {
-            const validItems = proj.items
-              .map((item: any, idx: number) => {
-                let itemType = item.type
-                if (!itemType || !VALID_TYPES.includes(itemType)) {
-                  itemType = 'external_link'
-                }
+          const usedSlugs = new Set<string>()
+          const keptProjectIds = new Set<string>()
+          const itemRows: Prisma.ProjectItemCreateManyInput[] = []
+
+          for (const { proj, isTempId } of planned) {
+            const existingContent = (proj.content as any) || {}
+            const baseSlug = (
+              proj.title
+                ? proj.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')
+                : (proj.slug || `project-${Date.now()}`)
+            ).replace(/^-|-$/g, '') || 'project'
+
+            let slug = proj.slug && !proj.slug.startsWith('project-new-') && !proj.slug.startsWith('new-')
+              ? proj.slug.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+              : baseSlug
+
+            let counter = 1
+            while (usedSlugs.has(slug)) {
+              slug = `${baseSlug}-${counter}`
+              counter++
+            }
+            usedSlugs.add(slug)
+
+            const projectData = {
+              title: proj.title || 'Untitled',
+              slug,
+              description: proj.description || null,
+              coverImage: sanitizeUrl(proj.coverImage) || null,
+              tags: proj.tags || [],
+              sortOrder: proj.sortOrder || 0,
+              content: {
+                ...existingContent,
+                linkType: proj.linkType || 'none',
+                linkedPageSlug: proj.linkedPageSlug || null,
+              } as Prisma.InputJsonValue,
+              displayMode: proj.displayMode || 'grid',
+              showInProjects: proj.showInProjects !== false,
+              showBackButton: proj.showBackButton !== false,
+              backButtonLabel: proj.backButtonLabel || 'Back to Portfolio',
+              externalLink: sanitizeUrl(proj.externalLink) || null,
+              linkLabel: proj.linkLabel || null,
+            }
+
+            let realProjectId: string
+            if (isTempId) {
+              const created = await tx.projectPage.create({
+                data: { profileId: own.id, ...projectData },
+              })
+              realProjectId = created.id
+              projectsOut.push({ id: realProjectId, tempId: proj.id, slug, title: projectData.title })
+            } else {
+              const updated = await tx.projectPage.update({
+                where: { id: proj.id },
+                data: projectData,
+              })
+              realProjectId = updated.id
+              projectsOut.push({ id: realProjectId, slug, title: projectData.title })
+            }
+            keptProjectIds.add(realProjectId)
+
+            if (proj.items && proj.items.length > 0) {
+              for (let idx = 0; idx < proj.items.length; idx++) {
+                const item = proj.items[idx]
+                const itemType =
+                  item.type && VALID_TYPES.includes(item.type) ? item.type : 'external_link'
 
                 const isPage = item.linkType === 'page'
                 const externalUrl = isPage
-                  ? (typeof item.linkedPageSlug === 'string' && item.linkedPageSlug.trim() ? item.linkedPageSlug.trim() : null)
+                  ? (typeof item.linkedPageSlug === 'string' && item.linkedPageSlug.trim()
+                      ? item.linkedPageSlug.trim()
+                      : null)
                   : (sanitizeUrl(item.externalUrl) || null)
                 const textContent = item.textContent || null
                 const imageUrl = sanitizeUrl(item.imageUrl) || null
                 const workspaceItemId = item.workspaceItemId || null
 
-                return {
+                const hasExt = externalUrl && String(externalUrl).trim() !== ''
+                const hasText = textContent && String(textContent).trim() !== ''
+                const hasImg = imageUrl && String(imageUrl).trim() !== ''
+                const hasWs = workspaceItemId && String(workspaceItemId).trim() !== ''
+                if (!hasExt && !hasText && !hasImg && !hasWs) continue
+
+                itemRows.push({
                   projectId: realProjectId,
                   type: itemType,
                   workspaceItemId,
@@ -526,39 +552,96 @@ export async function updatePortfolio(data: {
                   imageUrl,
                   title: item.title || item.linkLabel || null,
                   sortOrder: item.sortOrder !== undefined ? item.sortOrder : idx,
-                }
-              })
-              .filter((item: any) => {
-                const hasExt = item.externalUrl && String(item.externalUrl).trim() !== ''
-                const hasText = item.textContent && String(item.textContent).trim() !== ''
-                const hasImg = item.imageUrl && String(item.imageUrl).trim() !== ''
-                const hasWs = item.workspaceItemId && String(item.workspaceItemId).trim() !== ''
-                return hasExt || hasText || hasImg || hasWs
-              })
+                })
+              }
+            }
+          }
 
-            if (validItems.length > 0) {
-              await prisma.projectItem.createMany({
-                data: validItems,
-              })
+          // All surviving pages: two queries for every item instead of
+          // delete+create per project.
+          if (keptProjectIds.size > 0) {
+            await tx.projectItem.deleteMany({
+              where: { projectId: { in: [...keptProjectIds] } },
+            })
+            if (itemRows.length > 0) {
+              await tx.projectItem.createMany({ data: itemRows })
             }
           }
         }
-      }
 
-      // Handle deleted projects
-      for (const ep of existingProjects) {
-        if (!keptProjectIds.has(ep.id)) {
-          await prisma.projectPage.delete({ where: { id: ep.id } })
+        // ---- Profile + optimistic version bump (LAST) -------------------
+        const profileData = {
+          username,
+          avatarUrl: data.avatarUrl,
+          appearance: extras.appearance as Prisma.InputJsonValue,
+          localized: extras.localized as Prisma.InputJsonValue,
+          contactLinks: extras.contactLinks as Prisma.InputJsonValue,
+        }
+
+        let nextVersion: number
+        if (data.expectedVersion !== undefined) {
+          const bumped = await tx.userProfile.updateMany({
+            where: { userId: user.id, version: data.expectedVersion },
+            data: { ...profileData, version: { increment: 1 } },
+          })
+          if (bumped.count === 0) {
+            const current = await tx.userProfile.findUnique({
+              where: { userId: user.id },
+              select: { version: true },
+            })
+            throw conflictError(current?.version)
+          }
+          const row = await tx.userProfile.findUnique({
+            where: { userId: user.id },
+            select: { version: true },
+          })
+          nextVersion = row?.version ?? data.expectedVersion + 1
+        } else {
+          const row = await tx.userProfile.update({
+            where: { userId: user.id },
+            data: profileData,
+            select: { version: true },
+          })
+          nextVersion = row.version
+        }
+
+        return { sectionsOut, projectsOut, nextVersion }
+      }, { maxWait: 10_000, timeout: 20_000 })
+
+      savedSections = result.sectionsOut
+      savedProjects = result.projectsOut
+      version = result.nextVersion
+    } catch (err: any) {
+      if (err?.message === 'VERSION_CONFLICT') {
+        return {
+          success: false,
+          conflict: true,
+          currentVersion: err.currentVersion ?? own.version,
+          error: 'Someone else saved changes. Reload to get the latest version.',
         }
       }
+      // Unique-race on username between precheck and write (NOT a version
+      // conflict — no modal, just an error toast).
+      if (err?.code === 'P2002') {
+        return { success: false, error: 'Username is already taken' }
+      }
+      throw err
     }
 
-    revalidatePath('/profile/builder')
-    if (data.username) {
-      revalidatePath(`/u/${data.username}`)
-    }
-    
-    return { success: true, savedProjects, savedSections, version: updated.version }
+    // Revalidation runs after the response is sent: the client gets its
+    // "saved" state without waiting for the builder/public route refresh.
+    after(() => {
+      try {
+        revalidatePath('/profile/builder')
+        if (username) revalidatePath(`/u/${username}`)
+        if (own.username && own.username !== username) revalidatePath(`/u/${own.username}`)
+      } catch (err) {
+        // Revalidation is best-effort; the save itself already committed.
+        console.error('updatePortfolio revalidate error:', err)
+      }
+    })
+
+    return { success: true, savedProjects, savedSections, version }
   } catch (error: any) {
     console.error('updatePortfolio error:', error)
     return { success: false, error: error.message || 'Failed to save portfolio' }
@@ -713,6 +796,8 @@ export async function createProjectPage(titleOrProfileId?: string, maybeTitle?: 
         slug,
         sortOrder: count,
         displayMode: 'grid',
+        // Created from the Pages tab: a content page, not a home-page card.
+        showInProjects: false,
         showBackButton: true,
         backButtonLabel: 'Back to Portfolio',
       },
@@ -729,6 +814,7 @@ export async function createProjectPage(titleOrProfileId?: string, maybeTitle?: 
         slug: projectPage.slug,
         title: projectPage.title,
         displayMode: projectPage.displayMode,
+        showInProjects: projectPage.showInProjects,
         showBackButton: projectPage.showBackButton,
         backButtonLabel: projectPage.backButtonLabel,
       },

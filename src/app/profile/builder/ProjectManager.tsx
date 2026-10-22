@@ -7,9 +7,19 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { MediaPicker } from './MediaPicker'
 import { uploadToCloudinary } from '@/lib/cloudinary'
+import type { Prisma } from '@prisma/client'
 
-export function ProjectManager({ profile, updateProfile, isCardMode = false, allProjectPages = [], isFree = false }: { profile: any, updateProfile: any, isCardMode?: boolean, allProjectPages?: any[], isFree?: boolean }) {
-  const projects = profile.projectPages || []
+type ProjectPageWithItems = Prisma.ProjectPageGetPayload<{ include: { items: true } }>
+
+export function ProjectManager({ profile, updateProfile, isCardMode = false, allProjectPages = [], isFree = false }: { profile: any, updateProfile: any, isCardMode?: boolean, allProjectPages?: ProjectPageWithItems[], isFree?: boolean }) {
+  // Project pages come from the parent (`projectPages`, sorted by sortOrder).
+  // A local `profile.projectPages` copy used to shadow this prop; it could
+  // silently diverge from the sorted list the card/pages UI is built from.
+  // Pages created from the Pages tab are content pages (`showInProjects`
+  // false) and must never appear as home-page cards.
+  const projects = isCardMode
+    ? allProjectPages.filter((p: any) => p.showInProjects !== false)
+    : allProjectPages
   const currentPage = isCardMode ? null : (projects[0] || null)
   const displayItems = isCardMode ? projects : (currentPage?.items || [])
 
@@ -28,6 +38,7 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
       tags: [],
       sortOrder: projects.length + 1,
       items: [],
+      showInProjects: true,
       linkType: 'none',
       externalLink: '',
       linkLabel: 'View Project',

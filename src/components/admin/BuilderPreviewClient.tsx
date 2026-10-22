@@ -129,7 +129,7 @@ export function BuilderPreviewClient({
           </div>
         ) : (
           <div
-            className={`transition-all duration-300 ease-in-out bg-[var(--color-surface)] ${
+            className={`@container transition-all duration-300 ease-in-out bg-[var(--color-surface)] ${
               device === 'desktop'
                 ? 'w-full rounded-2xl border border-[var(--color-border)] shadow-xs overflow-hidden'
                 : device === 'tablet'

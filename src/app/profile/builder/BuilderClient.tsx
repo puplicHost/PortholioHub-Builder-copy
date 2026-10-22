@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } from 'react'
 import {
   ArrowLeft, Monitor, Smartphone, ExternalLink, Globe,
   Undo2, Redo2, CheckCircle, Check, Loader2, AlertCircle,
@@ -9,7 +9,7 @@ import {
   Palette, Layout, FileText, Menu, X, Sliders, Plus, Trash2,
   Trophy, Star, Users, Briefcase, Heart, Zap, Target, Award,
   Clock, TrendingUp, Code, Layers, Rocket, PenTool, Sun, Moon,
-  ArrowUp, BarChart3, LogOut, Languages, User, AlertTriangle, Lock, RefreshCw, Save
+  ArrowUp, BarChart3, LogOut, Languages, User, AlertTriangle, Lock, Save
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -295,52 +295,10 @@ function adjustColor(color: string, amount: number) {
   return '#' + color.replace(/^#/, '').replace(/../g, color => ('0'+Math.min(255, Math.max(0, parseInt(color, 16) + amount)).toString(16)).substr(-2))
 }
 
-// True-desktop preview for narrow (phone) viewports. The inline <LivePreview>
-// is bound to the real browser viewport, so on a phone it can only ever show a
-// mobile layout — making the device toggle look dead. This renders the same
-// saved portfolio in a fixed 1080px-wide iframe and scales it to fit the
-// available box, so "Desktop" always shows an actual desktop layout on any
-// device. (Project-page previews stay inline and draft-driven; only the home
-// portfolio uses this.)
-function ScaledDesktopPreview({ refreshKey, onRefresh }: { refreshKey: string; onRefresh: () => void }) {
-  const DESKTOP_W = 1080
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const [box, setBox] = useState({ w: DESKTOP_W, h: 800 })
-  useEffect(() => {
-    const el = boxRef.current
-    if (!el) return
-    const update = () => setBox({ w: el.clientWidth || DESKTOP_W, h: el.clientHeight || 800 })
-    update()
-    const ro = new ResizeObserver(update)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-  const scale = box.w > 0 ? Math.min(1, box.w / DESKTOP_W) : 1
-  return (
-    <div ref={boxRef} className="relative w-full h-full overflow-hidden bg-[var(--color-page)]">
-      <iframe
-        key={refreshKey}
-        src="/profile/builder/preview"
-        title="Desktop portfolio preview"
-        width={DESKTOP_W}
-        height={Math.round(box.h / scale)}
-        style={{ border: 'none', width: DESKTOP_W, height: box.h / scale, transform: `scale(${scale})`, transformOrigin: 'top left' }}
-        className="block bg-white"
-      />
-      <button
-        type="button"
-        onClick={onRefresh}
-        title="Reload desktop preview"
-        aria-label="Reload desktop preview"
-        className="absolute bottom-4 end-4 z-10 flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)] shadow-lg hover:text-[var(--color-primary)] transition-colors cursor-pointer"
-      >
-        <RefreshCw className="h-4 w-4" />
-      </button>
-    </div>
-  )
-}
-
-
+// The preview is inline (no iframe). ClassicTemplate uses container-query
+// breakpoints, so its layout follows the preview box width rather than the
+// browser window: the phone frame shows a real mobile layout and the desktop
+// canvas shows the desktop layout even on a phone. Both are draft-driven.
 // Item 8: one labelled text field that, in bilingual mode, renders a second
 // `{en,ar}` input — stored in the existing shape item fields already validate
 // (lstringOrText). Flat legacy strings show in the EN box and upgrade to
@@ -430,7 +388,7 @@ function ItemCard({ children, title, subtitle, onRemove, onEdit }: { children: R
           {title && <h4 className="text-[13px] font-semibold text-[var(--color-text-primary)] truncate">{title}</h4>}
           {subtitle && <p className="text-[11px] text-[var(--color-text-muted)] truncate mt-0.5">{subtitle}</p>}
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
           {onEdit && (
             <button aria-label="Edit item" onClick={onEdit} className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] bg-[var(--color-surface)] rounded-md border border-[var(--color-border)] shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
               <PenTool className="w-3.5 h-3.5" />
@@ -861,7 +819,6 @@ export function BuilderClient({
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
   const [selectedSectionType, setSelectedSectionType] = useState<string | null>(null)
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop')
-  const [lastSaved, setLastSaved] = useState<Date | null>(new Date())
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false)
   const [rightSheetOpen, setRightSheetOpen] = useState(false)
   const [builderDarkMode, setBuilderDarkMode] = useState<boolean>(() => {
@@ -875,21 +832,8 @@ export function BuilderClient({
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [activePage, setActivePage] = useState<'home' | string>('home')
   const [creatingProjectPage, setCreatingProjectPage] = useState(false)
-  // Mobile preview iframe reload key: bumped on save + via the manual
-  // refresh button so the true-390px frame re-fetches the latest portfolio.
-  const [mobileRefreshKey, setMobileRefreshKey] = useState(0)
-  // Device-toggle root cause: the "desktop" branch renders <LivePreview>
-  // INLINE in this document, so its responsive breakpoints resolve against
-  // the real browser viewport. On a narrow (phone) window that inline canvas
-  // is also narrow, so desktop and mobile modes converge — the toggle looks
-  // dead. When the viewport itself is too narrow for a desktop layout we swap
-  // the desktop branch to a fixed-width, scale-to-fit iframe so it still
-  // shows a TRUE desktop layout on any device.
-  const [narrowViewport, setNarrowViewport] = useState(false)
-  // True on real phones (< md / 768px). Forces the mobile preview frame.
+  // True on real phones (< 768px). Forces the mobile preview frame.
   const [isMobileViewport, setIsMobileViewport] = useState(false)
-  // Desktop iframe reload key (mirrors `mobileRefreshKey`).
-  const [desktopRefreshKey, setDesktopRefreshKey] = useState(0)
   // Mobile publish button feedback: idle → busy (spinner) → done (✓) → idle.
   const [publishState, setPublishState] = useState<
     'idle' | 'publishing' | 'unpublishing' | 'published' | 'unpublished'
@@ -926,16 +870,10 @@ export function BuilderClient({
     }
   }, [])
 
-  // Track whether the real viewport can natively render a desktop layout.
-  // 1024px ≈ Tailwind's `lg`; below it the inline desktop canvas would fall
-  // back to a mobile/tablet layout, defeating the device toggle.
-  // `isMobileViewport` (< md / 768px) additionally FORCES the phone preview:
-  // on a real phone the device switcher is hidden, so a "desktop" preview
-  // would be a 1080px scaled-down frame — i.e. a desktop layout on a phone.
-  // Under 768px we always render the 390px mobile frame instead.
+  // On a real phone the device switcher is hidden, so the phone frame is
+  // always used there regardless of the desktop/mobile toggle.
   useEffect(() => {
     const check = () => {
-      setNarrowViewport(window.innerWidth < 1024)
       setIsMobileViewport(window.innerWidth < 768)
     }
     check()
@@ -943,9 +881,11 @@ export function BuilderClient({
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  const isDirty = useMemo(() => {
-    return getProfileSnapshot(profile) !== savedSnapshot
-  }, [profile, savedSnapshot])
+  // Serialize once per profile change (not once per render): this is the only
+  // place the full snapshot is computed, and both dirty-checking and the
+  // draft autosave reuse it.
+  const currentSnapshot = useMemo(() => getProfileSnapshot(profile), [profile])
+  const isDirty = currentSnapshot !== savedSnapshot
 
   // ---- Local draft autosave (Phase 2) -------------------------------------
   // Draft lives ONLY in localStorage (per profile) and is cleared on every
@@ -1018,7 +958,7 @@ export function BuilderClient({
       try {
         window.localStorage.setItem(
           draftKey,
-          JSON.stringify({ snapshot: getProfileSnapshot(profile), ts: Date.now() }),
+          JSON.stringify({ snapshot: currentSnapshot, ts: Date.now() }),
         )
         setDraftSavedAt(Date.now())
       } catch {
@@ -1026,7 +966,7 @@ export function BuilderClient({
       }
     }, 2500)
     return () => clearTimeout(t)
-  }, [profile, isDirty, draftKey])
+  }, [currentSnapshot, isDirty, draftKey])
 
   const handleSaveChanges = async (forceVersion?: number): Promise<boolean> => {
     if (saveStatus === 'saving') return false
@@ -1044,7 +984,6 @@ export function BuilderClient({
         expectedVersion: forceVersion ?? profile.version,
       })
       if (res.success) {
-        setLastSaved(new Date())
         // Server state is now authoritative — drop the local draft.
         if (draftKey) {
           try {
@@ -1248,13 +1187,15 @@ export function BuilderClient({
   }
 
   // Theme toggle from inside the live preview canvas: persists the choice to
-  // the owner's saved `appearance.colorMode` (survives reload).
-  const handlePreviewThemeChange = (mode: 'light' | 'dark') => {
-    updateProfile((p: any) => ({
+  // the owner's saved `appearance.colorMode` (survives reload). Stable
+  // identity so the memoized preview is not invalidated by unrelated builder
+  // state changes.
+  const handlePreviewThemeChange = useCallback((mode: 'light' | 'dark') => {
+    setProfile((p: any) => ({
       ...p,
       appearance: { ...p.appearance, colorMode: mode },
     }))
-  }
+  }, [])
 
   // Sections from profile, sorted for display.
   const sections = useMemo(() => {
@@ -1273,6 +1214,11 @@ export function BuilderClient({
     if (!isFreePlan) return profile
     return stripLockedSectionsForFree(profile)
   }, [profile, isFreePlan])
+
+  // Deferred rendering is React's transition-backed mechanism: the form and
+  // sidebar stay urgent while the (very large) template re-renders at lower
+  // priority. Combined with the memoized LivePreview, typing stays smooth.
+  const deferredPreviewProfile = useDeferredValue(previewProfile)
 
   // Click on a section in the left panel
   const handleSelectSection = (section: any) => {
@@ -1399,6 +1345,35 @@ export function BuilderClient({
     })
   }
 
+  // Destructive removals are reversible via the toast's Undo action: the
+  // exact removed value is re-inserted at its old index if it is still absent.
+  const removeSectionArrayItem = (sectionId: string, field: string, items: any[], index: number) => {
+    const removed = items[index]
+    updateSectionContentRaw(sectionId, field, items.filter((_: any, i: number) => i !== index))
+    if (removed === undefined) return
+    const same = (a: any, b: any) => (a?.id && b?.id ? a.id === b.id : a === b)
+    toast('info', 'Item removed', {
+      label: 'Undo',
+      onClick: () => {
+        updateProfile((p: any) => {
+          const pages = [...(p.pages || [])]
+          const page = pages[0]
+          if (!page) return p
+          const sections = (page.sections || []).map((s: any) => {
+            if (s.id !== sectionId) return s
+            const current = [...(s.content?.[field] || [])]
+            if (!current.some((it: any) => same(it, removed))) {
+              current.splice(Math.max(0, Math.min(index, current.length)), 0, removed)
+            }
+            return { ...s, content: { ...(s.content || {}), [field]: current } }
+          })
+          pages[0] = { ...page, sections }
+          return { ...p, pages }
+        })
+      },
+    })
+  }
+
   // Project page handlers
   const projectPages = useMemo(() => {
     return [...(profile.projectPages || [])].sort((a, b) => a.sortOrder - b.sortOrder)
@@ -1417,6 +1392,8 @@ export function BuilderClient({
   const linkedPageSlugs = useMemo(() => {
     const refs = new Set<string>()
     for (const pg of profile.projectPages || []) {
+      // Only card rows can reference a page.
+      if ((pg as any).showInProjects === false) continue
       const linkType = (pg as any).linkType || (pg as any).content?.linkType
       const linked = (pg as any).linkedPageSlug || (pg as any).content?.linkedPageSlug
       if (linkType === 'page' && isRealSlug(linked)) refs.add(linked)
@@ -1637,7 +1614,10 @@ export function BuilderClient({
               <div>
                 <label htmlFor={`pp-link-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Link to Project</label>
                 {(() => {
-                  const linkingCard = (projectPages || []).find((proj: any) => {
+                  const cardRows = (projectPages || []).filter(
+                    (proj: any) => proj.showInProjects !== false && proj.id !== pp.id
+                  )
+                  const linkingCard = cardRows.find((proj: any) => {
                     const linked = (proj as any).linkedPageSlug || (proj as any).content?.linkedPageSlug
                     return linked === pp.slug
                   })
@@ -1653,7 +1633,7 @@ export function BuilderClient({
                         className="w-full min-h-[44px] h-[44px] rounded-lg border border-[var(--color-border)] bg-transparent px-[12px] text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
                       >
                         <option value="">Not linked to a project</option>
-                        {(projectPages || []).map((proj: any) => (
+                        {cardRows.map((proj: any) => (
                           <option key={proj.id} value={proj.id}>
                             {proj.title || proj.slug || 'Untitled'}
                           </option>
@@ -1665,6 +1645,23 @@ export function BuilderClient({
                     </>
                   )
                 })()}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id={`pp-card-${pp.id}`}
+                    type="checkbox"
+                    checked={pp.showInProjects !== false}
+                    onChange={(e) => updateProjectPageField(pp.id, 'showInProjects', e.target.checked)}
+                    className="w-4 h-4 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] bg-[var(--color-surface)]"
+                  />
+                  <label htmlFor={`pp-card-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] cursor-pointer">
+                    Show as project card
+                  </label>
+                </div>
+                <p className="text-[11px] text-[var(--color-text-muted)] mt-1.5">
+                  When off, this page is reachable by its link but does not appear in the Projects section.
+                </p>
               </div>
               <div>
                 <label htmlFor={`pp-back-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Back Button Label</label>
@@ -1763,9 +1760,20 @@ export function BuilderClient({
                     key={item.id}
                     title={item.title || 'New Item'}
                     onRemove={() => {
+                      const removed = (pp.items || [])[idx]
                       const newItems = [...(pp.items || [])]
                       newItems.splice(idx, 1)
                       updateProjectPageField(pp.id, 'items', newItems)
+                      if (removed !== undefined) {
+                        toast('info', 'Item removed', {
+                          label: 'Undo',
+                          onClick: () => {
+                            const restored = [...newItems]
+                            restored.splice(Math.max(0, Math.min(idx, restored.length)), 0, removed)
+                            updateProjectPageField(pp.id, 'items', restored)
+                          },
+                        })
+                      }
                     }}
                   >
                     <div className="flex flex-col gap-4 mt-2">
@@ -2156,11 +2164,7 @@ export function BuilderClient({
                 {aboutStats.map((stat: any, idx: number) => (
                   <ItemCard
                     key={idx}
-                    onRemove={() => {
-                      const newStats = [...aboutStats]
-                      newStats.splice(idx, 1)
-                      updateSectionContentRaw(selectedSection.id, 'stats', newStats)
-                    }}
+                    onRemove={() => removeSectionArrayItem(selectedSection.id, 'stats', aboutStats, idx)}
                   >
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-xs text-[var(--color-text-muted)] font-medium w-10 shrink-0">Icon</span>
@@ -2254,11 +2258,7 @@ case 'skills':
                 {skillGroups.length > 0 ? skillGroups.map((group: any, gIdx: number) => (
                   <ItemCard
                     key={gIdx}
-                    onRemove={() => {
-                      const newGroups = [...skillGroups]
-                      newGroups.splice(gIdx, 1)
-                      updateSectionContentRaw(selectedSection.id, 'groups', newGroups)
-                    }}
+                    onRemove={() => removeSectionArrayItem(selectedSection.id, 'groups', skillGroups, gIdx)}
                   >
                     <div>
                       <label htmlFor={`skill-group-${selectedSection.id}-${gIdx}-name`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Group Name</label>
@@ -2440,11 +2440,7 @@ case 'skills':
                     key={item.id}
                     title={pickLang(item.jobTitle, 'en') || 'New Role'}
                     subtitle={pickLang(item.companyName, 'en') || 'Company'}
-                    onRemove={() => {
-                      const newItems = [...experienceItems]
-                      newItems.splice(idx, 1)
-                      updateSectionContentRaw(selectedSection.id, 'items', newItems)
-                    }}
+                    onRemove={() => removeSectionArrayItem(selectedSection.id, 'items', experienceItems, idx)}
                   >
                       <div className="flex flex-col gap-4 mt-3">
                         <BiField
@@ -2675,10 +2671,7 @@ case 'skills':
                   <ItemCard
                     key={idx}
                     title={pickLang(service.title, 'en') || 'New Service'}
-                    onRemove={() => {
-                      const newServices = services.filter((_: any, i: number) => i !== idx)
-                      updateSectionContentRaw(selectedSection.id, 'services', newServices)
-                    }}
+                    onRemove={() => removeSectionArrayItem(selectedSection.id, 'services', services, idx)}
                   >
                     <div className="flex flex-col gap-4 mt-2">
                       <div role="group" aria-labelledby={`service-${idx}-icon-label`}>
@@ -3287,6 +3280,15 @@ case 'skills':
             3. CENTER CANVAS (full width on mobile, framed on md+)
         ────────────────────────────────────────────────────────────── */}
         <main className="flex-1 min-h-0 min-w-0 max-w-[100vw] bg-[var(--color-page)] relative overflow-hidden overflow-x-hidden flex items-center justify-center p-2 md:p-4">
+          {isFreePlan && (
+            <div className="pointer-events-none absolute inset-x-3 top-2 z-10 flex justify-center">
+              <p className="rounded-full bg-amber-500/95 px-3 py-1 text-center text-[11px] font-semibold text-white shadow-md">
+                {lang === 'ar'
+                  ? 'المعاينة تعرض النسخة المجانية: الخبرة والمهارات والخدمات وآراء العملاء مخفية عن الزوار.'
+                  : 'Preview shows the free version: Experience, Skills, Services and Testimonials are hidden from visitors.'}
+              </p>
+            </div>
+          )}
           <div
             className={`transition-all duration-300 ease-in-out bg-[var(--color-surface)] overflow-hidden flex flex-col max-w-full ${
               effectivePreviewMode === 'mobile'
@@ -3295,54 +3297,29 @@ case 'skills':
             }`}
           >
             {effectivePreviewMode === 'mobile' ? (
-              <div className="w-[398px] max-w-full h-full max-h-full mx-auto overflow-hidden rounded-[2.5rem] border-4 border-gray-800 shadow-2xl bg-white flex flex-col">
+              <div className="w-[375px] max-w-full h-full max-h-full mx-auto overflow-hidden rounded-[2.5rem] border-4 border-gray-800 shadow-2xl bg-white flex flex-col">
                 <div className="h-5 w-full bg-gray-800 flex items-center justify-center shrink-0">
                   <div className="h-3 w-20 bg-black/60 rounded-full" />
                 </div>
-                {/* True 390px viewport simulation via a SAME-ORIGIN iframe.
-                    A separate document is required: rendering the template
-                    inline would resolve its responsive breakpoints against the
-                    real (desktop) viewport and show the desktop layout, not the
-                    mobile one. The `src` is site-relative, so it hits the
-                    current origin (localhost:3000 in dev, the Vercel domain in
-                    prod) — never a hardcoded localhost. Framing used to be
-                    blocked by `X-Frame-Options: DENY`, which is why this iframe
-                    was blank / "refused to connect"; middleware now returns
-                    `SAMEORIGIN` for this route only. `?t=` cache-busts so the
-                    frame reloads with the latest saved portfolio. */}
-                <div className="flex-1 min-h-0 overflow-y-auto w-full relative">
-                  <iframe
-                    key={`mobile-preview-${lastSaved?.getTime() ?? 0}-${mobileRefreshKey}`}
-                    src={`/profile/builder/preview?t=${lastSaved?.getTime() ?? 0}-${mobileRefreshKey}`}
-                    title="Mobile portfolio preview"
-                    width="390"
-                    height="844"
-                    style={{ border: 'none' }}
-                    className="block w-[390px] max-w-full bg-white"
+                {/* Inline, container-query-scaled preview: the template's
+                    `cq-md:`/`cq-lg:` variants resolve against this 375px box, so
+                    it renders the real mobile layout live — no iframe, no
+                    save/reload required. */}
+                <div className="flex-1 min-h-0">
+                  <LivePreview
+                    profile={deferredPreviewProfile}
+                    isFree={isFreePlan}
+                    onThemeChange={handlePreviewThemeChange}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setMobileRefreshKey((k) => k + 1)}
-                    title="Reload mobile preview"
-                    aria-label="Reload mobile preview"
-                    className="absolute bottom-4 end-4 z-10 flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)] shadow-lg hover:text-[var(--color-primary)] transition-colors cursor-pointer"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                  </button>
                 </div>
               </div>
             ) : (
               <div className="flex-1 w-full min-h-0 overflow-hidden relative">
                 {activePage !== 'home' && editingProjectPage && !selectedSection ? (
                   <ProjectPagePreview profile={profile} projectPage={editingProjectPage} />
-                ) : narrowViewport ? (
-                  <ScaledDesktopPreview
-                    refreshKey={`desktop-preview-${lastSaved?.getTime() ?? 0}-${desktopRefreshKey}`}
-                    onRefresh={() => setDesktopRefreshKey((k) => k + 1)}
-                  />
                 ) : (
                   <LivePreview
-                    profile={previewProfile}
+                    profile={deferredPreviewProfile}
                     isFree={isFreePlan}
                     onThemeChange={handlePreviewThemeChange}
                   />
@@ -3668,9 +3645,9 @@ case 'skills':
                           Live
                         </span>
                       )}
-                      {!linkedPageSlugs.has(pp.slug) && (
+                      {pp.showInProjects === false && !linkedPageSlugs.has(pp.slug) && (
                         <span
-                          title="Not linked to a project — hidden from public navigation until linked"
+                          title="Not linked to a project — reachable by direct link until a card links to it"
                           className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-400 mr-1"
                         >
                           <AlertTriangle className="h-3 w-3" />
@@ -3682,7 +3659,7 @@ case 'skills':
                           e.stopPropagation()
                           handleDeleteProjectPage(pp.id)
                         }}
-                        className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-danger)] opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-danger)] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity"
                         title="Delete"
                       >
                         <Trash2 className="h-3 w-3" />

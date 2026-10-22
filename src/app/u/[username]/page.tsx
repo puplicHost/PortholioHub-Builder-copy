@@ -114,7 +114,13 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: personLd }} />
       <TrackBeacon username={profile.username} eventType="page_view" />
-      <ClassicTemplate profile={profile} isFree={isFree} />
+      {/* `.no-cq` opts the published page out of container queries: there is
+          no preview box here, so the template's `cq-*` breakpoints fall back
+          to viewport media queries. Scrolling and `position: fixed` stay
+          exactly as the browser handles a normal document. */}
+      <div className="no-cq">
+        <ClassicTemplate profile={profile} isFree={isFree} />
+      </div>
     </>
   )
 }

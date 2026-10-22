@@ -62,11 +62,20 @@ export default async function ArabicLandingPage() {
   const whatsapp = typeof settings['contact.whatsapp'] === 'string' ? (settings['contact.whatsapp'] as string) : ''
 
   return (
-    <HomePage
-      name={name}
-      whatsapp={whatsapp}
-      monthlyPrice={monthly ?? 150}
-      annualPrice={annual ?? 1000}
-    />
+    <>
+      {/* Icon font is landing-page-only; keeping it out of the root layout
+          removes a render-blocking stylesheet from every portfolio page. */}
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined"
+        precedence="material-icons"
+      />
+      <HomePage
+        name={name}
+        whatsapp={whatsapp}
+        monthlyPrice={monthly ?? 150}
+        annualPrice={annual ?? 1000}
+      />
+    </>
   )
 }

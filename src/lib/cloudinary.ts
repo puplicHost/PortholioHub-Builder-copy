@@ -148,3 +148,25 @@ async function sha1Hex(input: string): Promise<string> {
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('')
 }
+
+/**
+ * Insert Cloudinary delivery transforms (auto format/quality + capped width)
+ * into an existing delivery URL. Non-Cloudinary URLs (legacy/user-typed) are
+ * returned untouched, so arbitrary hosts keep working without next/image
+ * remote-pattern restrictions.
+ */
+export function portfolioImageUrl(url: string, width: number): string {
+  if (!url) return url
+  try {
+    const u = new URL(url)
+    if (!/(^|\.)res\.cloudinary\.com$/i.test(u.hostname)) return url
+    if (!u.pathname.includes('/upload/')) return url
+    // Already transformed — never stack a second transformation segment.
+    if (/\/upload\/[^/]*?(f_|q_|w_|c_)/.test(u.pathname)) return url
+    const transforms = `f_auto,q_auto,c_limit,w_${Math.max(1, Math.round(width))}`
+    u.pathname = u.pathname.replace('/upload/', `/upload/${transforms}/`)
+    return u.toString()
+  } catch {
+    return url
+  }
+}

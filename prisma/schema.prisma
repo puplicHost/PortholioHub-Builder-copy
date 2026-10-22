@@ -919,6 +919,10 @@ model ProjectPage {
   gallery         String[]    @default([])
   content         Json?
   isPublished     Boolean     @default(true) @map("is_published")
+  // Home-page card visibility. Pages created from the Pages tab are content
+  // pages (false); cards created in the Projects section are true. This is
+  // separate from `isPublished`, which controls the detail page itself.
+  showInProjects  Boolean     @default(true) @map("show_in_projects")
   sortOrder       Int         @default(0) @map("sort_order")
   displayMode     String      @default("grid") @map("display_mode")
   showBackButton  Boolean     @default(true) @map("show_back_button")

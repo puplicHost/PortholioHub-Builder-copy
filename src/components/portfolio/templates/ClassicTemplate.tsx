@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { trackPortfolioEvent } from '@/components/portfolio/TrackBeacon'
 import { normalizeWhatsappNumber } from '@/lib/whatsapp'
 import { sanitizeUrl } from '@/lib/urls'
+import { portfolioImageUrl } from '@/lib/cloudinary'
 import { isSectionVisible } from '@/lib/section-visibility'
 import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
 import { TestimonialsSlider } from '@/components/portfolio/TestimonialsSlider'
@@ -33,6 +34,23 @@ function getIcon(name?: string, className?: string) {
   return Icon ? <Icon className={className} aria-hidden="true" /> : null
 }
 
+// The template is rendered both as a full page and inline inside the
+// builder's preview boxes. In the inline case the page does not scroll —
+// an ancestor does — so scroll-driven behaviour must target that ancestor.
+function getScrollParent(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement ?? null
+  while (node && node !== document.body && node !== document.documentElement) {
+    const style = window.getComputedStyle(node)
+    // Only a real wrapper scroller counts. body/html are excluded on purpose:
+    // `body { overflow-x: hidden }` computes overflow-y to `auto`, but the
+    // document (not the body element) is what scrolls, so binding to it
+    // would silently break the nav shadow and "back to top" on public pages.
+    if (/(auto|scroll)/.test(style.overflowY)) return node
+    node = node.parentElement
+  }
+  return null
+}
+
 // Fixed navbar labels per section TYPE (independent of the editable section
 // heading). Derived from each type's built-in default title, so renaming a
 // section only changes its on-page heading, never its nav link. Custom
@@ -54,6 +72,7 @@ const SECTION_NAV_LABELS: Record<string, { en: string; ar: string }> = {
 export function ClassicTemplate({
   profile,
   isFree = false,
+  preview = false,
 }: {
   profile: any
   isFree?: boolean
@@ -87,17 +106,26 @@ export function ClassicTemplate({
 
   const [isScrolled, setIsScrolled] = useState(false)
   const [activeId, setActiveId] = useState('hero')
+  const rootRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
+    const target = getScrollParent(rootRef.current)
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50)
+      setIsScrolled((target ? target.scrollTop : window.scrollY) > 50)
     }
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
+    handleScroll()
+    const el: HTMLElement | Window = target ?? window
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => el.removeEventListener('scroll', handleScroll)
   }, [])
 
   const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    const target = getScrollParent(rootRef.current)
+    if (target) {
+      target.scrollTo({ top: 0, behavior: 'smooth' })
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
   }
 
   const actionButtons = appearance.actionButtons || {}
@@ -106,27 +134,6 @@ export function ClassicTemplate({
   const waDigits = normalizeWhatsappNumber(whatsappNumber)
   const showWhatsapp = actionButtons.showWhatsapp !== false && !!waDigits
 
-  // Intersection Observer for animations
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('animate-in')
-            if (entry.target.classList.contains('skill-bar')) {
-              const width = entry.target.getAttribute('data-width')
-              if (width) (entry.target as HTMLElement).style.width = width
-            }
-          }
-        })
-      },
-      { threshold: 0.1 }
-    )
-
-    document.querySelectorAll('.fade-up, .skill-bar').forEach((el) => observer.observe(el))
-    return () => observer.disconnect()
-  }, [])
-  
   // Item 8: resolve every `{ar,en}` (or flat-string) user-content value for the
   // visitor's language, falling back to the other language when a translation
   // is empty. `t()` is the single bilingual resolver used across the template.
@@ -179,20 +186,6 @@ export function ClassicTemplate({
       : 'Inter'
   const fontLink = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontFam).replace(/%20/g, '+')}:wght@400;500;600;700&display=swap`
 
-  // Dynamically inject Google Font
-  useEffect(() => {
-    const existingLink = document.getElementById('dynamic-font-link') as HTMLLinkElement
-    if (existingLink) {
-      existingLink.href = fontLink
-    } else {
-      const link = document.createElement('link')
-      link.id = 'dynamic-font-link'
-      link.rel = 'stylesheet'
-      link.href = fontLink
-      document.head.appendChild(link)
-    }
-  }, [fontLink])
-
   const style = {
     '--color-primary': primary,
     '--color-primary-light': primaryLight,
@@ -211,29 +204,78 @@ export function ClassicTemplate({
   // the publish check can never disagree on which sections are shown.
   const visibleSections = sections.filter(isSectionVisible)
 
+  // Reveal animations are re-scanned whenever the rendered structure changes.
+  // A one-shot observer (mount only) left re-shown sections, display-mode
+  // remounts and newly added items stuck at opacity-0 until a full reload.
+  const revealKey = visibleSections
+    .map((s: any) => {
+      const c = s.content || {}
+      const count = (v: unknown) => (Array.isArray(v) ? v.length : 0)
+      return [
+        s.id,
+        c.displayMode || '',
+        count(c.items),
+        count(c.groups),
+        count(c.stats),
+        count(c.paragraphs),
+        count(c.links),
+        count(c.images),
+      ].join(':')
+    })
+    .join('|') + `#${(profile.projectPages || []).map((p: any) => `${p.id}:${p.title || ''}:${p.coverImage ? 1 : 0}`).join(',')}`
+
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return
+          entry.target.classList.add('animate-in')
+          if (entry.target.classList.contains('skill-bar')) {
+            const width = entry.target.getAttribute('data-width')
+            if (width) (entry.target as HTMLElement).style.width = width
+          }
+          // One-shot per element: a remount creates a fresh node anyway.
+          observer.unobserve(entry.target)
+        })
+      },
+      { threshold: 0.1, root: getScrollParent(root) }
+    )
+
+    root
+      .querySelectorAll('.fade-up:not(.animate-in), .skill-bar:not(.animate-in)')
+      .forEach((el) => observer.observe(el))
+    return () => observer.disconnect()
+  }, [revealKey])
+
   // Scroll-spy: highlight the nav link for the section currently in view.
   const navSectionIds = visibleSections.map((s: any) =>
     s.sectionType === 'footer' ? 'contact' : s.sectionType === 'contact' ? 'contact-info' : s.sectionType
   )
   const navSectionIdsKey = navSectionIds.join(',')
   useEffect(() => {
+    const root = rootRef.current
+    const scrollRoot = getScrollParent(root)
     const els = navSectionIdsKey
       .split(',')
-      .map((id) => (id ? document.getElementById(id) : null))
+      .map((id) => (root && id ? root.querySelector<HTMLElement>(`#${id}`) : null))
       .filter((el): el is HTMLElement => !!el)
     if (els.length === 0) return
     const update = () => {
+      const offset = scrollRoot ? scrollRoot.getBoundingClientRect().top : 0
       let current = els[0].id
       for (const el of els) {
-        if (el.getBoundingClientRect().top <= 120) current = el.id
+        if (el.getBoundingClientRect().top - offset <= 120) current = el.id
       }
       setActiveId(current)
     }
     update()
-    window.addEventListener('scroll', update, { passive: true })
+    const el: HTMLElement | Window = scrollRoot ?? window
+    el.addEventListener('scroll', update, { passive: true })
     window.addEventListener('resize', update)
     return () => {
-      window.removeEventListener('scroll', update)
+      el.removeEventListener('scroll', update)
       window.removeEventListener('resize', update)
     }
   }, [navSectionIdsKey])
@@ -295,7 +337,7 @@ export function ClassicTemplate({
     return (
       <p
         dir={lang === 'ar' ? 'rtl' : 'ltr'}
-        className="text-[var(--color-text-muted)] leading-relaxed max-w-2xl text-sm sm:text-base mb-6 text-pretty"
+        className="text-[var(--color-text-muted)] leading-relaxed max-w-2xl text-sm cq-sm:text-base mb-6 text-pretty"
       >
         {text}
       </p>
@@ -315,17 +357,19 @@ export function ClassicTemplate({
         const aboutBg = theme === 'dark' ? 'var(--color-card)' : '#FAF7F2'
         const aboutImage = sanitizeUrl(profile.avatarUrl) || sanitizeUrl(c.imageUrl)
         return (
-          <section id="about" key={section.id} className="py-8 sm:py-16" style={{ backgroundColor: aboutBg }}>
-            <div className="max-w-[1200px] mx-auto px-4 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+          <section id="about" key={section.id} className="py-8 cq-sm:py-16" style={{ backgroundColor: aboutBg }}>
+            <div className="max-w-[1200px] mx-auto px-4 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               
               {/* MOBILE VIEW (< md): image + text same row; margin below pushes cards below the fold */}
-              <div className="md:hidden grid grid-cols-12 gap-3 items-start mb-12" dir="ltr">
+              <div className="cq-md:hidden grid grid-cols-12 gap-3 items-start mb-12" dir="ltr">
                 {aboutImage ? (
                   <div className="col-span-5">
                     <div className="overflow-hidden rounded-2xl shadow-sm border border-[var(--color-border)]/40 bg-[var(--color-bg)] aspect-[3/4]">
                       <img
-                        src={aboutImage}
+                        src={portfolioImageUrl(aboutImage, 800)}
                         alt={displayName}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover"
                       />
                     </div>
@@ -341,8 +385,8 @@ export function ClassicTemplate({
               </div>
 
               {/* DESKTOP VIEW (>= md): heading + text left, stat cards right */}
-              <div className="hidden md:block">
-                <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+              <div className="hidden cq-md:block">
+                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <UserIcon className="text-[var(--color-primary)]" />}
                   {t(c.title) || (lang === 'ar' ? 'نبذة عني' : 'About Me')}
                 </h2>
@@ -352,7 +396,7 @@ export function ClassicTemplate({
                     <div className="col-span-3 text-[var(--color-text-muted)] leading-[1.75] whitespace-pre-wrap text-lg break-words text-left">
                       {biography}
                     </div>
-                    <div className="col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="col-span-2 grid grid-cols-1 cq-lg:grid-cols-2 gap-4">
                       {aboutStats.map((stat: any, i: number) => (
                         <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-all duration-500 shadow-sm">
                           <div className="flex justify-center mb-3">
@@ -372,7 +416,7 @@ export function ClassicTemplate({
               </div>
 
               {aboutStats.length > 0 && (
-                <div className="grid grid-cols-2 gap-4 mt-8 sm:mt-10 md:hidden">
+                <div className="grid grid-cols-2 gap-4 mt-8 cq-sm:mt-10 cq-md:hidden">
                   {aboutStats.map((stat: any, i: number) => (
                     <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-all duration-500 shadow-sm">
                       <div className="flex justify-center mb-3">
@@ -416,35 +460,35 @@ export function ClassicTemplate({
         }
 
         return (
-          <section id="skills" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
-            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+          <section id="skills" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
                 {t(c.heading) || t(c.title) || (lang === 'ar' ? 'المهارات' : 'Skills & Expertise')}
               </h2>
               {renderSectionDescription(c)}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-8">
+              <div className="grid grid-cols-1 cq-md:grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8">
                 {categories.map((cat, i) => (
-                  <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group relative overflow-hidden rounded-[15px] border border-[var(--color-border)] p-4 sm:p-[30px] bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                  <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group relative overflow-hidden rounded-[15px] border border-[var(--color-border)] p-4 cq-sm:p-[30px] bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
                     <span className="absolute top-0 left-0 right-0 h-1" style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))' }} />
-                    <div className="flex items-center gap-2.5 sm:gap-3 mb-4 sm:mb-6">
-                      <span className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm [&>*]:!text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
+                    <div className="flex items-center gap-2.5 cq-sm:gap-3 mb-4 cq-sm:mb-6">
+                      <span className="w-9 h-9 cq-sm:w-11 cq-sm:h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm [&>*]:!text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
                         {cat.icon}
                       </span>
                       <div className="min-w-0">
-                        <h3 className="text-base sm:text-xl break-words font-bold tracking-tight text-[var(--color-text)] leading-tight">
+                        <h3 className="text-base cq-sm:text-xl break-words font-bold tracking-tight text-[var(--color-text)] leading-tight">
                           {cat.title}
                         </h3>
-                        <p className="text-[11px] sm:text-xs font-semibold text-[var(--color-text-muted)]">
+                        <p className="text-[11px] cq-sm:text-xs font-semibold text-[var(--color-text-muted)]">
                           {cat.items.length} {cat.items.length === 1 ? (lang === 'ar' ? 'مهارة' : 'skill') : (lang === 'ar' ? 'مهارات' : 'skills')}
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                    <div className="flex flex-wrap gap-1.5 cq-sm:gap-2">
                       {cat.items.map((skill: { name: string; percentage: number }, j: number) => (
                         <span
                           key={j}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-xs sm:text-sm font-medium text-[var(--color-text)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] hover:-translate-y-0.5 transition-all"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-xs cq-sm:text-sm font-medium text-[var(--color-text)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] hover:-translate-y-0.5 transition-all"
                         >
                           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primary)' }} />
                           {skill.name}
@@ -492,7 +536,7 @@ export function ClassicTemplate({
             <div key={item.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm">
               <div className="flex items-start gap-4 mb-3">
                 {item.companyLogo ? (
-                  <img src={sanitizeUrl(item.companyLogo)} alt={t(item.companyName)} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                  <img src={portfolioImageUrl(sanitizeUrl(item.companyLogo), 96)} alt={t(item.companyName)} loading="lazy" decoding="async" width={40} height={40} className="w-10 h-10 rounded-lg object-cover shrink-0" />
                 ) : (
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--color-primary)' }}>
                     {getIcon(item.icon, 'w-5 h-5 text-white') || <Briefcase className="w-5 h-5 text-white" />}
@@ -539,9 +583,9 @@ export function ClassicTemplate({
           )
         }
         return (
-          <section id="experience" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
-            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
+          <section id="experience" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Briefcase className="text-[var(--color-primary)]" />}
                 {t(c.heading) || (lang === 'ar' ? 'الخبرات العملية' : 'Work Experience')}
               </h2>
@@ -550,8 +594,8 @@ export function ClassicTemplate({
               )}
               {expItems.length > 0 ? (
                 expDisplayMode === 'timeline' ? (
-                  <div className="relative ps-8 md:ps-12">
-                    <div className="absolute start-3 md:start-5 top-1 bottom-1 w-[3px] rounded-full" style={{ background: 'linear-gradient(to bottom, transparent, var(--color-primary) 12%, var(--color-primary) 88%, transparent)' }} />
+                  <div className="relative ps-8 cq-md:ps-12">
+                    <div className="absolute start-3 cq-md:start-5 top-1 bottom-1 w-[3px] rounded-full" style={{ background: 'linear-gradient(to bottom, transparent, var(--color-primary) 12%, var(--color-primary) 88%, transparent)' }} />
                     <div className="space-y-10">
                       {expItems.map((item: any, ei: number) => {
                         const endLabel = item.isCurrent
@@ -565,7 +609,7 @@ export function ClassicTemplate({
                         return (
                           <div key={item.id} style={{ transitionDelay: `${Math.min(ei * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative transition-all duration-500">
                             <div
-                              className={`absolute -start-5 md:-start-7 top-1.5 w-3.5 h-3.5 rounded-full border-[3px] border-[var(--color-bg)] ring-2 ring-[var(--color-primary)]/20 ${
+                              className={`absolute -start-5 cq-md:-start-7 top-1.5 w-3.5 h-3.5 rounded-full border-[3px] border-[var(--color-bg)] ring-2 ring-[var(--color-primary)]/20 ${
                                 item.isCurrent ? 'motion-safe:animate-pulse' : ''
                               }`}
                               style={{ backgroundColor: item.isCurrent ? '#22c55e' : 'var(--color-primary)' }}
@@ -579,7 +623,7 @@ export function ClassicTemplate({
                             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm">
                               <div className="flex items-start gap-4 mb-3">
                                 {item.companyLogo ? (
-                                  <img src={sanitizeUrl(item.companyLogo)} alt={t(item.companyName)} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                                  <img src={portfolioImageUrl(sanitizeUrl(item.companyLogo), 96)} alt={t(item.companyName)} loading="lazy" decoding="async" width={40} height={40} className="w-10 h-10 rounded-lg object-cover shrink-0" />
                                 ) : (
                                   <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--color-primary)' }}>
                                     {getIcon(item.icon, 'w-5 h-5 text-white') || <Briefcase className="w-5 h-5 text-white" />}
@@ -635,7 +679,7 @@ export function ClassicTemplate({
                     </div>
                   </div>
                 ) : expDisplayMode === 'grid' ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 cq-md:grid-cols-2 cq-lg:grid-cols-3 gap-6">
                     {expItems.map((item: any) => renderExpItem(item))}
                   </div>
                 ) : (
@@ -654,10 +698,10 @@ export function ClassicTemplate({
       case 'services':
         const serviceItems = c.services || []
         return (
-          <section id="services" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
-            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+          <section id="services" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <div className="mb-16">
-                <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
+                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Briefcase className="text-[var(--color-primary)]" />}
                   {t(c.heading) || t(c.title) || (lang === 'ar' ? 'الخدمات' : 'Services')}
                 </h2>
@@ -668,27 +712,27 @@ export function ClassicTemplate({
                 )}
               </div>
               {serviceItems.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-8">
+                <div className="grid grid-cols-1 cq-md:grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8">
                   {serviceItems.map((service: any, i: number) => (
-                    <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group relative overflow-hidden rounded-xl border border-[var(--color-border)] p-4 sm:p-7 bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                    <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group relative overflow-hidden rounded-xl border border-[var(--color-border)] p-4 cq-sm:p-7 bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
                       <span className="absolute top-0 left-0 right-0 h-1" style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))' }} />
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center mb-4 sm:mb-5 shadow-sm [&>*]:!text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
+                      <div className="w-10 h-10 cq-sm:w-12 cq-sm:h-12 rounded-xl flex items-center justify-center mb-4 cq-sm:mb-5 shadow-sm [&>*]:!text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
                         {getIcon(service.icon, 'w-5 h-5 text-white') || <Code className="w-5 h-5 text-white" />}
                       </div>
-                      <h3 className="text-base sm:text-xl break-words font-bold mb-2 sm:mb-3 text-[var(--color-text)] tracking-tight">{t(service.title)}</h3>
+                      <h3 className="text-base cq-sm:text-xl break-words font-bold mb-2 cq-sm:mb-3 text-[var(--color-text)] tracking-tight">{t(service.title)}</h3>
                       {t(service.description) ? (
-                        <p className="text-[var(--color-text-muted)] text-[13px] sm:text-[15px] leading-relaxed break-words mb-4 sm:mb-5 line-clamp-3">{t(service.description)}</p>
+                        <p className="text-[var(--color-text-muted)] text-[13px] cq-sm:text-[15px] leading-relaxed break-words mb-4 cq-sm:mb-5 line-clamp-3">{t(service.description)}</p>
                       ) : null}
                       {service.features && service.features.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {service.features.slice(0, 4).map((feature: string, fi: number) => (
-                            <span key={fi} className="inline-flex items-center gap-1 rounded-md bg-[var(--color-primary)]/10 px-2 py-1 text-[11px] sm:text-xs font-semibold break-words" style={{ color: 'var(--color-primary)' }}>
+                            <span key={fi} className="inline-flex items-center gap-1 rounded-md bg-[var(--color-primary)]/10 px-2 py-1 text-[11px] cq-sm:text-xs font-semibold break-words" style={{ color: 'var(--color-primary)' }}>
                               <CheckCircle className="w-3 h-3 shrink-0" />
                               {feature}
                             </span>
                           ))}
                           {service.features.length > 4 && (
-                            <span className="inline-flex items-center px-2 py-1 text-[11px] sm:text-xs font-semibold text-[var(--color-text-muted)]">
+                            <span className="inline-flex items-center px-2 py-1 text-[11px] cq-sm:text-xs font-semibold text-[var(--color-text-muted)]">
                               +{service.features.length - 4}
                             </span>
                           )}
@@ -706,10 +750,10 @@ export function ClassicTemplate({
       case 'testimonials':
         const testimonialItems = c.items || []
         return (
-          <section id="testimonials" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
-            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+          <section id="testimonials" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <div className="mb-12 text-center">
-                <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center justify-center gap-3">
+                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center justify-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <MessageCircle className="text-[var(--color-primary)]" />}
                   {t(c.title) || (lang === 'ar' ? 'آراء العملاء' : 'Testimonials')}
                 </h2>
@@ -728,12 +772,16 @@ export function ClassicTemplate({
           </section>
         )
       case 'projects':
-        const projects = profile.projectPages || []
+        // Content pages (`showInProjects === false`) are reachable by direct
+        // link only; only card rows render in the Projects section.
+        const projects = (profile.projectPages || []).filter(
+          (p: any) => p.showInProjects !== false
+        )
         const displayMode = c.displayMode || 'grid'
         return (
-          <section id="projects" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
-            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+          <section id="projects" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Palette className="text-[var(--color-primary)]" />}
                 {t(c.title) || (lang === 'ar' ? 'المشاريع' : 'Featured Projects')}
               </h2>
@@ -741,13 +789,13 @@ export function ClassicTemplate({
               {displayMode === 'list' ? (
                 <div className="flex flex-col gap-6">
                   {projects.map((proj: any) => (
-                    <div key={proj.id} className="group flex flex-col sm:flex-row rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
+                    <div key={proj.id} className="group flex flex-col cq-sm:flex-row rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
                       {proj.coverImage ? (
-                        <div className="w-full sm:w-[300px] h-[200px] sm:h-auto shrink-0 overflow-hidden bg-[var(--color-bg)]">
-                          <img src={sanitizeUrl(proj.coverImage)} alt={proj.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <div className="w-full cq-sm:w-[300px] h-[200px] cq-sm:h-auto shrink-0 overflow-hidden bg-[var(--color-bg)]">
+                          <img src={portfolioImageUrl(sanitizeUrl(proj.coverImage), 600)} alt={proj.title} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                         </div>
                       ) : (
-                        <div className="w-full sm:w-[300px] h-[200px] sm:h-auto shrink-0 bg-[var(--color-bg)] flex items-center justify-center border-b sm:border-b-0 sm:border-r border-[var(--color-border)]">
+                        <div className="w-full cq-sm:w-[300px] h-[200px] cq-sm:h-auto shrink-0 bg-[var(--color-bg)] flex items-center justify-center border-b cq-sm:border-b-0 cq-sm:border-r border-[var(--color-border)]">
                           <Code className="h-12 w-12 text-[var(--color-border)]" />
                         </div>
                       )}
@@ -838,21 +886,21 @@ export function ClassicTemplate({
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-8">
+                <div className="grid grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8">
                   {projects.map((proj: any, pi: number) => (
                     <div key={proj.id} style={{ transitionDelay: `${Math.min(pi * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col">
                       {proj.coverImage ? (
-                        <div className="h-[120px] sm:h-[200px] w-full overflow-hidden bg-[var(--color-bg)] shrink-0">
-                          <img src={sanitizeUrl(proj.coverImage)} alt={proj.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <div className="h-[120px] cq-sm:h-[200px] w-full overflow-hidden bg-[var(--color-bg)] shrink-0">
+                          <img src={portfolioImageUrl(sanitizeUrl(proj.coverImage), 600)} alt={proj.title} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                         </div>
                       ) : (
-                        <div className="h-[120px] sm:h-[200px] w-full bg-[var(--color-bg)] flex items-center justify-center border-b border-[var(--color-border)]">
-                          <Code className="h-8 w-8 sm:h-12 sm:w-12 text-[var(--color-border)]" />
+                        <div className="h-[120px] cq-sm:h-[200px] w-full bg-[var(--color-bg)] flex items-center justify-center border-b border-[var(--color-border)]">
+                          <Code className="h-8 w-8 cq-sm:h-12 cq-sm:w-12 text-[var(--color-border)]" />
                         </div>
                       )}
-                        <div className="p-4 sm:p-6 flex flex-col flex-1 min-w-0">
-                          <h3 className="text-base sm:text-xl break-words font-bold tracking-tight text-[var(--color-text)] mb-2 sm:mb-3">{proj.title}</h3>
-                          {proj.description && <p className="text-[var(--color-text-muted)] text-[13px] sm:text-[15px] leading-relaxed break-words mb-3 sm:mb-4 line-clamp-3">{proj.description}</p>}
+                        <div className="p-4 cq-sm:p-6 flex flex-col flex-1 min-w-0">
+                          <h3 className="text-base cq-sm:text-xl break-words font-bold tracking-tight text-[var(--color-text)] mb-2 cq-sm:mb-3">{proj.title}</h3>
+                          {proj.description && <p className="text-[var(--color-text-muted)] text-[13px] cq-sm:text-[15px] leading-relaxed break-words mb-3 cq-sm:mb-4 line-clamp-3">{proj.description}</p>}
                           {proj.tags && proj.tags.length > 0 && (
                             <div className="flex flex-wrap gap-2 mb-6">
                               {proj.tags.map((tag: string, i: number) => (
@@ -944,20 +992,20 @@ export function ClassicTemplate({
         const galleryItems = Array.isArray(c.items) ? c.items : []
         if (galleryItems.length === 0) return null
         return (
-          <section id="gallery" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
-            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+          <section id="gallery" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
                 {t(c.title) || (lang === 'ar' ? 'معرض الأعمال' : 'Gallery')}
               </h2>
               {renderSectionDescription(c)}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 cq-md:grid-cols-3 gap-4">
                 {galleryItems.map((item: any, i: number) => {
                   const src = sanitizeUrl(item.imageUrl || item.url || '')
                   if (!src) return null
                   return (
                     <figure key={item.id || i} className="group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm">
-                      <img src={src} alt={t(item.caption)} loading="lazy" className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <img src={portfolioImageUrl(src, 600)} alt={t(item.caption)} loading="lazy" decoding="async" width={600} height={600} className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500" />
                       {t(item.caption) ? (
                         <figcaption className="px-4 py-3 text-sm text-[var(--color-text-muted)] break-words">{t(item.caption)}</figcaption>
                       ) : null}
@@ -973,9 +1021,9 @@ export function ClassicTemplate({
         const fileItems = Array.isArray(c.items) ? c.items.filter((f: any) => f && (f.url || f.externalUrl)) : []
         if (fileItems.length === 0) return null
         return (
-          <section id="files" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
-            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+          <section id="files" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <FileText className="h-7 w-7 text-[var(--color-primary)]" />}
                 {t(c.title) || (lang === 'ar' ? 'ملفات للتحميل' : 'Downloads')}
               </h2>
@@ -1012,9 +1060,9 @@ export function ClassicTemplate({
         const contactLinks = Array.isArray(c.links) ? c.links : []
         if (contactLinks.length === 0 && !t(c.title) && !t(c.headline) && !t(c.description)) return null
         return (
-          <section id="contact-info" key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
-            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+          <section id="contact-info" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                 {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Mail className="h-7 w-7 text-[var(--color-primary)]" />}
                 {t(c.title) || t(c.headline) || (lang === 'ar' ? 'تواصل معي' : 'Contact')}
               </h2>
@@ -1055,10 +1103,10 @@ export function ClassicTemplate({
         const paragraphs = Array.isArray(c.paragraphs) ? c.paragraphs.filter((p: any) => typeof p === 'string' && p.trim() !== '') : []
         if (!t(c.title) && paragraphs.length === 0 && !t(c.description)) return null
         return (
-          <section id={`custom-${section.id}`} key={section.id} className="py-12 md:py-[100px]" style={{ backgroundColor: sectionBg }}>
-            <div className="max-w-[1200px] mx-auto px-6 sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+          <section id={`custom-${section.id}`} key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               {t(c.title) ? (
-                <h2 className="text-2xl md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
+                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
                   {t(c.title)}
                 </h2>
@@ -1161,7 +1209,7 @@ export function ClassicTemplate({
             <footer
               id="contact"
               dir={lang === 'ar' ? 'rtl' : 'ltr'}
-              className="border-t pt-12 pb-8 sm:pt-16"
+              className="border-t pt-12 pb-8 cq-sm:pt-16"
               style={{
                 background: 'var(--color-primary)',
                 color: footerText,
@@ -1171,13 +1219,13 @@ export function ClassicTemplate({
                   : 'Inter, system-ui, -apple-system, sans-serif',
               }}
             >
-              <div className="mx-auto max-w-[1200px] px-6 sm:px-12">
+              <div className="mx-auto max-w-[1200px] px-6 cq-sm:px-12">
                 {/* ── Three columns ──────────────────────────────────────── */}
-                <div className="grid grid-cols-1 gap-10 text-center md:grid-cols-[1.5fr_1fr_1.3fr] md:gap-12 md:text-start">
+                <div className="grid grid-cols-1 gap-10 text-center cq-md:grid-cols-[1.5fr_1fr_1.3fr] cq-md:gap-12 cq-md:text-start">
 
                   {/* Column 1 · Identity */}
                   <div>
-                    <p className="break-words text-xl font-bold tracking-tight sm:text-2xl" style={{ color: footerText }}>
+                    <p className="break-words text-xl font-bold tracking-tight cq-sm:text-2xl" style={{ color: footerText }}>
                       {displayName}
                     </p>
                     {role && (
@@ -1186,17 +1234,17 @@ export function ClassicTemplate({
                       </p>
                     )}
                     {shortBio && (
-                      <p className="mx-auto mt-4 max-w-sm text-sm leading-relaxed break-words md:mx-0" style={{ color: footerMuted }}>
+                      <p className="mx-auto mt-4 max-w-sm text-sm leading-relaxed break-words cq-md:mx-0" style={{ color: footerMuted }}>
                         {shortBio}
                       </p>
                     )}
                     {footerDescription && (
-                      <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed break-words md:mx-0" style={{ color: footerMuted }}>
+                      <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed break-words cq-md:mx-0" style={{ color: footerMuted }}>
                         {footerDescription}
                       </p>
                     )}
                     {footerSocialLinks.length > 0 && (
-                      <div className="mt-5 flex flex-wrap justify-center gap-3 md:justify-start">
+                      <div className="mt-5 flex flex-wrap justify-center gap-3 cq-md:justify-start">
                         {footerSocialLinks.map((link: any, idx: number) => {
                           const platform = link.platform || link.label || 'globe'
                           const label = t(link.label) || link.platform || (lang === 'ar' ? 'رابط' : 'Link')
@@ -1267,7 +1315,7 @@ export function ClassicTemplate({
                         {subheading}
                       </p>
                     )}
-                    <ul className="mt-4 space-y-3 flex flex-col items-center md:items-start">
+                    <ul className="mt-4 space-y-3 flex flex-col items-center cq-md:items-start">
                       {emailHref && (
                         <li>
                           <a
@@ -1316,11 +1364,11 @@ export function ClassicTemplate({
 
                 {/* ── Bottom bar — always credits the owner + PortfolioHub ── */}
                 <div className="mt-12 border-t pt-5" style={{ borderTopColor: footerBorder }}>
-                  <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-between sm:gap-4">
+                  <div className="flex flex-col items-center gap-3 cq-sm:flex-row cq-sm:justify-between cq-sm:gap-4">
                     <p className="text-xs" style={{ color: footerMuted }}>
                       © {year} · {displayName}
                     </p>
-                    <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-5">
+                    <div className="flex flex-col items-center gap-2 cq-sm:flex-row cq-sm:gap-5">
                       <p className="text-xs" style={{ color: footerMuted }}>
                         © {year} · {lang === 'ar' ? 'بُني بواسطة' : 'Developed with'}{' '}
                         <a
@@ -1361,7 +1409,9 @@ export function ClassicTemplate({
 
   return (
     <>
-      <link rel="stylesheet" href={fontLink} />
+      {/* Single hoisted stylesheet request for the owner's font (was
+          requested twice: body link + client head injection). */}
+      <link rel="stylesheet" href={fontLink} precedence="portfolio-font" />
       <style dangerouslySetInnerHTML={{__html: `
         html { scroll-behavior: smooth; }
         @media (min-width: 768px) {
@@ -1373,17 +1423,21 @@ export function ClassicTemplate({
         }
       `}} />
       
-      <div className="min-h-screen w-full transition-colors duration-300" style={style}>
-        <div className="w-full min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] relative" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      <div
+        ref={rootRef}
+        className={`${preview ? 'min-h-full' : 'min-h-screen'} w-full transition-colors duration-300`}
+        style={style}
+      >
+        <div className={`w-full ${preview ? 'min-h-full' : 'min-h-screen'} bg-[var(--color-bg)] text-[var(--color-text)] relative`} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
           
           {/* Navigation Bar — desktop only (md+); mobile uses the bottom
               nav. Carries a blurred, theme-tinted background so it stays
               legible over any hero (incl. the builder's desktop preview,
               which never scrolls). */}
-          <nav className={`hidden md:block fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${isScrolled ? 'py-2.5 sm:py-3 shadow-md' : 'py-3 sm:py-5'}`} style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 88%, transparent)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderBottom: '1px solid var(--color-border)' }}>
-            <div className="max-w-[1200px] mx-auto px-4 sm:px-12">
+          <nav className={`hidden cq-md:block fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${isScrolled ? 'py-2.5 cq-sm:py-3 shadow-md' : 'py-3 cq-sm:py-5'}`} style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 88%, transparent)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderBottom: '1px solid var(--color-border)' }}>
+            <div className="max-w-[1200px] mx-auto px-4 cq-sm:px-12">
               {/* DESKTOP (md+): 3-column split — name | links | contact */}
-              <div className="hidden md:grid w-full items-center gap-6" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
+              <div className="hidden cq-md:grid w-full items-center gap-6" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
                 <a
                   href="#hero"
                   className={`justify-self-start truncate max-w-[240px] text-lg font-bold tracking-tight transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${theme === 'light' ? 'text-[var(--color-text)] hover:text-[var(--color-primary)]' : 'text-white hover:text-white/80'}`}
@@ -1391,7 +1445,7 @@ export function ClassicTemplate({
                   {displayName}
                 </a>
 
-                <ul className="justify-self-center flex items-center gap-5 lg:gap-8 font-medium">
+                <ul className="justify-self-center flex items-center gap-5 cq-lg:gap-8 font-medium">
                   {visibleSections.map((s: any) => {
                     if (s.sectionType === 'hero') return null
                     if (s.sectionType === 'skills') {
@@ -1442,7 +1496,7 @@ export function ClassicTemplate({
           </nav>
 
           {/* Floating Action Buttons */}
-          <div className="fixed bottom-20 md:bottom-6 left-6 z-50 flex flex-col items-start gap-3">
+          <div className="fixed bottom-20 cq-md:bottom-6 left-6 z-50 flex flex-col items-start gap-3">
             {showWhatsapp && (
               <a
                 href={`https://wa.me/${waDigits}`}
@@ -1478,7 +1532,7 @@ export function ClassicTemplate({
               return (
                 <section 
                   id="hero" 
-                  className="relative flex items-center justify-center min-h-[50vh] md:min-h-[62vh] overflow-hidden"
+                  className="relative flex items-center justify-center min-h-[50vh] cq-md:min-h-[62vh] overflow-hidden"
                   style={{ 
                     background: bgImage
                       ? `url("${bgImage}") center/cover no-repeat`
@@ -1493,41 +1547,41 @@ export function ClassicTemplate({
                       style={{ opacity: overlayOpacity }}
                     />
                   )}
-                  <div className="max-w-[1200px] mx-auto px-5 sm:px-12 flex flex-col items-center text-center z-10 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative">
+                  <div className="max-w-[1200px] mx-auto px-5 cq-sm:px-12 flex flex-col items-center text-center z-10 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative">
                     {/* Avatar image — desktop only (hidden on mobile) */}
                     {profile.avatarUrl ? (
-                      <div className="hidden md:block w-36 h-36 lg:w-44 lg:h-44 rounded-full overflow-hidden border-4 border-white shadow-2xl mb-6 hover:scale-105 transition-transform duration-500 bg-white shrink-0">
-                        <img src={sanitizeUrl(profile.avatarUrl)} alt={displayName} className="w-full h-full object-cover" />
+                      <div className="hidden cq-md:block w-36 h-36 cq-lg:w-44 cq-lg:h-44 rounded-full overflow-hidden border-4 border-white shadow-2xl mb-6 hover:scale-105 transition-transform duration-500 bg-white shrink-0">
+                        <img src={portfolioImageUrl(sanitizeUrl(profile.avatarUrl), 400)} alt={displayName} loading="eager" fetchPriority="high" decoding="async" className="w-full h-full object-cover" />
                       </div>
                     ) : (
-                      <div className="hidden md:flex w-36 h-36 lg:w-44 lg:h-44 rounded-full overflow-hidden border-4 border-white shadow-2xl mb-6 hover:scale-105 transition-transform duration-500 bg-white/20 backdrop-blur-md items-center justify-center text-white text-4xl lg:text-5xl font-black select-none shrink-0">
+                      <div className="hidden cq-md:flex w-36 h-36 cq-lg:w-44 cq-lg:h-44 rounded-full overflow-hidden border-4 border-white shadow-2xl mb-6 hover:scale-105 transition-transform duration-500 bg-white/20 backdrop-blur-md items-center justify-center text-white text-4xl cq-lg:text-5xl font-black select-none shrink-0">
                         {initial}
                       </div>
                     )}
-                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-2.5 sm:mb-4 text-center leading-snug whitespace-pre-line" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
+                    <h1 className="text-3xl cq-sm:text-4xl cq-md:text-5xl font-bold text-white mb-2.5 cq-sm:mb-4 text-center leading-snug whitespace-pre-line" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
                       {displayName}
                     </h1>
                     {(title || t(heroContent.subtitle)) ? (
-                      <p className="text-sm sm:text-sm md:text-base text-white/90 max-w-xl leading-relaxed mb-5 sm:mb-7 font-normal text-center">
+                      <p className="text-sm cq-sm:text-sm cq-md:text-base text-white/90 max-w-xl leading-relaxed mb-5 cq-sm:mb-7 font-normal text-center">
                         {title || t(heroContent.subtitle)}
                       </p>
                     ) : null}
                     {t(heroContent.description) && (
-                      <p className="text-xs sm:text-sm text-white/80 max-w-xl leading-relaxed mb-5 sm:mb-7 text-center">
+                      <p className="text-xs cq-sm:text-sm text-white/80 max-w-xl leading-relaxed mb-5 cq-sm:mb-7 text-center">
                         {t(heroContent.description)}
                       </p>
                     )}
-                    <div className="flex flex-wrap justify-center items-center gap-2.5 sm:gap-4" dir="rtl">
+                    <div className="flex flex-wrap justify-center items-center gap-2.5 cq-sm:gap-4" dir="rtl">
                       <a 
                         href="#projects" 
-                        className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-2 cursor-pointer min-h-[44px]"
+                        className="px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-2 cursor-pointer min-h-[44px]"
                       >
-                        <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 rtl:rotate-180" />
+                        <ArrowRight className="h-3.5 w-3.5 cq-sm:h-4 cq-sm:w-4 rtl:rotate-180" />
                         <span>{lang === 'ar' ? 'شاهد أعمالي' : 'View My Work'}</span>
                       </a>
                       <a 
                         href="#contact" 
-                        className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl border-2 border-white text-white font-bold text-sm hover:bg-white/10 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[44px] inline-flex items-center"
+                        className="px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl border-2 border-white text-white font-bold text-sm hover:bg-white/10 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[44px] inline-flex items-center"
                       >
                         <span>{lang === 'ar' ? 'تواصل معي' : 'Contact Me'}</span>
                       </a>
@@ -1559,7 +1613,7 @@ export function ClassicTemplate({
                   : 'Inter, system-ui, -apple-system, sans-serif',
               }}
             >
-              <div className="mx-auto flex max-w-[1200px] flex-col items-center gap-2 text-xs sm:flex-row sm:justify-between">
+              <div className="mx-auto flex max-w-[1200px] flex-col items-center gap-2 text-xs cq-sm:flex-row cq-sm:justify-between">
                 <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--color-bg) 78%, transparent)' }}>
                   © {new Date().getFullYear()} · {displayName}
                 </p>
@@ -1583,7 +1637,7 @@ export function ClassicTemplate({
           <PortfolioBottomNav tabs={navTabs} />
           {/* Spacer: keeps content clear of the fixed bar on mobile */}
           <div
-            className="md:hidden"
+            className="cq-md:hidden"
             style={{ height: 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
             aria-hidden="true"
           />

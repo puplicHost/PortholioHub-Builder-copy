@@ -65,7 +65,7 @@ export function PortfolioBottomNav({ tabs }: { tabs: PortfolioNavTab[] }) {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 md:hidden"
+      className="fixed bottom-0 left-0 right-0 z-40 cq-md:hidden"
       style={{
         backgroundColor: 'var(--color-primary)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
