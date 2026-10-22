@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { LandingPage, type LandingSocial } from '@/components/landing/LandingPage'
+import { HomePage } from '@/components/home/HomePage'
 import { getAppUrl } from '@/lib/urls'
 import { prisma } from '@/lib/prisma'
 import { getSettings } from '@/lib/settings'
@@ -10,34 +10,38 @@ import { getUser } from '@/lib/guards'
 export async function generateMetadata(): Promise<Metadata> {
   const base = getAppUrl()
   return {
-    title: 'PortfolioHub — ابنِ بروتفوليو احترافي في دقائق',
-    description: 'ابنِ بروتفوليو بصريًا وانشر على رابطك الخاص، بدون كود. عربي وإنجليزي.',
+    title: 'PortfolioHub — ابنِ بورتفوليو احترافي في دقائق',
+    description: 'بيلدر بورتفوليو بالعربي بالسحب والإفلات — من غير كود، من غير ديزاينر. انشر بورتفوليو على لينك واحد في دقائق.',
     alternates: {
       canonical: base,
       languages: { ar: base, en: `${base}/en`, 'x-default': base },
     },
+    icons: {
+      icon: [
+        { url: '/favicon.png', type: 'image/png' },
+        { url: '/favicon.ico', sizes: 'any' },
+      ],
+      shortcut: '/favicon.ico',
+    },
     openGraph: {
       title: 'PortfolioHub',
-      description: 'ابنِ بروتفوليو احترافي في دقائق.',
+      description: 'بورتفوليو احترافي بالعربي تعمله بنفسك — جاهز في دقائق.',
       url: base,
       siteName: 'PortfolioHub',
       type: 'website',
-      images: [{ url: `${base}/og?title=PortfolioHub&subtitle=${encodeURIComponent('ابني بورتفوليو احترافي بنفسك')}`, width: 1200, height: 630 }],
+      images: [{ url: `${base}/og?title=PortfolioHub&subtitle=${encodeURIComponent('بورتفوليو احترافي تعمله بنفسك')}`, width: 1200, height: 630 }],
       locale: 'ar_EG',
     },
     twitter: {
       card: 'summary_large_image',
       title: 'PortfolioHub',
-      description: 'ابنِ بروتفوليو احترافي في دقائق.',
-      images: [`${base}/og?title=PortfolioHub&subtitle=${encodeURIComponent('ابني بورتفوليو احترافي بنفسك')}`],
+      description: 'بورتفوليو احترافي بالعربي تعمله بنفسك — جاهز في دقائق.',
+      images: [`${base}/og?title=PortfolioHub&subtitle=${encodeURIComponent('بورتفوليو احترافي تعمله بنفسك')}`],
     },
   }
 }
 
-// Server component: reads platform settings + active plan prices and passes
-// them to the client landing shell as serializable props.
 export default async function ArabicLandingPage() {
-  // Logged-in visitors skip the marketing page and land in their builder.
   if (await getUser()) redirect('/profile/builder')
 
   const [name, plans, settings] = await Promise.all([
@@ -49,7 +53,7 @@ export default async function ArabicLandingPage() {
         select: { priceEgp: true, durationDays: true },
       })
       .catch(() => [] as Array<{ priceEgp: number; durationDays: number | null }>),
-    getSettings(['contact.whatsapp', 'contact.facebook', 'contact.instagram', 'contact.linkedin', 'contact.twitter'] as never[])
+    getSettings(['contact.whatsapp'] as never[])
       .catch(() => ({} as Record<string, unknown>)),
   ])
 
@@ -57,23 +61,12 @@ export default async function ArabicLandingPage() {
   const annual = plans.find((p) => (p.durationDays ?? 0) === 365)?.priceEgp
   const whatsapp = typeof settings['contact.whatsapp'] === 'string' ? (settings['contact.whatsapp'] as string) : ''
 
-  const socials = ([
-    { label: 'Facebook', href: settings['contact.facebook'] },
-    { label: 'Instagram', href: settings['contact.instagram'] },
-    { label: 'LinkedIn', href: settings['contact.linkedin'] },
-    { label: 'X', href: settings['contact.twitter'] },
-  ] as Array<{ label: string; href: unknown }>).filter(
-    (s): s is LandingSocial => typeof s.href === 'string' && s.href.trim() !== '',
-  )
-
   return (
-    <LandingPage
-      lang="ar"
+    <HomePage
       name={name}
       whatsapp={whatsapp}
       monthlyPrice={monthly ?? 150}
       annualPrice={annual ?? 1000}
-      socials={socials}
     />
   )
 }
