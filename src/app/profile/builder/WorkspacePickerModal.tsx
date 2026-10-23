@@ -6,8 +6,10 @@ import { X, Search, FileText, Image as ImageIcon, Loader2, LayoutList, Calendar 
 import { getAdminWorkspaceContent } from '@/lib/actions/portfolio'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { useBuilderI18n } from './i18n/BuilderI18nContext'
 
 export function WorkspacePickerModal({ onClose, onSelect }: { onClose: () => void, onSelect: (item: any) => void }) {
+  const { t } = useBuilderI18n()
   const [activeTab, setActiveTab] = useState<'strategies' | 'plans' | 'posts' | 'media' | 'external'>('strategies')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -67,10 +69,10 @@ export function WorkspacePickerModal({ onClose, onSelect }: { onClose: () => voi
       setLoading(false)
     }).catch(err => {
       console.error(err)
-      setError('Could not load workspace content. Please try again.')
+      setError(t('workspace.loadError'))
       setLoading(false)
     })
-  }, [reloadKey])
+  }, [reloadKey, t])
 
   const handleSelect = (type: string, id: string, title: string, extra?: any) => {
     onSelect({
@@ -96,7 +98,7 @@ export function WorkspacePickerModal({ onClose, onSelect }: { onClose: () => voi
     const filtered = items.filter(i => (i.title || i.name || i.filename || '').toLowerCase().includes(search.toLowerCase()))
     
     if (filtered.length === 0) {
-      return <p className="text-sm text-center py-8 text-[var(--color-text-muted)]">No items found.</p>
+      return <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">{t('empty.searchResults')}</p>
     }
 
     return (
@@ -105,7 +107,7 @@ export function WorkspacePickerModal({ onClose, onSelect }: { onClose: () => voi
           <button 
             key={item.id}
             onClick={() => handleSelect(type, item.id, item.title || item.name || item.filename, { imageUrl: item.url })}
-            className="group w-full flex items-center justify-between p-3 text-left border border-[var(--color-border)] rounded-lg hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+            className="group flex w-full items-center justify-between rounded-lg border p-3 text-start border-[var(--color-border)] rounded-lg hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
           >
             <div className="flex items-center gap-3 overflow-hidden">
               <div className="h-8 w-8 rounded bg-[var(--color-surface-secondary)] flex items-center justify-center shrink-0">
@@ -114,12 +116,12 @@ export function WorkspacePickerModal({ onClose, onSelect }: { onClose: () => voi
               <div className="truncate">
                 <p className="text-sm font-medium truncate">{item.title || item.name || item.filename}</p>
                 <p className="text-[10px] text-[var(--color-text-muted)]">
-                  {data?.workspaces?.find((w:any) => w.id === item.workspaceId)?.name || 'Workspace'}
+                  {data?.workspaces?.find((w:any) => w.id === item.workspaceId)?.name || t('workspace.workspace')}
                   {item.platform && ` • ${item.platform}`}
                 </p>
               </div>
             </div>
-            <span className="text-[10px] font-semibold text-[var(--color-primary)] opacity-0 group-hover:opacity-100">Select</span>
+            <span className="text-[10px] font-semibold text-[var(--color-primary)] opacity-0 group-hover:opacity-100">{t('workspace.select')}</span>
           </button>
         ))}
       </div>
@@ -137,39 +139,39 @@ export function WorkspacePickerModal({ onClose, onSelect }: { onClose: () => voi
         className="bg-[var(--color-surface)] rounded-xl w-full max-w-2xl max-h-[85dvh] flex flex-col shadow-2xl overflow-hidden focus:outline-none"
       >
         <div className="flex items-center justify-between p-4 border-b border-[var(--color-border)]">
-          <h2 id={titleId} className="text-lg font-semibold">Add Content to Project</h2>
+          <h2 id={titleId} className="text-lg font-semibold">{t('workspace.title')}</h2>
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t('misc.closeAria')}
             className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-1 hover:bg-[var(--color-surface-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
           >
             <X className="h-5 w-5 text-[var(--color-text-muted)]" />
           </button>
         </div>
         
-        <div role="tablist" aria-label="Content source" className="flex border-b border-[var(--color-border)]">
-          <Tab active={activeTab === 'strategies'} onClick={() => setActiveTab('strategies')}>Strategies</Tab>
-          <Tab active={activeTab === 'plans'} onClick={() => setActiveTab('plans')}>Plans</Tab>
-          <Tab active={activeTab === 'posts'} onClick={() => setActiveTab('posts')}>Posts</Tab>
-          <Tab active={activeTab === 'media'} onClick={() => setActiveTab('media')}>Media</Tab>
-          <Tab active={activeTab === 'external'} onClick={() => setActiveTab('external')}>External Link</Tab>
+        <div role="tablist" aria-label={t('workspace.source')} className="flex border-b border-[var(--color-border)]">
+          <Tab active={activeTab === 'strategies'} onClick={() => setActiveTab('strategies')}>{t('workspace.strategies')}</Tab>
+          <Tab active={activeTab === 'plans'} onClick={() => setActiveTab('plans')}>{t('workspace.plans')}</Tab>
+          <Tab active={activeTab === 'posts'} onClick={() => setActiveTab('posts')}>{t('workspace.posts')}</Tab>
+          <Tab active={activeTab === 'media'} onClick={() => setActiveTab('media')}>{t('workspace.media')}</Tab>
+          <Tab active={activeTab === 'external'} onClick={() => setActiveTab('external')}>{t('workspace.external')}</Tab>
         </div>
 
         <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
           {activeTab !== 'external' ? (
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--color-text-muted)]" />
+              <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
               <Input 
                 type="search"
-                aria-label="Search across your workspaces"
-                placeholder="Search across your workspaces..." 
+                aria-label={t('workspace.searchAria')}
+                placeholder={t('placeholder.searchWorkspaces')}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="pl-9 bg-[var(--color-surface)]"
+                className="bg-[var(--color-surface)] ps-9"
               />
             </div>
           ) : (
-            <p className="text-sm text-[var(--color-text-muted)]">Add a link to an external article, video, or website.</p>
+            <p className="text-sm text-[var(--color-text-muted)]">{t('workspace.externalHint')}</p>
           )}
         </div>
 
@@ -177,13 +179,13 @@ export function WorkspacePickerModal({ onClose, onSelect }: { onClose: () => voi
           {loading ? (
             <div role="status" className="flex flex-col items-center justify-center h-40 gap-3 text-[var(--color-text-muted)]">
               <Loader2 className="h-6 w-6 animate-spin" />
-              <p className="text-sm">Loading workspace content...</p>
+              <p className="text-sm">{t('workspace.loading')}</p>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center gap-3 py-8">
               <p role="alert" className="text-sm text-center text-[var(--color-danger)]">{error}</p>
               <Button variant="secondary" size="sm" onClick={() => { setError(null); setLoading(true); setReloadKey((k) => k + 1) }}>
-                Try again
+                {t('common.tryAgain')}
               </Button>
             </div>
           ) : (
@@ -195,15 +197,15 @@ export function WorkspacePickerModal({ onClose, onSelect }: { onClose: () => voi
               {activeTab === 'external' && (
                 <div className="space-y-4 max-w-md mx-auto py-8">
                   <div>
-                    <label htmlFor="ws-external-url" className="text-sm font-medium mb-1 block">URL</label>
-                    <Input id="ws-external-url" type="url" inputMode="url" autoComplete="off" placeholder="https://..." value={externalUrl} onChange={e => setExternalUrl(e.target.value)} />
+                    <label htmlFor="ws-external-url" className="mb-1 block text-sm font-medium">{t('common.url')}</label>
+                    <Input id="ws-external-url" type="url" inputMode="url" autoComplete="off" placeholder={t('placeholder.url')} value={externalUrl} onChange={e => setExternalUrl(e.target.value)} />
                   </div>
                   <div>
-                    <label htmlFor="ws-external-title" className="text-sm font-medium mb-1 block">Title (Optional)</label>
-                    <Input id="ws-external-title" placeholder="My Guest Post" value={externalTitle} onChange={e => setExternalTitle(e.target.value)} />
+                    <label htmlFor="ws-external-title" className="mb-1 block text-sm font-medium">{t('workspace.titleOptional')}</label>
+                    <Input id="ws-external-title" placeholder={t('placeholder.externalTitle')} value={externalTitle} onChange={e => setExternalTitle(e.target.value)} />
                   </div>
                   <Button variant="primary" className="w-full" onClick={handleAddExternal} disabled={!externalUrl}>
-                    Add Link
+                    {t('workspace.addLink')}
                   </Button>
                 </div>
               )}

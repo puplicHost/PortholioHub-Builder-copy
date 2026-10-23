@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo, useRef, type ReactNode } from 'react'
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react'
 import { tStatic } from '@/components/I18nProvider'
 
@@ -26,8 +26,16 @@ export interface Toast {
   action?: ToastAction
 }
 
+export type ToastDir = 'ltr' | 'rtl'
+
 export interface ToastContextType {
   toast: (type: ToastType, message: string, action?: ToastAction) => void
+  /**
+   * Scoped direction for the toaster. Defaults to `ltr` (app default); the
+   * builder sets it while mounted and restores it on unmount so RTL never
+   * leaks onto public pages.
+   */
+  setDir: (dir: ToastDir) => void
 }
 
 const ToastContext = createContext<ToastContextType | null>(null)
@@ -95,6 +103,7 @@ export function ToastProvider({
   duration = 3000,
 }: ToastProviderProps) {
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [dir, setDir] = useState<ToastDir>('ltr')
   const timerRefs = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   const removeToast = useCallback((id: string) => {
@@ -140,12 +149,15 @@ export function ToastProvider({
     [duration, visibleToasts, removeToast],
   )
 
+  const contextValue = useMemo(() => ({ toast, setDir }), [toast])
+
   return (
-    <ToastContext.Provider value={{ toast }}>
+    <ToastContext.Provider value={contextValue}>
       {children}
       <div
         aria-live="polite"
         aria-atomic="false"
+        dir={dir}
         className={`fixed z-50 flex flex-col gap-3 max-w-sm w-full px-4 pointer-events-none ${
           positionClasses[position] || positionClasses['top-center']
         }`}
@@ -162,7 +174,7 @@ export function ToastProvider({
               style={{ backgroundColor: t.type === 'success' ? '#16a34a' : t.type === 'error' ? '#dc2626' : t.type === 'warning' ? '#d97706' : undefined }}
             >
               <Icon className={`h-5 w-5 mt-0.5 shrink-0 ${s.icon}`} aria-hidden="true" />
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 text-start">
                 <p className={`text-sm font-medium ${s.text}`}>
                   {t.message}
                 </p>

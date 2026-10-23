@@ -2,16 +2,22 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2, Edit, Link as LinkIcon, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Edit, Link as LinkIcon, Loader2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { MediaPicker } from './MediaPicker'
 import { uploadToCloudinary } from '@/lib/cloudinary'
+import { useBuilderI18n } from './i18n/BuilderI18nContext'
+import { useConfirm } from './ui/ConfirmModal'
+import { Select } from './ui/Select'
+import { FileButton } from './ui/FileButton'
 import type { Prisma } from '@prisma/client'
 
 type ProjectPageWithItems = Prisma.ProjectPageGetPayload<{ include: { items: true } }>
 
 export function ProjectManager({ profile, updateProfile, isCardMode = false, allProjectPages = [], isFree = false }: { profile: any, updateProfile: any, isCardMode?: boolean, allProjectPages?: ProjectPageWithItems[], isFree?: boolean }) {
+  const { t } = useBuilderI18n()
+  const confirm = useConfirm()
   // Project pages come from the parent (`projectPages`, sorted by sortOrder).
   // A local `profile.projectPages` copy used to shadow this prop; it could
   // silently diverge from the sorted list the card/pages UI is built from.
@@ -27,6 +33,9 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+
+  const linkTypeLabel = (type: string) =>
+    type === 'none' ? t('project.noLink') : type === 'external' ? t('project.externalUrl') : t('project.projectPage')
 
   // ─── Card Mode (home page): manages project pages ─────────────────
   const handleAddCard = () => {
@@ -52,9 +61,15 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
     setEditingIndex(null)
   }
 
-  const handleDeleteCard = (id: string) => {
-    // Destructive + irreversible (UI/UX #9): confirm before removing.
-    if (!window.confirm('Delete this project? This cannot be undone.')) return
+  const handleDeleteCard = async (id: string) => {
+    const ok = await confirm({
+      title: t('confirm.deleteProjectTitle'),
+      message: t('confirm.deleteProjectMessage'),
+      confirmLabel: t('confirm.confirm'),
+      cancelLabel: t('confirm.cancel'),
+      destructive: true,
+    })
+    if (!ok) return
     updateProfile((p: any) => ({
       ...p,
       projectPages: p.projectPages.filter((proj: any) => proj.id !== id)
@@ -75,8 +90,7 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
     }))
   }
 
-  const handleCardCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleCardCoverUpload = async (file: File | undefined) => {
     if (!file) return
     setUploading(true)
     try {
@@ -115,14 +129,19 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
         )
       }
     })
-    // Set editing to the new item (it will have the临时 id)
     setEditingItem(newItem)
     setEditingIndex(null) // will be set after re-render via the list
   }
 
-  const handleRemoveItem = (index: number) => {
-    // Destructive + irreversible (UI/UX #9): confirm before removing.
-    if (!window.confirm('Remove this item? This cannot be undone.')) return
+  const handleRemoveItem = async (index: number) => {
+    const ok = await confirm({
+      title: t('confirm.removeItemTitle'),
+      message: t('confirm.removeItemMessage'),
+      confirmLabel: t('confirm.confirm'),
+      cancelLabel: t('confirm.cancel'),
+      destructive: true,
+    })
+    if (!ok) return
     updateProfile((p: any) => {
       const page = p.projectPages[0]
       if (!page) return p
@@ -159,8 +178,7 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
     })
   }
 
-  const handleItemCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
-    const file = e.target.files?.[0]
+  const handleItemCoverUpload = async (file: File | undefined, index: number) => {
     if (!file) return
     setUploading(true)
     try {
@@ -183,17 +201,31 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
     handleAddItem(item)
   }
 
+  const removeCardLinkedContent = async (idx: number) => {
+    const ok = await confirm({
+      title: t('confirm.removeLinkedContentTitle'),
+      message: t('confirm.removeLinkedContentMessage'),
+      confirmLabel: t('confirm.confirm'),
+      cancelLabel: t('confirm.cancel'),
+      destructive: true,
+    })
+    if (!ok) return
+    const newItems = [...(editingItem.items || [])]
+    newItems.splice(idx, 1)
+    updateEditingCard('items', newItems)
+  }
+
   // ─── Card Mode Edit Form ──────────────────────────────────────────
   if (isCardMode && editingItem) {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Edit Project Card</h3>
-          <button onClick={() => { setEditingItem(null); setEditingIndex(null) }} className="text-xs text-[var(--color-primary)] hover:underline">Back</button>
+          <h3 className="text-sm font-semibold">{t('project.editCard')}</h3>
+          <button onClick={() => { setEditingItem(null); setEditingIndex(null) }} className="text-xs text-[var(--color-primary)] hover:underline">{t('common.back')}</button>
         </div>
 
         <div>
-          <label htmlFor="pmc-title" className="text-xs text-[var(--color-text-secondary)]">Project Title</label>
+          <label htmlFor="pmc-title" className="text-xs text-[var(--color-text-secondary)]">{t('project.projectTitle')}</label>
           <Input
             id="pmc-title"
             value={editingItem.title}
@@ -203,59 +235,58 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
         </div>
 
         <div>
-          <label htmlFor="pmc-cover" className="text-xs text-[var(--color-text-secondary)]">Cover Image</label>
-          <div className="flex gap-2 mt-1">
+          <label htmlFor="pmc-cover" className="text-xs text-[var(--color-text-secondary)]">{t('project.coverImage')}</label>
+          <div className="mt-1 flex gap-2">
             <Input
               id="pmc-cover"
               type="url"
               inputMode="url"
               value={editingItem.coverImage || ''}
               onChange={e => updateEditingCard('coverImage', e.target.value)}
-              placeholder="Image URL"
+              placeholder={t('placeholder.imageUrl')}
               className="flex-1"
             />
-            <div className="relative overflow-hidden shrink-0">
-              <Button variant="secondary" className="h-9 px-3" disabled={uploading}>
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Upload'}
-              </Button>
-              <input
-                type="file"
-                accept="image/*"
-                className="absolute inset-0 opacity-0 cursor-pointer"
-                onChange={handleCardCoverUpload}
-              />
-            </div>
+            <FileButton
+              accept="image/*"
+              disabled={uploading}
+              onFiles={(files) => void handleCardCoverUpload(files?.[0])}
+              aria-label={t('common.upload')}
+              className="h-10 shrink-0 px-3 text-xs"
+            >
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {uploading ? t('common.uploading') : t('common.upload')}
+            </FileButton>
           </div>
           {editingItem.coverImage && (
-            <img src={editingItem.coverImage} alt="Cover Preview" className="mt-2 w-full h-32 rounded-md object-cover border border-[var(--color-border)]" />
+            <img src={editingItem.coverImage} alt={t('misc.coverPreview')} className="mt-2 h-32 w-full rounded-md border border-[var(--color-border)] object-cover" />
           )}
         </div>
 
         <div>
-          <label htmlFor="pmc-desc" className="text-xs font-semibold text-[var(--color-text-secondary)] mb-2 block">Description</label>
+          <label htmlFor="pmc-desc" className="mb-2 block text-xs font-semibold text-[var(--color-text-secondary)]">{t('field.description')}</label>
           <textarea
             id="pmc-desc"
             value={editingItem.description || ''}
             onChange={e => updateEditingCard('description', e.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm min-h-[120px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+            className="mt-1 min-h-[120px] w-full resize-y rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
             rows={3}
           />
         </div>
 
         <div>
-          <label htmlFor="pmc-tags" className="text-xs text-[var(--color-text-secondary)]">Tags (comma separated)</label>
+          <label htmlFor="pmc-tags" className="text-xs text-[var(--color-text-secondary)]">{t('project.tags')}</label>
           <Input
             id="pmc-tags"
             value={(editingItem.tags || []).join(', ')}
-            onChange={e => updateEditingCard('tags', e.target.value.split(',').map((t: string) => t.trim()).filter(Boolean))}
+            onChange={e => updateEditingCard('tags', e.target.value.split(',').map((tag: string) => tag.trim()).filter(Boolean))}
             className="mt-1"
-            placeholder="React, Design, Copywriting"
+            placeholder={t('placeholder.tags')}
           />
         </div>
 
-        <div className="border-t border-[var(--color-border)] pt-4 space-y-3">
-          <label id="pmc-link-label" className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-            Project Link
+        <div className="space-y-3 border-t border-[var(--color-border)] pt-4">
+          <label id="pmc-link-label" className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
+            {t('project.projectLink')}
           </label>
           <div role="group" aria-labelledby="pmc-link-label" className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
             {(['none', 'external', ...(isFree ? [] : ['page'])] as const).map((type) => (
@@ -271,13 +302,13 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
                     updateEditingCard('linkedPageSlug', '')
                   }
                 }}
-                className={`flex-1 py-1.5 text-[11px] font-semibold rounded-md transition-colors cursor-pointer ${
+                className={`flex-1 cursor-pointer rounded-md py-1.5 text-[11px] font-semibold transition-colors ${
                   (editingItem.linkType || 'none') === type
                     ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
                     : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                 }`}
               >
-                {type === 'none' ? 'No Link' : type === 'external' ? 'External URL' : 'Project Page'}
+                {linkTypeLabel(type)}
               </button>
             ))}
           </div>
@@ -285,7 +316,7 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
           {(editingItem.linkType || 'none') === 'external' && (
             <>
               <div>
-                <label htmlFor="pmc-external" className="text-xs text-[var(--color-text-secondary)]">External URL</label>
+                <label htmlFor="pmc-external" className="text-xs text-[var(--color-text-secondary)]">{t('project.externalUrl')}</label>
                 <Input
                   id="pmc-external"
                   type="url"
@@ -297,10 +328,10 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
                 />
               </div>
               <div>
-                <label htmlFor="pmc-linklabel" className="text-xs text-[var(--color-text-secondary)]">Link Label</label>
+                <label htmlFor="pmc-linklabel" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkLabel')}</label>
                 <Input
                   id="pmc-linklabel"
-                  value={editingItem.linkLabel || 'View Project'}
+                  value={editingItem.linkLabel || ''}
                   onChange={e => updateEditingCard('linkLabel', e.target.value)}
                   className="mt-1"
                   placeholder="View Project"
@@ -312,24 +343,24 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
           {(editingItem.linkType || 'none') === 'page' && (
             <>
               <div>
-                <label htmlFor="pmc-page" className="text-xs text-[var(--color-text-secondary)]">Link to Page</label>
-                <select
+                <label htmlFor="pmc-page" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkToPage')}</label>
+                <Select
                   id="pmc-page"
+                  className="mt-1"
                   value={editingItem.linkedPageSlug || ''}
-                  onChange={e => updateEditingCard('linkedPageSlug', e.target.value)}
-                  className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-                >
-                  <option value="">— Select a page —</option>
-                  {allProjectPages.map((pp: any) => (
-                    <option key={pp.id} value={pp.slug}>{pp.title || pp.slug}</option>
-                  ))}
-                </select>
+                  onChange={(value) => updateEditingCard('linkedPageSlug', value)}
+                  placeholder={t('project.selectPage')}
+                  options={allProjectPages.map((pp: any) => ({
+                    value: pp.slug,
+                    label: pp.title || pp.slug,
+                  }))}
+                />
               </div>
               <div>
-                <label htmlFor="pmc-linklabel-page" className="text-xs text-[var(--color-text-secondary)]">Link Label</label>
+                <label htmlFor="pmc-linklabel-page" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkLabel')}</label>
                 <Input
                   id="pmc-linklabel-page"
-                  value={editingItem.linkLabel || 'View Project'}
+                  value={editingItem.linkLabel || ''}
                   onChange={e => updateEditingCard('linkLabel', e.target.value)}
                   className="mt-1"
                   placeholder="View Project"
@@ -339,37 +370,32 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
           )}
         </div>
 
-        <div className="border-t border-[var(--color-border)] pt-4 space-y-3" role="group" aria-labelledby="pmc-linked-content">
+        <div className="space-y-3 border-t border-[var(--color-border)] pt-4" role="group" aria-labelledby="pmc-linked-content">
           <div className="flex items-center justify-between">
-            <label id="pmc-linked-content" className="text-xs text-[var(--color-text-secondary)]">Linked Content</label>
-            <Button size="sm" variant="secondary" onClick={() => setIsPickerOpen(true)} className="h-7 text-xs px-2">
-              <Plus className="h-3 w-3 mr-1" /> Add
+            <label id="pmc-linked-content" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkedContent')}</label>
+            <Button size="sm" variant="secondary" onClick={() => setIsPickerOpen(true)} className="h-7 px-2 text-xs">
+              <Plus className="me-1 h-3 w-3" /> {t('common.add')}
             </Button>
           </div>
           <div className="space-y-2">
             {(editingItem.items || []).map((item: any, idx: number) => (
-              <div key={idx} className="flex items-center justify-between p-2 text-xs rounded border border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
+              <div key={idx} className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-2 text-xs">
                 <div className="flex items-center gap-2 truncate">
-                  <span className="px-1.5 py-0.5 rounded bg-[var(--color-border)] text-[10px] font-medium capitalize">
-                    {item.type?.replace('workspace_', '') || 'item'}
+                  <span className="rounded bg-[var(--color-border)] px-1.5 py-0.5 text-[10px] font-medium capitalize">
+                    {item.type?.replace('workspace_', '') || t('common.item')}
                   </span>
-                  <span className="truncate">{item.title || item.workspaceItemId || item.externalUrl || 'Item'}</span>
+                  <span className="truncate">{item.title || item.workspaceItemId || item.externalUrl || t('common.item')}</span>
                 </div>
                 <button
-                  aria-label="Remove linked content"
-                  onClick={() => {
-                    if (!window.confirm('Remove this linked content?')) return
-                    const newItems = [...(editingItem.items || [])]
-                    newItems.splice(idx, 1)
-                    updateEditingCard('items', newItems)
-                  }} className="p-1.5 rounded-md text-[var(--color-danger)] hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+                  aria-label={t('project.removeLinked')}
+                  onClick={() => void removeCardLinkedContent(idx)} className="rounded-md p-1.5 text-[var(--color-danger)] hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             ))}
             {(!editingItem.items || editingItem.items.length === 0) && (
-              <p className="text-xs text-[var(--color-text-muted)] text-center py-4 border border-dashed rounded border-[var(--color-border)]">
-                No content linked yet.
+              <p className="rounded border border-dashed border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-text-muted)]">
+                {t('empty.linkedContent')}
               </p>
             )}
           </div>
@@ -388,68 +414,82 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
 
   // ─── Item Mode Edit Form (editing an item within a project page) ──
   if (!isCardMode && editingItem && editingIndex !== null) {
+    const removeItemLinkedContent = async (idx: number) => {
+      const ok = await confirm({
+        title: t('confirm.removeLinkedContentTitle'),
+        message: t('confirm.removeLinkedContentMessage'),
+        confirmLabel: t('confirm.confirm'),
+        cancelLabel: t('confirm.cancel'),
+        destructive: true,
+      })
+      if (!ok) return
+      const key = editingItem.linkedContent ? 'linkedContent' : 'items'
+      const newLc = [...(editingItem[key] || [])]
+      newLc.splice(idx, 1)
+      updateItemField(editingIndex, key, newLc)
+    }
+
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Edit Project Item</h3>
-          <button onClick={() => { setEditingItem(null); setEditingIndex(null) }} className="text-xs text-[var(--color-primary)] hover:underline">Back</button>
+          <h3 className="text-sm font-semibold">{t('project.editItem')}</h3>
+          <button onClick={() => { setEditingItem(null); setEditingIndex(null) }} className="text-xs text-[var(--color-primary)] hover:underline">{t('common.back')}</button>
         </div>
 
         <div>
-          <label htmlFor="pmi-title" className="text-xs text-[var(--color-text-secondary)]">Title</label>
+          <label htmlFor="pmi-title" className="text-xs text-[var(--color-text-secondary)]">{t('field.title')}</label>
           <Input
             id="pmi-title"
             value={editingItem.title || ''}
             onChange={e => updateItemField(editingIndex, 'title', e.target.value)}
             className="mt-1"
-            placeholder="Project title"
+            placeholder={t('placeholder.projectTitle')}
           />
         </div>
 
         <div>
-          <label htmlFor="pmi-desc" className="text-xs font-semibold text-[var(--color-text-secondary)] mb-2 block">Description</label>
+          <label htmlFor="pmi-desc" className="mb-2 block text-xs font-semibold text-[var(--color-text-secondary)]">{t('field.description')}</label>
           <textarea
             id="pmi-desc"
             value={editingItem.description || editingItem.textContent || ''}
             onChange={e => updateItemField(editingIndex, 'textContent', e.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm min-h-[120px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+            className="mt-1 min-h-[120px] w-full resize-y rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
             rows={3}
-            placeholder="Brief description of this project"
+            placeholder={t('placeholder.projectDescription')}
           />
         </div>
 
         <div>
-          <label htmlFor="pmi-image" className="text-xs text-[var(--color-text-secondary)]">Image</label>
-          <div className="flex gap-2 mt-1">
+          <label htmlFor="pmi-image" className="text-xs text-[var(--color-text-secondary)]">{t('field.image')}</label>
+          <div className="mt-1 flex gap-2">
             <Input
               id="pmi-image"
               type="url"
               inputMode="url"
               value={editingItem.imageUrl || ''}
               onChange={e => updateItemField(editingIndex, 'imageUrl', e.target.value)}
-              placeholder="Image URL"
+              placeholder={t('placeholder.imageUrl')}
               className="flex-1"
             />
-            <div className="relative overflow-hidden shrink-0">
-              <Button variant="secondary" className="h-9 px-3" disabled={uploading}>
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Upload'}
-              </Button>
-              <input
-                type="file"
-                accept="image/*"
-                className="absolute inset-0 opacity-0 cursor-pointer"
-                onChange={(e) => handleItemCoverUpload(e, editingIndex)}
-              />
-            </div>
+            <FileButton
+              accept="image/*"
+              disabled={uploading}
+              onFiles={(files) => void handleItemCoverUpload(files?.[0], editingIndex)}
+              aria-label={t('common.upload')}
+              className="h-10 shrink-0 px-3 text-xs"
+            >
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {uploading ? t('common.uploading') : t('common.upload')}
+            </FileButton>
           </div>
           {editingItem.imageUrl && (
-            <img src={editingItem.imageUrl} alt="Preview" className="mt-2 w-full h-32 rounded-md object-cover border border-[var(--color-border)]" />
+            <img src={editingItem.imageUrl} alt={t('misc.coverPreview')} className="mt-2 h-32 w-full rounded-md border border-[var(--color-border)] object-cover" />
           )}
         </div>
 
-        <div className="border-t border-[var(--color-border)] pt-4 space-y-3">
-          <label id="pmi-link-label" className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-            Link
+        <div className="space-y-3 border-t border-[var(--color-border)] pt-4">
+          <label id="pmi-link-label" className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
+            {t('project.projectLink')}
           </label>
           <div role="group" aria-labelledby="pmi-link-label" className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
             {(['none', 'external', ...(isFree ? [] : ['page'])] as const).map((type) => (
@@ -465,13 +505,13 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
                     updateItemField(editingIndex, 'linkedPageSlug', '')
                   }
                 }}
-                className={`flex-1 py-1.5 text-[11px] font-semibold rounded-md transition-colors cursor-pointer ${
+                className={`flex-1 cursor-pointer rounded-md py-1.5 text-[11px] font-semibold transition-colors ${
                   (editingItem.linkType || 'none') === type
                     ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
                     : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                 }`}
               >
-                {type === 'none' ? 'No Link' : type === 'external' ? 'External URL' : 'Project Page'}
+                {linkTypeLabel(type)}
               </button>
             ))}
           </div>
@@ -479,7 +519,7 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
           {(editingItem.linkType || 'none') === 'external' && (
             <>
               <div>
-                <label htmlFor="pmi-external" className="text-xs text-[var(--color-text-secondary)]">External URL</label>
+                <label htmlFor="pmi-external" className="text-xs text-[var(--color-text-secondary)]">{t('project.externalUrl')}</label>
                 <Input
                   id="pmi-external"
                   type="url"
@@ -491,10 +531,10 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
                 />
               </div>
               <div>
-                <label htmlFor="pmi-linklabel" className="text-xs text-[var(--color-text-secondary)]">Link Label</label>
+                <label htmlFor="pmi-linklabel" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkLabel')}</label>
                 <Input
                   id="pmi-linklabel"
-                  value={editingItem.linkLabel || 'View Project'}
+                  value={editingItem.linkLabel || ''}
                   onChange={e => updateItemField(editingIndex, 'linkLabel', e.target.value)}
                   className="mt-1"
                   placeholder="View Project"
@@ -506,24 +546,24 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
           {(editingItem.linkType || 'none') === 'page' && (
             <>
               <div>
-                <label htmlFor="pmi-page" className="text-xs text-[var(--color-text-secondary)]">Link to Page</label>
-                <select
+                <label htmlFor="pmi-page" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkToPage')}</label>
+                <Select
                   id="pmi-page"
+                  className="mt-1"
                   value={editingItem.linkedPageSlug || ''}
-                  onChange={e => updateItemField(editingIndex, 'linkedPageSlug', e.target.value)}
-                  className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-                >
-                  <option value="">— Select a page —</option>
-                  {allProjectPages.map((pp: any) => (
-                    <option key={pp.id} value={pp.slug}>{pp.title || pp.slug}</option>
-                  ))}
-                </select>
+                  onChange={(value) => updateItemField(editingIndex, 'linkedPageSlug', value)}
+                  placeholder={t('project.selectPage')}
+                  options={allProjectPages.map((pp: any) => ({
+                    value: pp.slug,
+                    label: pp.title || pp.slug,
+                  }))}
+                />
               </div>
               <div>
-                <label htmlFor="pmi-linklabel-page" className="text-xs text-[var(--color-text-secondary)]">Link Label</label>
+                <label htmlFor="pmi-linklabel-page" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkLabel')}</label>
                 <Input
                   id="pmi-linklabel-page"
-                  value={editingItem.linkLabel || 'View Project'}
+                  value={editingItem.linkLabel || ''}
                   onChange={e => updateItemField(editingIndex, 'linkLabel', e.target.value)}
                   className="mt-1"
                   placeholder="View Project"
@@ -533,38 +573,32 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
           )}
         </div>
 
-        <div className="border-t border-[var(--color-border)] pt-4 space-y-3" role="group" aria-labelledby="pmi-linked-content">
+        <div className="space-y-3 border-t border-[var(--color-border)] pt-4" role="group" aria-labelledby="pmi-linked-content">
           <div className="flex items-center justify-between">
-            <label id="pmi-linked-content" className="text-xs text-[var(--color-text-secondary)]">Linked Content</label>
-            <Button size="sm" variant="secondary" onClick={() => setIsPickerOpen(true)} className="h-7 text-xs px-2">
-              <Plus className="h-3 w-3 mr-1" /> Add
+            <label id="pmi-linked-content" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkedContent')}</label>
+            <Button size="sm" variant="secondary" onClick={() => setIsPickerOpen(true)} className="h-7 px-2 text-xs">
+              <Plus className="me-1 h-3 w-3" /> {t('common.add')}
             </Button>
           </div>
           <div className="space-y-2">
             {(editingItem.linkedContent || editingItem.items || []).map((lc: any, idx: number) => (
-              <div key={idx} className="flex items-center justify-between p-2 text-xs rounded border border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
+              <div key={idx} className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-2 text-xs">
                 <div className="flex items-center gap-2 truncate">
-                  <span className="px-1.5 py-0.5 rounded bg-[var(--color-border)] text-[10px] font-medium capitalize">
-                    {lc.type?.replace('workspace_', '') || 'item'}
+                  <span className="rounded bg-[var(--color-border)] px-1.5 py-0.5 text-[10px] font-medium capitalize">
+                    {lc.type?.replace('workspace_', '') || t('common.item')}
                   </span>
-                  <span className="truncate">{lc.title || lc.workspaceItemId || lc.externalUrl || 'Item'}</span>
+                  <span className="truncate">{lc.title || lc.workspaceItemId || lc.externalUrl || t('common.item')}</span>
                 </div>
                 <button
-                  aria-label="Remove linked content"
-                  onClick={() => {
-                    if (!window.confirm('Remove this linked content?')) return
-                    const key = editingItem.linkedContent ? 'linkedContent' : 'items'
-                    const newLc = [...(editingItem[key] || [])]
-                    newLc.splice(idx, 1)
-                    updateItemField(editingIndex, key, newLc)
-                  }} className="p-1.5 rounded-md text-[var(--color-danger)] hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+                  aria-label={t('project.removeLinked')}
+                  onClick={() => void removeItemLinkedContent(idx)} className="rounded-md p-1.5 text-[var(--color-danger)] hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             ))}
             {((!editingItem.linkedContent && !editingItem.items) || (editingItem.linkedContent?.length === 0 && editingItem.items?.length === 0)) && (
-              <p className="text-xs text-[var(--color-text-muted)] text-center py-4 border border-dashed rounded border-[var(--color-border)]">
-                No content linked yet.
+              <p className="rounded border border-dashed border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-text-muted)]">
+                {t('empty.linkedContent')}
               </p>
             )}
           </div>
@@ -591,38 +625,38 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
         // ─── Card Mode: list of project pages ────────────────────────
         <>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Projects</h3>
+            <h3 className="text-sm font-semibold">{t('project.projectsTitle')}</h3>
             <Button size="sm" variant="primary" onClick={handleAddCard} className="h-8">
-              <Plus className="h-4 w-4 mr-1" /> New Project
+              <Plus className="me-1 h-4 w-4" /> {t('actions.newProject')}
             </Button>
           </div>
 
           {isFree && (
             <p className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
-              صفحات تفاصيل المشاريع متاحة في الخطة المدفوعة فقط. يمكنك إنشاؤها وتعديلها الآن، لكنها لن تظهر للزوّار حتى الترقية.
+              {t('project.pagesFreeHint')}
             </p>
           )}
 
           <div className="space-y-3">
             {projects.map((proj: any) => (
-              <div key={proj.id} className="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+              <div key={proj.id} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
                 <div>
-                  <p className="text-sm font-medium text-[var(--color-text-primary)]">{proj.title || 'Untitled'}</p>
-                  <p className="text-[10px] text-[var(--color-text-muted)]">{proj.items?.length || 0} items linked</p>
+                  <p className="text-sm font-medium text-[var(--color-text-primary)]">{proj.title || t('common.untitled')}</p>
+                  <p className="text-[10px] text-[var(--color-text-muted)]">{t('project.itemsLinked', { count: proj.items?.length || 0 })}</p>
                 </div>
                 <div className="flex gap-1">
-                  <button aria-label="Edit project" onClick={() => { setEditingItem(proj); setEditingIndex(null) }} className="p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-surface-secondary)] rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+                  <button aria-label={t('project.editProjectAria')} onClick={() => { setEditingItem(proj); setEditingIndex(null) }} className="rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
                     <Edit className="h-4 w-4" />
                   </button>
-                  <button aria-label="Delete project" onClick={() => handleDeleteCard(proj.id)} className="p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-danger)] hover:bg-[var(--color-surface-secondary)] rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+                  <button aria-label={t('project.deleteProjectAria')} onClick={() => void handleDeleteCard(proj.id)} className="rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-danger)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>
             ))}
             {projects.length === 0 && (
-              <p className="text-xs text-[var(--color-text-muted)] text-center py-8">
-                You haven&apos;t added any projects yet.
+              <p className="py-8 text-center text-xs text-[var(--color-text-muted)]">
+                {t('empty.projects')}
               </p>
             )}
           </div>
@@ -631,48 +665,48 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
         // ─── Item Mode: list of items within the current page ────────
         <>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Page Items</h3>
+            <h3 className="text-sm font-semibold">{t('project.pageItems')}</h3>
             <Button size="sm" variant="primary" onClick={() => handleAddItem()} className="h-8">
-              <Plus className="h-4 w-4 mr-1" /> Add Item
+              <Plus className="me-1 h-4 w-4" /> {t('actions.addItem')}
             </Button>
           </div>
 
           <div className="space-y-3">
             {displayItems.map((item: any, idx: number) => (
-              <div key={item.id || idx} className="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
-                <div className="flex items-center gap-3 min-w-0">
+              <div key={item.id || idx} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                <div className="flex min-w-0 items-center gap-3">
                   {item.imageUrl ? (
-                    <img src={item.imageUrl} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                    <img src={item.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
                   ) : (
-                    <div className="w-10 h-10 rounded bg-[var(--color-surface-secondary)] flex items-center justify-center shrink-0">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-[var(--color-surface-secondary)]">
                       <LinkIcon className="h-4 w-4 text-[var(--color-text-muted)]" />
                     </div>
                   )}
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-[var(--color-text-primary)] truncate">{item.title || 'Untitled'}</p>
-                    <p className="text-[10px] text-[var(--color-text-muted)] truncate">
-                      {item.type === 'workspace_strategy' && 'Strategy'}
-                      {item.type === 'workspace_content' && 'Content'}
-                      {item.type === 'workspace_planning' && 'Planning'}
-                      {item.type === 'external' && (item.externalUrl || 'External link')}
-                      {item.type === 'page_link' && `Page: ${item.linkedPageSlug || item.externalUrl || '...'}`}
-                      {!item.type && 'Item'}
+                    <p className="truncate text-sm font-medium text-[var(--color-text-primary)]">{item.title || t('common.untitled')}</p>
+                    <p className="truncate text-[10px] text-[var(--color-text-muted)]">
+                      {item.type === 'workspace_strategy' && t('project.strategy')}
+                      {item.type === 'workspace_content' && t('project.content')}
+                      {item.type === 'workspace_planning' && t('project.planning')}
+                      {item.type === 'external' && (item.externalUrl || t('project.externalLink'))}
+                      {item.type === 'page_link' && t('project.pagePrefix', { slug: item.linkedPageSlug || item.externalUrl || '...' })}
+                      {!item.type && t('common.item')}
                     </p>
                   </div>
                 </div>
-                <div className="flex gap-1 shrink-0">
-                  <button aria-label="Edit item" onClick={() => startEditItem(item, idx)} className="p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-surface-secondary)] rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+                <div className="flex shrink-0 gap-1">
+                  <button aria-label={t('project.editItemAria')} onClick={() => startEditItem(item, idx)} className="rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
                     <Edit className="h-4 w-4" />
                   </button>
-                  <button aria-label="Delete item" onClick={() => handleRemoveItem(idx)} className="p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-danger)] hover:bg-[var(--color-surface-secondary)] rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+                  <button aria-label={t('project.deleteItemAria')} onClick={() => void handleRemoveItem(idx)} className="rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-danger)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>
             ))}
             {displayItems.length === 0 && (
-              <p className="text-xs text-[var(--color-text-muted)] text-center py-8">
-                No items on this page yet. Click &quot;Add Item&quot; to get started.
+              <p className="py-8 text-center text-xs text-[var(--color-text-muted)]">
+                {t('empty.projectPageItems')}
               </p>
             )}
           </div>

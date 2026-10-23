@@ -32,7 +32,10 @@ import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
-import { useI18n } from '@/components/I18nProvider'
+import { useBuilderI18n } from './i18n/BuilderI18nContext'
+import { useConfirm } from './ui/ConfirmModal'
+import { Select } from './ui/Select'
+import { FileButton } from './ui/FileButton'
 import { getFriendlyErrorMessage } from '@/lib/validations/error-messages'
 import { isSectionLockedForFree, stripLockedSectionsForFree } from '@/lib/free-sections'
 import { isSectionVisible, withSectionVisibility } from '@/lib/section-visibility'
@@ -73,6 +76,7 @@ const ICON_OPTIONS = [
 ] as const
 
 function IconPicker({ value, onChange }: { value?: string; onChange: (key: string | undefined) => void }) {
+  const { t } = useBuilderI18n()
   return (
     <div className="grid grid-cols-6 gap-1.5">
       {ICON_OPTIONS.map(({ key, icon: Icon }) => (
@@ -80,7 +84,7 @@ function IconPicker({ value, onChange }: { value?: string; onChange: (key: strin
           key={key}
           type="button"
           onClick={() => onChange(value === key ? undefined : key)}
-          aria-label={`Use ${key} icon`}
+          aria-label={t('misc.useIcon', { key })}
           aria-pressed={value === key}
           className={`p-1.5 rounded-md border transition-colors cursor-pointer flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
             value === key
@@ -96,9 +100,9 @@ function IconPicker({ value, onChange }: { value?: string; onChange: (key: strin
         <button
           type="button"
           onClick={() => onChange(undefined)}
-          aria-label="Clear icon"
+          aria-label={t('misc.clearIcon')}
           className="p-1.5 rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 transition-colors cursor-pointer flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-          title="Clear icon"
+          title={t('misc.clearIcon')}
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -195,7 +199,7 @@ function ProjectPagePreview({ profile, projectPage }: { profile: any; projectPag
             <div className="flex flex-col gap-6">
               {projects.map((item: any) => (
                 <div key={item.id} className="flex flex-col sm:flex-row rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm">
-                  <div className="w-full sm:w-[300px] h-[200px] sm:h-auto shrink-0 bg-[var(--color-bg)] flex items-center justify-center border-b sm:border-b-0 sm:border-r border-[var(--color-border)] overflow-hidden">
+                  <div className="w-full sm:w-[300px] h-[200px] sm:h-auto shrink-0 bg-[var(--color-bg)] flex items-center justify-center border-b sm:border-b-0 sm:border-e border-[var(--color-border)] overflow-hidden">
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt={item.title || 'Project'} className="w-full h-full object-cover" />
                     ) : (
@@ -381,6 +385,20 @@ function AddActionCard({ onClick, label, icon: Icon = Plus }: { onClick: () => v
 }
 
 function ItemCard({ children, title, subtitle, onRemove, onEdit }: { children: React.ReactNode, title?: string, subtitle?: string, onRemove?: () => void, onEdit?: () => void }) {
+  const { t } = useBuilderI18n()
+  const confirm = useConfirm()
+
+  const handleRemove = async () => {
+    const ok = await confirm({
+      title: t('confirm.removeItemTitle'),
+      message: t('confirm.removeItemMessage'),
+      confirmLabel: t('confirm.confirm'),
+      cancelLabel: t('confirm.cancel'),
+      destructive: true,
+    })
+    if (ok) onRemove?.()
+  }
+
   return (
     <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] space-y-3 relative group">
       <div className="flex items-start justify-between gap-4">
@@ -390,17 +408,14 @@ function ItemCard({ children, title, subtitle, onRemove, onEdit }: { children: R
         </div>
         <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
           {onEdit && (
-            <button aria-label="Edit item" onClick={onEdit} className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] bg-[var(--color-surface)] rounded-md border border-[var(--color-border)] shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+            <button aria-label={t('common.editItem')} onClick={onEdit} className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] bg-[var(--color-surface)] rounded-md border border-[var(--color-border)] shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
               <PenTool className="w-3.5 h-3.5" />
             </button>
           )}
           {onRemove && (
             <button
-              aria-label="Remove item"
-              onClick={() => {
-                // Destructive + irreversible (UI/UX #9): confirm before removing.
-                if (window.confirm('Remove this item? This cannot be undone.')) onRemove()
-              }}
+              aria-label={t('common.removeItem')}
+              onClick={() => void handleRemove()}
               className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] bg-[var(--color-surface)] rounded-md border border-[var(--color-border)] shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -438,6 +453,7 @@ function SortableSectionItem({
     transition,
     isDragging,
   } = useSortable({ id: sec.id })
+  const { t } = useBuilderI18n()
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -451,7 +467,7 @@ function SortableSectionItem({
       style={style}
       onClick={onSelect}
       aria-disabled={locked || undefined}
-      title={locked ? '🔒 ميزة للمشتركين فقط' : undefined}
+      title={locked ? t('sections.lockedTitle') : undefined}
       className={`group flex items-center justify-between p-2.5 rounded-lg border transition-all ${
         locked
           ? 'opacity-50 cursor-not-allowed border-transparent bg-white/40 dark:bg-white/[0.03]'
@@ -466,7 +482,7 @@ function SortableSectionItem({
     >
       <div className="flex items-center gap-2 truncate">
         {locked ? (
-          <span className="p-1 -ml-1 rounded flex items-center justify-center shrink-0" aria-hidden="true">
+          <span className="p-1 rounded flex items-center justify-center shrink-0 -ms-1" aria-hidden="true">
             <Lock className="h-3.5 w-3.5 text-[var(--color-text-muted)] shrink-0" />
           </span>
         ) : (
@@ -474,17 +490,17 @@ function SortableSectionItem({
             {...attributes}
             {...listeners}
             onClick={(e) => e.stopPropagation()}
-            aria-label="Drag to reorder"
-            className="cursor-grab active:cursor-grabbing p-1 -ml-1 rounded hover:bg-black/5 dark:hover:bg-white/10 touch-none flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-            title="Drag to reorder"
+            aria-label={t('sections.dragReorder')}
+            className="cursor-grab active:cursor-grabbing p-1 -ms-1 rounded hover:bg-black/5 dark:hover:bg-white/10 touch-none flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+            title={t('sections.dragReorder')}
           >
             <GripVertical className="h-3.5 w-3.5 text-[var(--color-text-muted)] opacity-60 group-hover:opacity-100 shrink-0" />
           </div>
         )}
-        <span className="text-xs capitalize truncate">{sec.sectionType}</span>
+        <span className="text-xs capitalize truncate">{t(`section.${sec.sectionType}`)}</span>
         {locked && (
           <span className="rounded-full bg-[#D4A017]/15 px-1.5 py-0.5 text-[9px] font-bold text-[#8a6d0b] dark:text-[#e8c547] shrink-0">
-            Pro
+            {t('sections.pro')}
           </span>
         )}
       </div>
@@ -497,12 +513,12 @@ function SortableSectionItem({
             {/* Eye visibility toggle */}
             <button
               onClick={onToggleVisibility}
-              aria-label={isVisible ? `Hide ${sec.sectionType} section` : `Show ${sec.sectionType} section`}
+              aria-label={isVisible ? t('sections.hideAria', { name: t(`section.${sec.sectionType}`) }) : t('sections.showAria', { name: t(`section.${sec.sectionType}`) })}
               aria-pressed={isVisible}
               className={`p-1 rounded hover:bg-[var(--color-surface-hover)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
                 isVisible ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-muted)] opacity-50'
               }`}
-              title={isVisible ? 'Hide Section' : 'Show Section'}
+              title={isVisible ? t('sections.hideTitle') : t('sections.showTitle')}
             >
               {isVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
             </button>
@@ -510,7 +526,7 @@ function SortableSectionItem({
             {/* Chevron */}
             <ChevronRight
               className={`h-3.5 w-3.5 text-[var(--color-text-muted)] transition-transform ${
-                isSelected ? 'rotate-90 text-[var(--color-primary)]' : ''
+                isSelected ? 'rotate-90 text-[var(--color-primary)]' : 'rtl:rotate-180'
               }`}
             />
           </>
@@ -534,68 +550,9 @@ const VALID_PROJECT_ITEM_TYPES = [
 // Locked: experience, skills, services, testimonials (+ project pages & analytics).
 // Single source of truth lives in @/lib/free-sections (also used to strip
 // locked sections from preview + public output).
-const FREE_LOCK_TOAST = '🔒 هذه الميزة متاحة للمشتركين فقط · تواصل معنا للترقية'
-
-// Builder chrome strings, localised to the active UI language. Only the
-// builder's surrounding chrome (nav / tabs / status / publish) follows the UI
+// Builder chrome strings live in ./i18n/dictionaries. Only the builder's
+// surrounding chrome (nav / tabs / status / publish) follows the builder UI
 // language; the portfolio canvas keeps its own language and direction.
-const BUILDER_LABELS = {
-  en: {
-    builderTitle: 'Portfolio Builder',
-    saveSaving: 'Saving...',
-    unsaved: 'Unsaved changes',
-    saved: 'Saved',
-    saveFailed: 'Save failed',
-    publish: 'Publish',
-    unpublish: 'Unpublish',
-    publishing: 'Publishing...',
-    unpublishing: 'Unpublishing...',
-    published: 'Published ✓',
-    unpublished: 'Unpublished ✓',
-    sections: 'Sections',
-    pages: 'Pages',
-    edit: 'Edit',
-    preview: 'Preview',
-    saveChanges: 'Save Changes',
-    savedChanges: 'Saved ✓',
-    navigation: 'Navigation',
-    openSections: 'Open sections',
-    openEditor: 'Open editor',
-    viewPreview: 'View preview',
-    goLive: 'Go Live',
-    publishAria: 'Publish portfolio',
-    unpublishAria: 'Unpublish portfolio',
-  },
-  ar: {
-    builderTitle: 'منشئ البورتفوليو',
-    saveSaving: 'جارٍ الحفظ...',
-    unsaved: 'تغييرات غير محفوظة',
-    saved: 'تم الحفظ',
-    saveFailed: 'تعذّر الحفظ',
-    publish: 'نشر',
-    unpublish: 'إلغاء النشر',
-    publishing: 'جارٍ النشر...',
-    unpublishing: 'جارٍ إلغاء النشر...',
-    published: 'تم النشر ✓',
-    unpublished: 'تم إلغاء النشر ✓',
-    sections: 'الأقسام',
-    pages: 'الصفحات',
-    edit: 'تحرير',
-    preview: 'معاينة',
-    saveChanges: 'حفظ التغييرات',
-    savedChanges: 'تم الحفظ ✓',
-    navigation: 'التنقل',
-    openSections: 'فتح الأقسام',
-    openEditor: 'فتح المحرر',
-    viewPreview: 'عرض المعاينة',
-    goLive: 'افتح الموقع',
-    publishAria: 'نشر البورتفوليو',
-    unpublishAria: 'إلغاء نشر البورتفوليو',
-  },
-} as const
-
-type BuilderLabelKey = keyof (typeof BUILDER_LABELS)['en']
-type BuilderLabels = Record<BuilderLabelKey, string>
 
 const BUILDER_DARK_KEY = 'portfoliohub-builder-dark'
 
@@ -604,8 +561,6 @@ const BUILDER_DARK_KEY = 'portfoliohub-builder-dark'
 const BUILDER_DRAFT_PREFIX = 'portfoliohub-builder-draft:'
 
 // Shown when the mobile "Go Live" button is tapped before publishing.
-const PUBLISH_NOT_READY_TOAST = 'انشر البورتفوليو أولاً'
-
 function ensureValidProjectItemTypes(projectPages: any[]) {
   if (!projectPages) return []
   return projectPages.map((proj: any) => ({
@@ -633,19 +588,18 @@ function getProfileSnapshot(p: any): string {
 
 function ProfileMenu({
   displayName,
-  lang,
-  onToggleLang,
+  onToggleLocale,
   dark,
   onToggleDark,
   onLogout,
 }: {
   displayName: string
-  lang: 'ar' | 'en'
-  onToggleLang: () => void
+  onToggleLocale: () => void
   dark: boolean
   onToggleDark: () => void
   onLogout: () => void
 }) {
+  const { locale, t } = useBuilderI18n()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -666,7 +620,7 @@ function ProfileMenu({
   }, [open])
 
   const rowClass =
-    'w-full flex items-center gap-2.5 px-3 py-2 min-h-[44px] text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)] transition-colors cursor-pointer text-left'
+    'w-full flex items-center gap-2.5 px-3 py-2 min-h-[44px] text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)] transition-colors cursor-pointer text-start'
 
   return (
     <div ref={rootRef} className="relative">
@@ -675,7 +629,7 @@ function ProfileMenu({
         aria-haspopup="menu"
         className="flex h-11 min-h-[44px] w-11 min-w-[44px] rounded-full overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-secondary)] items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] transition-colors cursor-pointer"
         title={displayName}
-        aria-label="Profile menu"
+        aria-label={t('menu.profileMenu')}
         aria-expanded={open}
       >
         <User className="h-4 w-4" />
@@ -683,22 +637,24 @@ function ProfileMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-12 z-50 w-52 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl overflow-hidden"
+          className="absolute end-0 top-12 z-50 w-52 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl overflow-hidden"
         >
           <div className="px-3 py-2.5 border-b border-[var(--color-border)]">
             <p className="text-xs font-bold truncate">{displayName}</p>
           </div>
           <button
             onClick={() => {
-              onToggleLang()
+              onToggleLocale()
               setOpen(false)
             }}
             className={rowClass}
           >
             <Languages className="h-4 w-4 text-[var(--color-text-muted)]" />
-            <span className="flex-1">{lang === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}</span>
+            <span className="flex-1">
+              {locale === 'ar' ? t('menu.switchToEnglish') : t('menu.switchToArabic')}
+            </span>
             <span className="text-[10px] font-bold uppercase text-[var(--color-text-muted)]">
-              {lang === 'ar' ? 'EN' : 'عربي'}
+              {locale === 'ar' ? 'EN' : 'عربي'}
             </span>
           </button>
           <button
@@ -713,7 +669,7 @@ function ProfileMenu({
             ) : (
               <Moon className="h-4 w-4 text-[var(--color-text-muted)]" />
             )}
-            <span className="flex-1">{dark ? 'Light mode' : 'Dark mode'}</span>
+            <span className="flex-1">{dark ? t('menu.lightMode') : t('menu.darkMode')}</span>
           </button>
           <button
             onClick={() => {
@@ -723,7 +679,7 @@ function ProfileMenu({
             className={`${rowClass} border-t border-[var(--color-border)]`}
           >
             <LogOut className="h-4 w-4 text-[var(--color-text-muted)]" />
-            <span className="flex-1">Log out</span>
+            <span className="flex-1">{t('menu.logout')}</span>
           </button>
         </div>
       )}
@@ -741,8 +697,36 @@ export function BuilderClient({
   whatsappNumber?: string
 }) {
   const { toast } = useToast()
-  const { lang, setLang } = useI18n()
-  const L: BuilderLabels = BUILDER_LABELS[lang === 'ar' ? 'ar' : 'en']
+  const { locale, dir, t, toggleLocale } = useBuilderI18n()
+  const confirm = useConfirm()
+  // Chrome labels used across the header/tabs. Kept as an object so the
+  // existing JSX stays readable; all values come from the builder dictionary.
+  const L = {
+    builderTitle: t('labels.builderTitle'),
+    saveSaving: t('labels.saveSaving'),
+    unsaved: t('labels.unsaved'),
+    saved: t('labels.saved'),
+    saveFailed: t('labels.saveFailed'),
+    publish: t('labels.publish'),
+    unpublish: t('labels.unpublish'),
+    publishing: t('labels.publishing'),
+    unpublishing: t('labels.unpublishing'),
+    published: t('labels.published'),
+    unpublished: t('labels.unpublished'),
+    sections: t('labels.sections'),
+    pages: t('labels.pages'),
+    edit: t('labels.edit'),
+    preview: t('labels.preview'),
+    saveChanges: t('labels.saveChanges'),
+    savedChanges: t('labels.savedChanges'),
+    navigation: t('labels.navigation'),
+    openSections: t('labels.openSections'),
+    openEditor: t('labels.openEditor'),
+    viewPreview: t('labels.viewPreview'),
+    goLive: t('labels.goLive'),
+    publishAria: t('labels.publishAria'),
+    unpublishAria: t('labels.unpublishAria'),
+  }
   const router = useRouter()
 
   // FREE plan = anything that is not an active/paid state. Locked features
@@ -757,15 +741,15 @@ export function BuilderClient({
     () =>
       hasWhatsapp
         ? {
-            label: 'تواصل واتساب',
+            label: t('locked.whatsappAction'),
             onClick: () => window.open(upgradeHref, '_blank', 'noopener,noreferrer'),
           }
         : undefined,
-    [hasWhatsapp, upgradeHref],
+    [hasWhatsapp, upgradeHref, t],
   )
   const showLockedToast = useCallback(() => {
-    toast('warning', FREE_LOCK_TOAST, lockedToastAction)
-  }, [toast, lockedToastAction])
+    toast('warning', t('locked.feature'), lockedToastAction)
+  }, [toast, lockedToastAction, t])
 
   const handleLogout = async () => {
     // Privacy on shared devices: never leave this user's unsaved draft behind.
@@ -939,7 +923,7 @@ export function BuilderClient({
         projectPages: d.projectPages ?? p.projectPages,
       }))
       setDraftSavedAt(typeof parsed.ts === 'number' ? parsed.ts : Date.now())
-      toast('info', 'تم استرجاع مسودتك غير المحفوظة. اضغط "حفظ التغييرات" لتثبيتها.')
+      toast('info', t('toasts.draftRestored'))
     } catch {
       try {
         window.localStorage.removeItem(draftKey)
@@ -1053,7 +1037,7 @@ export function BuilderClient({
         setSavedSnapshot(getProfileSnapshot(nextProfile))
         setSaveStatus('saved')
         backoffRef.current = 0
-        toast('success', 'Changes saved successfully!')
+        toast('success', t('toasts.saved'))
         return true
       } else if ((res as any).conflict) {
         setSaveStatus('error')
@@ -1061,13 +1045,13 @@ export function BuilderClient({
         return false
       } else {
         setSaveStatus('error')
-        toast('error', getFriendlyErrorMessage((res as any)?.code ?? res.error ?? 'SAVE_FAILED', lang))
+        toast('error', getFriendlyErrorMessage((res as any)?.code ?? res.error ?? 'SAVE_FAILED', locale))
         return false
       }
     } catch (err: any) {
       console.error('Failed to save changes', err)
       setSaveStatus('error')
-      toast('error', getFriendlyErrorMessage('NETWORK_ERROR', lang))
+      toast('error', getFriendlyErrorMessage('NETWORK_ERROR', locale))
       return false
     }
   }
@@ -1086,11 +1070,11 @@ export function BuilderClient({
       const res = await unpublishProfile()
       if (res.success) {
         setProfile((p: any) => ({ ...p, status: 'DRAFT', version: (res as any).version ?? p.version }))
-        toast('success', 'Unpublished. Your public page is now hidden.')
+        toast('success', t('toasts.unpublished'))
         setPublishState('unpublished')
         resetSoon()
       } else {
-        toast('error', getFriendlyErrorMessage((res as any)?.code ?? (res as any).error ?? 'UNPUBLISH_FAILED', lang))
+        toast('error', getFriendlyErrorMessage((res as any)?.code ?? (res as any).error ?? 'UNPUBLISH_FAILED', locale))
         setPublishState('idle')
       }
       return
@@ -1104,11 +1088,11 @@ export function BuilderClient({
     const res = await publishProfile()
     if (res.success) {
       setProfile((p: any) => ({ ...p, status: 'PUBLISHED', version: (res as any).version ?? p.version }))
-      toast('success', 'Published! Your portfolio is now live.')
+      toast('success', t('toasts.published'))
       setPublishState('published')
       resetSoon()
     } else {
-      toast('error', getFriendlyErrorMessage((res as any)?.code ?? (res as any).error ?? 'PUBLISH_FAILED', lang))
+      toast('error', getFriendlyErrorMessage((res as any)?.code ?? (res as any).error ?? 'PUBLISH_FAILED', locale))
       setPublishState('idle')
     }
   }
@@ -1118,7 +1102,7 @@ export function BuilderClient({
   // "View Live" link).
   const handleGoLive = () => {
     if (profile.status !== 'PUBLISHED' || !profile.username) {
-      toast('warning', PUBLISH_NOT_READY_TOAST)
+      toast('warning', t('toasts.publishNotReady'))
       return
     }
     setLeftDrawerOpen(false)
@@ -1155,11 +1139,11 @@ export function BuilderClient({
       setSavedSnapshot(getProfileSnapshot(fresh))
       backoffRef.current = 0
       setSaveStatus('saved')
-      toast('success', 'Reloaded the latest saved version.')
+      toast('success', t('toasts.reloaded'))
     } catch (err: any) {
       console.error('Failed to reload profile', err)
       setSaveStatus('error')
-      toast('error', getFriendlyErrorMessage('RELOAD_FAILED', lang))
+      toast('error', getFriendlyErrorMessage('RELOAD_FAILED', locale))
     }
   }
 
@@ -1352,8 +1336,8 @@ export function BuilderClient({
     updateSectionContentRaw(sectionId, field, items.filter((_: any, i: number) => i !== index))
     if (removed === undefined) return
     const same = (a: any, b: any) => (a?.id && b?.id ? a.id === b.id : a === b)
-    toast('info', 'Item removed', {
-      label: 'Undo',
+    toast('info', t('toasts.itemRemoved'), {
+      label: t('common.undo'),
       onClick: () => {
         updateProfile((p: any) => {
           const pages = [...(p.pages || [])]
@@ -1490,15 +1474,15 @@ export function BuilderClient({
           setLeftDrawerOpen(false)
           setRightSheetOpen(true)
         }
-        toast('success', 'Project page created')
-        toast('warning', 'Link this page to a project so it appears in your portfolio')
+        toast('success', t('toasts.projectPageCreated'))
+        toast('warning', t('toasts.linkPageHint'))
       } else {
         console.error('createProjectPage failed:', res.error)
-        toast('error', getFriendlyErrorMessage((res as any)?.code ?? res.error ?? 'CREATE_PAGE_FAILED', lang))
+        toast('error', getFriendlyErrorMessage((res as any)?.code ?? res.error ?? 'CREATE_PAGE_FAILED', locale))
       }
     } catch (err) {
       console.error('Failed to create project page', err)
-      toast('error', getFriendlyErrorMessage('CREATE_PAGE_FAILED', lang))
+      toast('error', getFriendlyErrorMessage('CREATE_PAGE_FAILED', locale))
     } finally {
       setCreatingProjectPage(false)
     }
@@ -1552,7 +1536,14 @@ export function BuilderClient({
 
   const handleDeleteProjectPage = async (pageId: string) => {
     // Destructive + irreversible on the server (UI/UX #9): confirm first.
-    if (!window.confirm('Delete this project page? This cannot be undone.')) return
+    const ok = await confirm({
+      title: t('confirm.deleteProjectPageTitle'),
+      message: t('confirm.deleteProjectPageMessage'),
+      confirmLabel: t('confirm.confirm'),
+      cancelLabel: t('confirm.cancel'),
+      destructive: true,
+    })
+    if (!ok) return
     try {
       const res = await deleteProjectPage(pageId)
       if (res.success) {
@@ -1563,14 +1554,14 @@ export function BuilderClient({
         if (activePage === pageId) {
           setActivePage('home')
         }
-        toast('success', 'Project page deleted')
+        toast('success', t('toasts.projectPageDeleted'))
       } else {
         console.error('deleteProjectPage failed:', res.error)
-        toast('error', getFriendlyErrorMessage((res as any)?.code ?? res.error ?? 'DELETE_PAGE_FAILED', lang))
+        toast('error', getFriendlyErrorMessage((res as any)?.code ?? res.error ?? 'DELETE_PAGE_FAILED', locale))
       }
     } catch (err) {
       console.error('Failed to delete project page', err)
-      toast('error', getFriendlyErrorMessage('DELETE_PAGE_FAILED', lang))
+      toast('error', getFriendlyErrorMessage('DELETE_PAGE_FAILED', locale))
     }
   }
 
@@ -1581,10 +1572,10 @@ export function BuilderClient({
       const pp = editingProjectPage
       return (
         <div className="space-y-6">
-          <FormCard title="Page Configuration">
+          <FormCard title={t('form.pageConfiguration')}>
             <div className="space-y-4">
               <div>
-                <label htmlFor={`pp-title-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Page Title</label>
+                <label htmlFor={`pp-title-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.pageTitle')}</label>
                 <Input
                   id={`pp-title-${pp.id}`}
                   value={pp.title || ''}
@@ -1598,21 +1589,21 @@ export function BuilderClient({
                 />
               </div>
               <div>
-                <label htmlFor={`pp-slug-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">URL Slug</label>
+                <label htmlFor={`pp-slug-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.urlSlug')}</label>
                 <div className="flex">
-                  <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-[var(--color-text-muted)] text-xs">
+                  <span className="inline-flex items-center px-3 rounded-s-md border border-e-0 border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-[var(--color-text-muted)] text-xs">
                     /u/{profile.username}/projects/
                   </span>
                   <Input
                     id={`pp-slug-${pp.id}`}
                     value={pp.slug || ''}
                     onChange={(e) => updateProjectPageField(pp.id, 'slug', e.target.value.replace(/[^a-z0-9-]/g, '').replace(/(^-|-$)/g, ''))}
-                    className="h-[44px] min-h-[44px] text-[15px] px-[12px] py-[10px] rounded-l-none flex-1"
+                    className="h-[44px] min-h-[44px] text-[15px] px-[12px] py-[10px] rounded-s-none flex-1"
                   />
                 </div>
               </div>
               <div>
-                <label htmlFor={`pp-link-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Link to Project</label>
+                <label htmlFor={`pp-link-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.linkToProject')}</label>
                 {(() => {
                   const cardRows = (projectPages || []).filter(
                     (proj: any) => proj.showInProjects !== false && proj.id !== pp.id
@@ -1623,24 +1614,23 @@ export function BuilderClient({
                   })
                   return (
                     <>
-                      <select
+                      <Select
                         id={`pp-link-${pp.id}`}
                         value={linkingCard ? linkingCard.id : ''}
-                        onChange={(e) => {
-                          if (e.target.value) linkCardToPage(e.target.value, pp.slug)
+                        onChange={(value) => {
+                          if (value) linkCardToPage(value, pp.slug)
                           else unlinkPageFromCards(pp.slug)
                         }}
-                        className="w-full min-h-[44px] h-[44px] rounded-lg border border-[var(--color-border)] bg-transparent px-[12px] text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
-                      >
-                        <option value="">Not linked to a project</option>
-                        {cardRows.map((proj: any) => (
-                          <option key={proj.id} value={proj.id}>
-                            {proj.title || proj.slug || 'Untitled'}
-                          </option>
-                        ))}
-                      </select>
+                        options={[
+                          { value: '', label: t('project.noLink') },
+                          ...cardRows.map((proj: any) => ({
+                            value: proj.id,
+                            label: proj.title || proj.slug || t('common.untitled'),
+                          })),
+                        ]}
+                      />
                       <p className="text-[11px] text-[var(--color-text-muted)] mt-1.5">
-                        Pages with no linked project are hidden from public navigation until linked.
+                        {t('misc.linkHint')}
                       </p>
                     </>
                   )
@@ -1656,15 +1646,15 @@ export function BuilderClient({
                     className="w-4 h-4 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] bg-[var(--color-surface)]"
                   />
                   <label htmlFor={`pp-card-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] cursor-pointer">
-                    Show as project card
+                    {t('misc.showAsCard')}
                   </label>
                 </div>
                 <p className="text-[11px] text-[var(--color-text-muted)] mt-1.5">
-                  When off, this page is reachable by its link but does not appear in the Projects section.
+                  {t('misc.showAsCardHint')}
                 </p>
               </div>
               <div>
-                <label htmlFor={`pp-back-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Back Button Label</label>
+                <label htmlFor={`pp-back-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.backButtonLabel')}</label>
                 <Input
                   id={`pp-back-${pp.id}`}
                   value={pp.backButtonLabel || 'Back to Portfolio'}
@@ -1675,45 +1665,41 @@ export function BuilderClient({
             </div>
           </FormCard>
 
-          <FormCard title="Page Header" subtitle="Cover image and description">
+          <FormCard title={t('form.pageHeader')} subtitle={t('form.subtitlePageHeader')}>
             <div className="space-y-4">
               <div>
-                <label htmlFor={`pp-cover-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Cover Image URL</label>
+                <label htmlFor={`pp-cover-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.coverImageUrl')}</label>
                 <div className="flex gap-2">
                   <Input
                     id={`pp-cover-${pp.id}`}
                     value={pp.coverImage || ''}
                     onChange={(e) => updateProjectPageField(pp.id, 'coverImage', e.target.value)}
                     className="flex-1 min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                    placeholder="https://..."
+                    placeholder={t('placeholder.url')}
                   />
-                  <div className="relative overflow-hidden shrink-0">
-                    <Button variant="secondary" className="h-[44px] min-h-[44px] px-4 text-sm">
-                      Upload
-                    </Button>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0]
-                        if (!file) return
-                        try {
-                          const result = await uploadToCloudinary(file)
-                          updateProjectPageField(pp.id, 'coverImage', result.url)
-                        } catch (err) {
-                          console.error(err)
-                        }
-                      }}
-                    />
-                  </div>
+                  <FileButton
+                    accept="image/*"
+                    onFiles={async (files) => {
+                      const file = files?.[0]
+                      if (!file) return
+                      try {
+                        const result = await uploadToCloudinary(file)
+                        updateProjectPageField(pp.id, 'coverImage', result.url)
+                      } catch (err) {
+                        console.error(err)
+                      }
+                    }}
+                    className="h-[44px] min-h-[44px] px-4"
+                  >
+                    {t('common.upload')}
+                  </FileButton>
                 </div>
                 {pp.coverImage && (
-                  <img src={pp.coverImage} alt="Cover Preview" className="mt-2 w-full h-28 rounded-lg object-cover border border-[var(--color-border)]" />
+                  <img src={pp.coverImage} alt={t('misc.coverPreview')} className="mt-2 w-full h-28 rounded-lg object-cover border border-[var(--color-border)]" />
                 )}
               </div>
               <div>
-                <label htmlFor={`pp-desc-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Description</label>
+                <label htmlFor={`pp-desc-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.description')}</label>
                 <textarea
                   id={`pp-desc-${pp.id}`}
                   value={pp.description || ''}
@@ -1724,10 +1710,10 @@ export function BuilderClient({
             </div>
           </FormCard>
 
-          <FormCard title="Project Items" subtitle="Manage layout and items">
+          <FormCard title={t('form.projectItems')} subtitle={t('form.subtitleProjectItems')}>
             <div className="space-y-4">
               <div>
-                <label id={`pp-display-mode-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Display Mode</label>
+                <label id={`pp-display-mode-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.displayMode')}</label>
                 <div role="group" aria-labelledby={`pp-display-mode-${pp.id}`} className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
                   <button
                     type="button"
@@ -1738,7 +1724,7 @@ export function BuilderClient({
                         : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                     }`}
                   >
-                    Grid
+                    {t('display.grid')}
                   </button>
                   <button
                     type="button"
@@ -1749,7 +1735,7 @@ export function BuilderClient({
                         : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                     }`}
                   >
-                    List
+                    {t('display.list')}
                   </button>
                 </div>
               </div>
@@ -1758,15 +1744,15 @@ export function BuilderClient({
                 {(pp.items || []).map((item: any, idx: number) => (
                   <ItemCard
                     key={item.id}
-                    title={item.title || 'New Item'}
+                    title={item.title || t('common.item')}
                     onRemove={() => {
                       const removed = (pp.items || [])[idx]
                       const newItems = [...(pp.items || [])]
                       newItems.splice(idx, 1)
                       updateProjectPageField(pp.id, 'items', newItems)
                       if (removed !== undefined) {
-                        toast('info', 'Item removed', {
-                          label: 'Undo',
+                        toast('info', t('toasts.itemRemoved'), {
+                          label: t('common.undo'),
                           onClick: () => {
                             const restored = [...newItems]
                             restored.splice(Math.max(0, Math.min(idx, restored.length)), 0, removed)
@@ -1778,7 +1764,7 @@ export function BuilderClient({
                   >
                     <div className="flex flex-col gap-4 mt-2">
                       <div>
-                        <label htmlFor={`pp-item-${item.id}-title`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Title</label>
+                        <label htmlFor={`pp-item-${item.id}-title`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.title')}</label>
                         <Input
                           id={`pp-item-${item.id}-title`}
                           value={item.title || ''}
@@ -1791,7 +1777,7 @@ export function BuilderClient({
                         />
                       </div>
                       <div>
-                        <label htmlFor={`pp-item-${item.id}-desc`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Description</label>
+                        <label htmlFor={`pp-item-${item.id}-desc`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.description')}</label>
                         <textarea
                           id={`pp-item-${item.id}-desc`}
                           value={item.textContent || ''}
@@ -1804,7 +1790,7 @@ export function BuilderClient({
                         />
                       </div>
                       <div>
-                        <label htmlFor={`pp-item-${item.id}-image`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Image URL</label>
+                        <label htmlFor={`pp-item-${item.id}-image`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('common.imageUrl')}</label>
                         <div className="flex gap-2">
                           <Input
                             id={`pp-item-${item.id}-image`}
@@ -1816,32 +1802,28 @@ export function BuilderClient({
                             }}
                             className="flex-1 min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
                           />
-                          <div className="relative overflow-hidden shrink-0">
-                            <Button variant="secondary" className="h-[44px] min-h-[44px] px-3 text-xs">
-                              Upload
-                            </Button>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="absolute inset-0 opacity-0 cursor-pointer"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0]
-                                if (!file) return
-                                try {
-                                  const result = await uploadToCloudinary(file)
-                                  const newItems = [...(pp.items || [])]
-                                  newItems[idx].imageUrl = result.url
-                                  updateProjectPageField(pp.id, 'items', newItems)
-                                } catch (err) {
-                                  console.error(err)
-                                }
-                              }}
-                            />
-                          </div>
+                          <FileButton
+                            accept="image/*"
+                            onFiles={async (files) => {
+                              const file = files?.[0]
+                              if (!file) return
+                              try {
+                                const result = await uploadToCloudinary(file)
+                                const newItems = [...(pp.items || [])]
+                                newItems[idx].imageUrl = result.url
+                                updateProjectPageField(pp.id, 'items', newItems)
+                              } catch (err) {
+                                console.error(err)
+                              }
+                            }}
+                            className="h-[44px] min-h-[44px] px-3"
+                          >
+                            {t('common.upload')}
+                          </FileButton>
                         </div>
                       </div>
                       <div>
-                        <label htmlFor={`pp-item-${item.id}-link`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">External Link</label>
+                        <label htmlFor={`pp-item-${item.id}-link`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('project.externalLink')}</label>
                         <Input
                           id={`pp-item-${item.id}-link`}
                           value={item.externalUrl || ''}
@@ -1851,7 +1833,7 @@ export function BuilderClient({
                             updateProjectPageField(pp.id, 'items', newItems)
                           }}
                           className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                          placeholder="https://..."
+                          placeholder={t('placeholder.url')}
                         />
                       </div>
                     </div>
@@ -1860,7 +1842,7 @@ export function BuilderClient({
                 
                 {(pp.items || []).length === 0 && (
                   <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-surface-secondary)]">
-                    <p className="text-xs text-[var(--color-text-muted)] font-medium">No items in this project page.</p>
+                    <p className="text-xs text-[var(--color-text-muted)] font-medium">{t('empty.projectPageItems')}</p>
                   </div>
                 )}
                 
@@ -1873,7 +1855,7 @@ export function BuilderClient({
                     }]
                     updateProjectPageField(pp.id, 'items', newItems)
                   }}
-                  label="Add Project Item"
+                  label={t('actions.addProjectItem')}
                   icon={Palette}
                 />
               </div>
@@ -1900,108 +1882,101 @@ export function BuilderClient({
       case 'hero':
         return (
           <div className="space-y-6">
-            <FormCard title="Profile Photo" subtitle="Your avatar or portrait image">
+            <FormCard title={t('form.profilePhoto')} subtitle={t('form.subtitleProfilePhoto')}>
               <div className="flex gap-2">
                 <Input
                   value={profile.avatarUrl || ''}
                   onChange={e => updateProfile((p: any) => ({ ...p, avatarUrl: e.target.value }))}
-                  placeholder="Image URL"
+                  placeholder={t('placeholder.imageUrl')}
                   className="flex-1 min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
                 />
-                <div className="relative overflow-hidden shrink-0">
-                  <Button variant="secondary" className="h-[44px] min-h-[44px] px-4 text-sm" disabled={uploadingAvatar}>
-                    {uploadingAvatar ? '...' : 'Upload'}
-                  </Button>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-                      setUploadingAvatar(true)
-                      try {
-                        const result = await uploadToCloudinary(file)
-                        updateProfile((p: any) => ({ ...p, avatarUrl: result.url }))
-                      } catch (err) {
-                        console.error(err)
-                      } finally {
-                        setUploadingAvatar(false)
-                      }
-                    }}
-                  />
-                </div>
+                <FileButton
+                  accept="image/*"
+                  disabled={uploadingAvatar}
+                  onFiles={async (files) => {
+                    const file = files?.[0]
+                    if (!file) return
+                    setUploadingAvatar(true)
+                    try {
+                      const result = await uploadToCloudinary(file)
+                      updateProfile((p: any) => ({ ...p, avatarUrl: result.url }))
+                    } catch (err) {
+                      console.error(err)
+                    } finally {
+                      setUploadingAvatar(false)
+                    }
+                  }}
+                  className="h-[44px] min-h-[44px] px-4"
+                >
+                  {uploadingAvatar ? t('common.uploading') : t('common.upload')}
+                </FileButton>
                 {profile.avatarUrl && (
                   <button
                     type="button"
                     onClick={() => updateProfile((p: any) => ({ ...p, avatarUrl: '' }))}
                     className="h-[44px] min-h-[44px] px-3 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-red-500 hover:border-red-300 dark:hover:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-900/10 text-xs font-medium transition-colors cursor-pointer shrink-0 flex items-center gap-1"
-                    title="Remove profile image"
+                    title={t('misc.removeProfileImage')}
                   >
-                    <span>✕ Remove</span>
+                    <span>✕ {t('common.remove')}</span>
                   </button>
                 )}
               </div>
               {profile.avatarUrl && (
                 <div className="mt-2 flex items-center gap-3">
-                  <img src={profile.avatarUrl} alt="Avatar Preview" className="w-16 h-16 rounded-full object-cover border border-[var(--color-border)] shadow-sm" />
+                  <img src={profile.avatarUrl} alt={t('misc.avatarPreview')} className="w-16 h-16 rounded-full object-cover border border-[var(--color-border)] shadow-sm" />
                 </div>
               )}
             </FormCard>
 
-            <FormCard title="Background Image" subtitle="Optional backdrop image with dark overlay">
+            <FormCard title={t('form.backgroundImage')} subtitle={t('form.subtitleBackgroundImage')}>
               <div className="space-y-4">
                 <div>
-                  <label htmlFor={`bg-image-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Background Image URL</label>
+                  <label htmlFor={`bg-image-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.backgroundImageUrl')}</label>
                   <div className="flex gap-2">
                     <Input
                       id={`bg-image-${selectedSection.id}`}
                       value={c.backgroundImage || ''}
                       onChange={(e) => updateSectionContentRaw(selectedSection.id, 'backgroundImage', e.target.value)}
-                      placeholder="https://..."
+                      placeholder={t('placeholder.url')}
                       className="flex-1 min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
                     />
-                    <div className="relative overflow-hidden shrink-0">
-                      <Button variant="secondary" className="h-[44px] min-h-[44px] px-4 text-sm">
-                        Upload
-                      </Button>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="absolute inset-0 opacity-0 cursor-pointer"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0]
-                          if (!file) return
-                          try {
-                            const result = await uploadToCloudinary(file)
-                            updateSectionContentRaw(selectedSection.id, 'backgroundImage', result.url)
-                          } catch (err) {
-                            console.error(err)
-                          }
-                        }}
-                      />
-                    </div>
+                    <FileButton
+                      accept="image/*"
+                      onFiles={async (files) => {
+                        const file = files?.[0]
+                        if (!file) return
+                        try {
+                          const result = await uploadToCloudinary(file)
+                          updateSectionContentRaw(selectedSection.id, 'backgroundImage', result.url)
+                        } catch (err) {
+                          console.error(err)
+                        }
+                      }}
+                      className="h-[44px] min-h-[44px] px-4"
+                    >
+                      {t('common.upload')}
+                    </FileButton>
                     {c.backgroundImage && (
                       <button
                         type="button"
                         onClick={() => updateSectionContentRaw(selectedSection.id, 'backgroundImage', '')}
                         className="h-[44px] min-h-[44px] px-3 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-red-500 hover:border-red-300 dark:hover:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-900/10 text-xs font-medium transition-colors cursor-pointer shrink-0 flex items-center gap-1"
-                        title="Remove background image"
+                        title={t('misc.removeBackground')}
                       >
-                        <span>✕ Remove</span>
+                        <span>✕ {t('common.remove')}</span>
                       </button>
                     )}
                   </div>
                   {c.backgroundImage && (
                     <div className="mt-2">
-                      <img src={c.backgroundImage} alt="Background Preview" className="w-full h-28 rounded-lg object-cover border border-[var(--color-border)] shadow-sm" />
+                      <img src={c.backgroundImage} alt={t('misc.backgroundPreview')} className="w-full h-28 rounded-lg object-cover border border-[var(--color-border)] shadow-sm" />
                     </div>
                   )}
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label htmlFor={`overlay-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)]">Overlay Opacity</label>
+                    <label htmlFor={`overlay-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t('field.overlayOpacity')}</label>
                     <span className="text-xs font-mono font-medium text-[var(--color-text-muted)]">
                       {Math.round((c.overlayOpacity !== undefined ? Number(c.overlayOpacity) : 0.5) * 100)}%
                     </span>
@@ -2017,18 +1992,18 @@ export function BuilderClient({
                     className="w-full h-2 bg-[var(--color-surface-secondary)] rounded-lg appearance-none cursor-pointer accent-[var(--color-primary)]"
                   />
                   <p className="text-[11px] text-[var(--color-text-muted)] mt-1.5">
-                    Darkens the background image to keep hero text readable.
+                    {t('misc.overlayHint')}
                   </p>
                 </div>
               </div>
             </FormCard>
 
-            <FormCard title="Hero Content" subtitle="Display Name and Job Title">
+            <FormCard title={t('form.heroContent')} subtitle={t('form.subtitleHeroContent')}>
               <div className="space-y-4">
                 <div className="space-y-3">
                   {showEn && (
                     <div>
-                      <label htmlFor={`hero-display-name-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showAr ? 'Display Name (English)' : 'Display Name'}</label>
+                      <label htmlFor={`hero-display-name-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showAr ? `${t('field.displayName')} (English)` : t('field.displayName')}</label>
                       <Input
                         id={`hero-display-name-${selectedSection.id}`}
                         value={loc.displayName?.en || profile.displayName || ''}
@@ -2044,13 +2019,13 @@ export function BuilderClient({
                           }))
                         }}
                         className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                        placeholder="e.g. John Doe"
+                        placeholder={t('placeholder.nameEn')}
                       />
                     </div>
                   )}
                   {showAr && (
                     <div dir="rtl">
-                      <label htmlFor={`hero-display-name-ar-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showEn ? 'الاسم المعروض (عربي)' : 'الاسم المعروض'}</label>
+                      <label htmlFor={`hero-display-name-ar-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showEn ? `${t('field.displayName')} (عربي)` : t('field.displayName')}</label>
                       <Input
                         id={`hero-display-name-ar-${selectedSection.id}`}
                         value={loc.displayName?.ar || profile.displayName || ''}
@@ -2074,7 +2049,7 @@ export function BuilderClient({
                 <div className="space-y-3">
                   {showEn && (
                     <div>
-                      <label htmlFor={`hero-job-title-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showAr ? 'Job Title (English)' : 'Job Title'}</label>
+                      <label htmlFor={`hero-job-title-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showAr ? `${t('field.jobTitle')} (English)` : t('field.jobTitle')}</label>
                       <Input
                         id={`hero-job-title-${selectedSection.id}`}
                         value={loc.professionalTitle?.en || c.subtitle?.en || ''}
@@ -2090,13 +2065,13 @@ export function BuilderClient({
                           updateSectionContent(selectedSection.id, 'subtitle', 'en', val)
                         }}
                         className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                        placeholder="e.g. Full Stack Developer"
+                        placeholder={t('placeholder.jobTitleEn')}
                       />
                     </div>
                   )}
                   {showAr && (
                     <div dir="rtl">
-                      <label htmlFor={`hero-job-title-ar-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showEn ? 'المسمى الوظيفي (عربي)' : 'المسمى الوظيفي'}</label>
+                      <label htmlFor={`hero-job-title-ar-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{showEn ? `${t('field.jobTitle')} (عربي)` : t('field.jobTitle')}</label>
                       <Input
                         id={`hero-job-title-ar-${selectedSection.id}`}
                         value={loc.professionalTitle?.ar || c.subtitle?.ar || ''}
@@ -2126,10 +2101,10 @@ export function BuilderClient({
         const aboutStats = c.stats || []
         return (
           <div className="space-y-6">
-            <FormCard title="Section Content" subtitle="Icon, Heading, and Biography">
+            <FormCard title={t('form.sectionContent')} subtitle={t('form.subtitleAbout')}>
               <div className="space-y-4">
                 <div role="group" aria-labelledby={`about-icon-label-${selectedSection.id}`}>
-                  <label id={`about-icon-label-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Icon</label>
+                  <label id={`about-icon-label-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.icon')}</label>
                   <IconPicker
                     value={c.icon}
                     onChange={(val) => updateSectionContentRaw(selectedSection.id, 'icon', val)}
@@ -2137,7 +2112,7 @@ export function BuilderClient({
                 </div>
                 
                 <div>
-                  <label htmlFor={`about-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Heading</label>
+                  <label htmlFor={`about-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.heading')}</label>
                   <Input
                     id={`about-heading-${selectedSection.id}`}
                     value={c.title?.en || 'About Me'}
@@ -2147,19 +2122,19 @@ export function BuilderClient({
                 </div>
 
                 <div>
-                  <label htmlFor={`about-bio-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Detailed Biography</label>
+                  <label htmlFor={`about-bio-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.detailedBiography')}</label>
                   <textarea
                     id={`about-bio-${selectedSection.id}`}
                     value={c.biography?.en !== undefined ? c.biography.en : (c.text?.en || '')}
                     onChange={(e) => updateSectionContent(selectedSection.id, 'biography', 'en', e.target.value)}
                     className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
-                    placeholder="Write your comprehensive biography..."
+                    placeholder={t('placeholder.biography')}
                   />
                 </div>
               </div>
             </FormCard>
 
-            <FormCard title="Stat Cards" subtitle="Highlight key metrics in your About section">
+            <FormCard title={t('form.statCards')} subtitle={t('form.subtitleStatCards')}>
               <div className="space-y-4">
                 {aboutStats.map((stat: any, idx: number) => (
                   <ItemCard
@@ -2167,7 +2142,7 @@ export function BuilderClient({
                     onRemove={() => removeSectionArrayItem(selectedSection.id, 'stats', aboutStats, idx)}
                   >
                     <div className="flex items-center gap-2 mb-3">
-                      <span className="text-xs text-[var(--color-text-muted)] font-medium w-10 shrink-0">Icon</span>
+                      <span className="text-xs text-[var(--color-text-muted)] font-medium w-10 shrink-0">{t('field.icon')}</span>
                       <div className="flex-1">
                         <IconPicker
                           value={stat.icon}
@@ -2181,7 +2156,7 @@ export function BuilderClient({
                     </div>
                     <div className="flex flex-col gap-3">
                       <div>
-                        <label htmlFor={`stat-${selectedSection.id}-${idx}-value`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Value</label>
+                        <label htmlFor={`stat-${selectedSection.id}-${idx}-value`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.value')}</label>
                         <Input
                           id={`stat-${selectedSection.id}-${idx}-value`}
                           value={stat.value}
@@ -2191,11 +2166,11 @@ export function BuilderClient({
                             updateSectionContentRaw(selectedSection.id, 'stats', newStats)
                           }}
                           className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                          placeholder="e.g. 50+"
+                          placeholder={t('placeholder.statValue')}
                         />
                       </div>
                       <div>
-                        <label htmlFor={`stat-${selectedSection.id}-${idx}-label`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Label</label>
+                        <label htmlFor={`stat-${selectedSection.id}-${idx}-label`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.label')}</label>
                         <Input
                           id={`stat-${selectedSection.id}-${idx}-label`}
                           value={stat.label}
@@ -2205,7 +2180,7 @@ export function BuilderClient({
                             updateSectionContentRaw(selectedSection.id, 'stats', newStats)
                           }}
                           className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                          placeholder="e.g. Projects"
+                          placeholder={t('placeholder.statLabel')}
                         />
                       </div>
                     </div>
@@ -2213,7 +2188,7 @@ export function BuilderClient({
                 ))}
                 {aboutStats.length === 0 && (
                   <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-surface-secondary)]">
-                    <p className="text-xs text-[var(--color-text-muted)] font-medium">No stats added yet.</p>
+                    <p className="text-xs text-[var(--color-text-muted)] font-medium">{t('empty.stats')}</p>
                   </div>
                 )}
                 <AddActionCard 
@@ -2221,7 +2196,7 @@ export function BuilderClient({
                     const newStats = [...aboutStats, { icon: 'trophy', value: '0', label: 'New Stat' }]
                     updateSectionContentRaw(selectedSection.id, 'stats', newStats)
                   }}
-                  label="Add Stat Card"
+                  label={t('actions.addStat')}
                 />
               </div>
             </FormCard>
@@ -2232,17 +2207,17 @@ case 'skills':
         const fallbackSkills = c.skills || []
         return (
           <div className="space-y-6">
-            <FormCard title="Section Content" subtitle="Icon and Heading">
+            <FormCard title={t('form.sectionContent')} subtitle={t('form.subtitleSkills')}>
               <div className="space-y-4">
                 <div role="group" aria-labelledby={`skills-icon-label-${selectedSection.id}`}>
-                  <label id={`skills-icon-label-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Icon</label>
+                  <label id={`skills-icon-label-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.icon')}</label>
                   <IconPicker
                     value={c.icon}
                     onChange={(val) => updateSectionContentRaw(selectedSection.id, 'icon', val)}
                   />
                 </div>
                 <div>
-                  <label htmlFor={`skills-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Heading</label>
+                  <label htmlFor={`skills-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.heading')}</label>
                   <Input
                     id={`skills-heading-${selectedSection.id}`}
                     value={c.heading?.en || 'Skills & Expertise'}
@@ -2253,7 +2228,7 @@ case 'skills':
               </div>
             </FormCard>
 
-            <FormCard title="Skill Groups" subtitle="Organize your skills into categories">
+            <FormCard title={t('form.skillGroups')} subtitle={t('form.subtitleSkillGroups')}>
               <div className="space-y-4">
                 {skillGroups.length > 0 ? skillGroups.map((group: any, gIdx: number) => (
                   <ItemCard
@@ -2261,7 +2236,7 @@ case 'skills':
                     onRemove={() => removeSectionArrayItem(selectedSection.id, 'groups', skillGroups, gIdx)}
                   >
                     <div>
-                      <label htmlFor={`skill-group-${selectedSection.id}-${gIdx}-name`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Group Name</label>
+                      <label htmlFor={`skill-group-${selectedSection.id}-${gIdx}-name`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.groupName')}</label>
                       <Input
                         id={`skill-group-${selectedSection.id}-${gIdx}-name`}
                         value={group.name}
@@ -2271,12 +2246,12 @@ case 'skills':
                           updateSectionContentRaw(selectedSection.id, 'groups', newGroups)
                         }}
                         className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px] font-semibold"
-                        placeholder="e.g. Frontend, Backend..."
+                        placeholder={t('placeholder.skills')}
                       />
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-2 mt-4">
-                        <label id={`skill-group-${selectedSection.id}-${gIdx}-skills-label`} className="text-xs font-semibold text-[var(--color-text-primary)]">Skills in Group</label>
+                        <label id={`skill-group-${selectedSection.id}-${gIdx}-skills-label`} className="text-xs font-semibold text-[var(--color-text-primary)]">{t('field.skillsInGroup')}</label>
                         <button
                           type="button"
                           onClick={() => {
@@ -2286,7 +2261,7 @@ case 'skills':
                           }}
                           className="text-xs font-semibold text-[var(--color-primary)] hover:underline cursor-pointer"
                         >
-                          + Add Skill
+                          + {t('actions.addSkill')}
                         </button>
                       </div>
                       <div className="space-y-3" role="group" aria-labelledby={`skill-group-${selectedSection.id}-${gIdx}-skills-label`}>
@@ -2299,7 +2274,7 @@ case 'skills':
                                 newGroups[gIdx].skills[sIdx].name = e.target.value
                                 updateSectionContentRaw(selectedSection.id, 'groups', newGroups)
                               }}
-                              placeholder="Skill name"
+                              placeholder={t('placeholder.skillName')}
                               className="flex-1 min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
                             />
                             <div className="relative w-24 shrink-0">
@@ -2314,9 +2289,9 @@ case 'skills':
                                   newGroups[gIdx].skills[sIdx].percentage = isNaN(val) ? 0 : val
                                   updateSectionContentRaw(selectedSection.id, 'groups', newGroups)
                                 }}
-                                className="w-full rounded-lg border border-[var(--color-border)] bg-transparent px-[12px] py-[10px] min-h-[44px] h-[44px] text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] pr-7"
+                                className="w-full rounded-lg border border-[var(--color-border)] bg-transparent px-[12px] py-[10px] min-h-[44px] h-[44px] text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] pe-7"
                               />
-                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--color-text-muted)] pointer-events-none">%</span>
+                              <span className="absolute end-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--color-text-muted)] pointer-events-none">%</span>
                             </div>
                             <button
                               type="button"
@@ -2332,18 +2307,18 @@ case 'skills':
                           </div>
                         ))}
                         {(!group.skills || group.skills.length === 0) && (
-                          <div className="text-center py-3 bg-[var(--color-surface-secondary)] rounded-lg text-xs text-[var(--color-text-muted)]">No skills in this group</div>
+                          <div className="text-center py-3 bg-[var(--color-surface-secondary)] rounded-lg text-xs text-[var(--color-text-muted)]">{t('empty.skillsInGroup')}</div>
                         )}
                       </div>
                     </div>
                   </ItemCard>
                 )) : fallbackSkills.length > 0 ? (
                   <div className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-xl text-sm text-amber-800 dark:text-amber-500">
-                    Your profile has legacy skills format. Click &quot;Add Skill Group&quot; to migrate to the new structure.
+                    {t('misc.legacySkills')}
                   </div>
                 ) : (
                   <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-surface-secondary)]">
-                    <p className="text-xs text-[var(--color-text-muted)] font-medium">No skill groups added yet.</p>
+                    <p className="text-xs text-[var(--color-text-muted)] font-medium">{t('empty.skillGroups')}</p>
                   </div>
                 )}
                 
@@ -2352,7 +2327,7 @@ case 'skills':
                     const newGroups = [...skillGroups, { name: 'New Group', skills: [] }]
                     updateSectionContentRaw(selectedSection.id, 'groups', newGroups)
                   }}
-                  label="Add Skill Group"
+                  label={t('actions.addSkillGroup')}
                   icon={Layers}
                 />
               </div>
@@ -2373,11 +2348,11 @@ case 'skills':
         }
         return (
           <div className="space-y-6">
-            <FormCard title="Section Settings" subtitle="Display mode and icon">
+            <FormCard title={t('form.sectionSettings')} subtitle={t('form.subtitleSectionSettings')}>
               <div className="space-y-4">
                 <div>
                   <label id={`exp-display-mode-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
-                    Display Mode
+                    {t('field.displayMode')}
                   </label>
                   <div role="group" aria-labelledby={`exp-display-mode-${selectedSection.id}`} className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
                     {['timeline', 'grid', 'list'].map((mode) => (
@@ -2391,7 +2366,7 @@ case 'skills':
                             : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
                         }`}
                       >
-                        {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                        {t(`display.${mode}`)}
                       </button>
                     ))}
                   </div>
@@ -2399,7 +2374,7 @@ case 'skills':
 
                 <div role="group" aria-labelledby={`exp-section-icon-label-${selectedSection.id}`}>
                   <label id={`exp-section-icon-label-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
-                    Section Icon
+                    {t('field.sectionIcon')}
                   </label>
                   <IconPicker
                     value={c.icon}
@@ -2409,10 +2384,10 @@ case 'skills':
               </div>
             </FormCard>
 
-            <FormCard title="Section Content" subtitle="Heading and Description">
+            <FormCard title={t('form.sectionContent')} subtitle={t('form.subtitleExperience')}>
               <div className="space-y-4">
                 <div>
-                  <label htmlFor={`exp-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Heading</label>
+                  <label htmlFor={`exp-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.heading')}</label>
                   <Input
                     id={`exp-heading-${selectedSection.id}`}
                     value={c.heading?.en || 'Work Experience'}
@@ -2422,7 +2397,7 @@ case 'skills':
                 </div>
 
                 <div>
-                  <label htmlFor={`exp-desc-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Description (Optional)</label>
+                  <label htmlFor={`exp-desc-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.descriptionOptional')}</label>
                   <textarea
                     id={`exp-desc-${selectedSection.id}`}
                     value={c.description?.en || ''}
@@ -2433,7 +2408,7 @@ case 'skills':
               </div>
             </FormCard>
 
-            <FormCard title="Experience Items" subtitle="Your work history">
+            <FormCard title={t('form.experienceItems')} subtitle={t('form.subtitleExperienceItems')}>
               <div className="space-y-4">
                 {experienceItems.map((item: any, idx: number) => (
                   <ItemCard
@@ -2445,7 +2420,7 @@ case 'skills':
                       <div className="flex flex-col gap-4 mt-3">
                         <BiField
                           idBase={`exp-${item.id}-job`}
-                          label="Job Title"
+                          label={t('field.jobTitle')}
                           value={item.jobTitle}
                           showEn={showEn}
                           showAr={showAr}
@@ -2453,14 +2428,14 @@ case 'skills':
                         />
                         <BiField
                           idBase={`exp-${item.id}-company`}
-                          label="Company Name"
+                          label={t('field.companyName')}
                           value={item.companyName}
                           showEn={showEn}
                           showAr={showAr}
                           onChange={(l, v) => setExpField(idx, 'companyName', l, v)}
                         />
                       <div>
-                        <label htmlFor={`exp-${item.id}-logo`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Company Logo URL</label>
+                        <label htmlFor={`exp-${item.id}-logo`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.companyLogoUrl')}</label>
                         <div className="flex gap-2">
                           <Input
                             id={`exp-${item.id}-logo`}
@@ -2471,35 +2446,31 @@ case 'skills':
                               updateSectionContentRaw(selectedSection.id, 'items', newItems)
                             }}
                             className="flex-1 min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                            placeholder="https://..."
+                            placeholder={t('placeholder.url')}
                           />
-                          <div className="relative overflow-hidden shrink-0">
-                            <Button variant="secondary" className="h-[44px] min-h-[44px] px-3 text-xs">
-                              Upload
-                            </Button>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="absolute inset-0 opacity-0 cursor-pointer"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0]
-                                if (!file) return
-                                try {
-                                  const result = await uploadToCloudinary(file)
-                                  const newItems = [...experienceItems]
-                                  newItems[idx].companyLogo = result.url
-                                  updateSectionContentRaw(selectedSection.id, 'items', newItems)
-                                } catch (err) {
-                                  console.error(err)
-                                }
-                              }}
-                            />
-                          </div>
+                          <FileButton
+                            accept="image/*"
+                            onFiles={async (files) => {
+                              const file = files?.[0]
+                              if (!file) return
+                              try {
+                                const result = await uploadToCloudinary(file)
+                                const newItems = [...experienceItems]
+                                newItems[idx].companyLogo = result.url
+                                updateSectionContentRaw(selectedSection.id, 'items', newItems)
+                              } catch (err) {
+                                console.error(err)
+                              }
+                            }}
+                            className="h-[44px] min-h-[44px] px-3"
+                          >
+                            {t('common.upload')}
+                          </FileButton>
                         </div>
                       </div>
                       
                       <div>
-                        <label htmlFor={`exp-${item.id}-start`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Start Date</label>
+                        <label htmlFor={`exp-${item.id}-start`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.startDate')}</label>
                         <input
                           id={`exp-${item.id}-start`}
                           type="month"
@@ -2513,7 +2484,7 @@ case 'skills':
                         />
                       </div>
                       <div>
-                        <label htmlFor={`exp-${item.id}-end`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">End Date</label>
+                        <label htmlFor={`exp-${item.id}-end`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.endDate')}</label>
                         <input
                           id={`exp-${item.id}-end`}
                           type="month"
@@ -2540,42 +2511,42 @@ case 'skills':
                             id={`current-${item.id}`}
                           />
                           <label htmlFor={`current-${item.id}`} className="text-xs font-medium text-[var(--color-text-secondary)] cursor-pointer">
-                            Currently working here
+                            {t('misc.currentlyWorking')}
                           </label>
                         </div>
                       </div>
 
                       <BiField
                         idBase={`exp-${item.id}-location`}
-                        label="Location"
+                        label={t('field.location')}
                         value={item.location}
                         showEn={showEn}
                         showAr={showAr}
                         onChange={(l, v) => setExpField(idx, 'location', l, v)}
-                        placeholderEn="e.g. London, UK"
-                        placeholderAr="مثال: القاهرة، مصر"
+                        placeholderEn={t('placeholder.locationEn')}
+                        placeholderAr={t('placeholder.locationAr')}
                       />
                       <div>
-                        <label htmlFor={`exp-${item.id}-mode`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Work Mode</label>
-                        <select
+                        <label htmlFor={`exp-${item.id}-mode`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.workMode')}</label>
+                        <Select
                           id={`exp-${item.id}-mode`}
                           value={item.workMode || ''}
-                          onChange={(e) => {
+                          onChange={(value) => {
                             const newItems = [...experienceItems]
-                            newItems[idx].workMode = e.target.value
+                            newItems[idx].workMode = value
                             updateSectionContentRaw(selectedSection.id, 'items', newItems)
                           }}
-                          className="w-full min-h-[44px] h-[44px] rounded-lg border border-[var(--color-border)] bg-transparent px-[12px] py-[10px] text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
-                        >
-                          <option value="">Select Mode</option>
-                          <option value="Remote">Remote</option>
-                          <option value="Hybrid">Hybrid</option>
-                          <option value="On-site">On-site</option>
-                        </select>
+                          placeholder={t('common.select')}
+                          options={[
+                            { value: 'Remote', label: t('display.remote') },
+                            { value: 'Hybrid', label: t('display.hybrid') },
+                            { value: 'On-site', label: t('display.onsite') },
+                          ]}
+                        />
                       </div>
 
                       <div>
-                        <label htmlFor={`exp-${item.id}-desc`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Description (Bullets)</label>
+                        <label htmlFor={`exp-${item.id}-desc`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.descriptionBullets')}</label>
                         <textarea
                           id={`exp-${item.id}-desc`}
                           value={item.description || ''}
@@ -2585,7 +2556,7 @@ case 'skills':
                             updateSectionContentRaw(selectedSection.id, 'items', newItems)
                           }}
                           className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
-                          placeholder="Enter each achievement on a new line..."
+                          placeholder={t('placeholder.experienceBullets')}
                         />
                       </div>
                     </div>
@@ -2594,7 +2565,7 @@ case 'skills':
                 
                 {experienceItems.length === 0 && (
                   <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-surface-secondary)]">
-                    <p className="text-xs text-[var(--color-text-muted)] font-medium">No experience added yet.</p>
+                    <p className="text-xs text-[var(--color-text-muted)] font-medium">{t('empty.experience')}</p>
                   </div>
                 )}
                 
@@ -2608,7 +2579,7 @@ case 'skills':
                     }]
                     updateSectionContentRaw(selectedSection.id, 'items', newItems)
                   }}
-                  label="Add Experience"
+                  label={t('actions.addExperience')}
                   icon={Briefcase}
                 />
               </div>
@@ -2626,11 +2597,11 @@ case 'skills':
         }
         return (
           <div className="space-y-6">
-            <FormCard title="Section Content" subtitle="Icon, Heading, and Description">
+            <FormCard title={t('form.sectionContent')} subtitle={t('form.subtitleServices')}>
               <div className="space-y-4">
                 <div role="group" aria-labelledby={`services-icon-label-${selectedSection.id}`}>
                   <label id={`services-icon-label-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
-                    Section Icon
+                    {t('field.sectionIcon')}
                   </label>
                   <IconPicker
                     value={c.icon}
@@ -2640,7 +2611,7 @@ case 'skills':
 
                 <div>
                   <label htmlFor={`services-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
-                    Section Heading
+                    {t('field.sectionHeading')}
                   </label>
                   <Input
                     id={`services-heading-${selectedSection.id}`}
@@ -2652,20 +2623,20 @@ case 'skills':
 
                 <div>
                   <label htmlFor={`services-desc-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
-                    Section Description
+                    {t('field.sectionDescription')}
                   </label>
                   <textarea
                     id={`services-desc-${selectedSection.id}`}
                     value={c.description?.en || ''}
                     onChange={(e) => updateSectionContent(selectedSection.id, 'description', 'en', e.target.value)}
                     className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-                    placeholder="Brief description of your services..."
+                    placeholder={t('placeholder.serviceDescription')}
                   />
                 </div>
               </div>
             </FormCard>
 
-            <FormCard title="Services List" subtitle="What you offer">
+            <FormCard title={t('form.servicesList')} subtitle={t('form.subtitleServicesList')}>
               <div className="space-y-4">
                 {services.map((service: any, idx: number) => (
                   <ItemCard
@@ -2675,7 +2646,7 @@ case 'skills':
                   >
                     <div className="flex flex-col gap-4 mt-2">
                       <div role="group" aria-labelledby={`service-${idx}-icon-label`}>
-                        <label id={`service-${idx}-icon-label`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Service Icon</label>
+                        <label id={`service-${idx}-icon-label`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.serviceIcon')}</label>
                         <IconPicker
                           value={service.icon}
                           onChange={(val) => {
@@ -2687,28 +2658,28 @@ case 'skills':
                       </div>
                       <BiField
                         idBase={`service-${idx}-title`}
-                        label="Service Title"
+                        label={t('field.serviceTitle')}
                         value={service.title}
                         showEn={showEn}
                         showAr={showAr}
                         onChange={(l, v) => setServiceField(idx, 'title', l, v)}
-                        placeholderEn="Service title"
-                        placeholderAr="عنوان الخدمة"
+                        placeholderEn={t('placeholder.serviceTitleEn')}
+                        placeholderAr={t('placeholder.serviceTitleAr')}
                       />
                       <BiField
                         idBase={`service-${idx}-desc`}
-                        label="Service Description"
+                        label={t('field.serviceDescription')}
                         value={service.description}
                         showEn={showEn}
                         showAr={showAr}
                         multiline
                         onChange={(l, v) => setServiceField(idx, 'description', l, v)}
-                        placeholderEn="Short description"
-                        placeholderAr="وصف مختصر"
+                        placeholderEn={t('placeholder.serviceDescEn')}
+                        placeholderAr={t('placeholder.serviceDescAr')}
                       />
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <label id={`service-${idx}-features-label`} className="text-xs font-semibold text-[var(--color-text-primary)]">Features</label>
+                          <label id={`service-${idx}-features-label`} className="text-xs font-semibold text-[var(--color-text-primary)]">{t('field.features')}</label>
                           <button
                             type="button"
                             onClick={() => {
@@ -2719,7 +2690,7 @@ case 'skills':
                             }}
                             className="text-xs text-[var(--color-primary)] hover:underline cursor-pointer font-medium"
                           >
-                            + Add Feature
+                            + {t('actions.addFeature')}
                           </button>
                         </div>
                       <div className="space-y-3" role="group" aria-labelledby={`service-${idx}-features-label`}>
@@ -2734,21 +2705,28 @@ case 'skills':
                                   newServices[idx] = { ...newServices[idx], features }
                                   updateSectionContentRaw(selectedSection.id, 'services', newServices)
                                 }}
-                                placeholder="Feature text"
+                                placeholder={t('placeholder.featureText')}
                                 className="flex-1 min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
                               />
                               <button
                                 type="button"
-                                aria-label="Remove feature"
-                                onClick={() => {
-                                  if (!window.confirm('Remove this feature?')) return
+                                aria-label={t('common.removeFeature')}
+                                onClick={async () => {
+                                  const ok = await confirm({
+                                    title: t('confirm.removeFeatureTitle'),
+                                    message: t('confirm.removeFeatureMessage'),
+                                    confirmLabel: t('confirm.confirm'),
+                                    cancelLabel: t('confirm.cancel'),
+                                    destructive: true,
+                                  })
+                                  if (!ok) return
                                   const newServices = [...services]
                                   const features = (newServices[idx].features || []).filter((_: any, i: number) => i !== fi)
                                   newServices[idx] = { ...newServices[idx], features }
                                   updateSectionContentRaw(selectedSection.id, 'services', newServices)
                                 }}
                                 className="p-2 text-[var(--color-danger)] hover:opacity-80 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] rounded-md"
-                                title="Remove feature"
+                                title={t('common.removeFeature')}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -2762,7 +2740,7 @@ case 'skills':
                 
                 {services.length === 0 && (
                   <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-surface-secondary)]">
-                    <p className="text-xs text-[var(--color-text-muted)] font-medium">No services added yet.</p>
+                    <p className="text-xs text-[var(--color-text-muted)] font-medium">{t('empty.services')}</p>
                   </div>
                 )}
                 
@@ -2771,7 +2749,7 @@ case 'skills':
                     const newServices = [...services, { icon: 'code', title: 'New Service', description: '', features: [] }]
                     updateSectionContentRaw(selectedSection.id, 'services', newServices)
                   }}
-                  label="Add Service"
+                  label={t('actions.addService')}
                   icon={Briefcase}
                 />
               </div>
@@ -2783,11 +2761,11 @@ case 'skills':
         const displayMode = c.displayMode || 'grid'
         return (
           <div className="space-y-6">
-            <FormCard title="Section Settings" subtitle="Display mode and icon">
+            <FormCard title={t('form.sectionSettings')} subtitle={t('form.subtitleSectionSettings')}>
               <div className="space-y-4">
                 <div>
                   <label id={`projects-display-mode-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
-                    Display Mode
+                    {t('field.displayMode')}
                   </label>
                   <div role="group" aria-labelledby={`projects-display-mode-${selectedSection.id}`} className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
                     <button
@@ -2817,7 +2795,7 @@ case 'skills':
 
                 <div role="group" aria-labelledby={`projects-icon-label-${selectedSection.id}`}>
                   <label id={`projects-icon-label-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
-                    Section Icon
+                    {t('field.sectionIcon')}
                   </label>
                   <IconPicker
                     value={c.icon}
@@ -2827,9 +2805,9 @@ case 'skills':
               </div>
             </FormCard>
 
-            <FormCard title="Section Content" subtitle="Heading">
+            <FormCard title={t('form.sectionContent')} subtitle={t('form.subtitleProjects')}>
               <div>
-                <label htmlFor={`projects-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Section Heading</label>
+                <label htmlFor={`projects-heading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.sectionHeading')}</label>
                 <Input
                   id={`projects-heading-${selectedSection.id}`}
                   value={c.title?.en || 'Featured Projects'}
@@ -2839,7 +2817,7 @@ case 'skills':
               </div>
             </FormCard>
 
-            <FormCard title="Project Cards" subtitle="Manage portfolio projects">
+            <FormCard title={t('form.projectCards')} subtitle={t('form.subtitleProjectCards')}>
               <ProjectManager profile={profile} updateProfile={updateProfile} isCardMode={true} allProjectPages={projectPages} isFree={isFreePlan} />
             </FormCard>
           </div>
@@ -2849,57 +2827,58 @@ case 'skills':
         const footerLinks = profile.contactLinks || c.links || []
         return (
           <div className="space-y-6">
-            <FormCard title="Footer Content" subtitle="Headline and subheading">
+            <FormCard title={t('form.footerContent')} subtitle={t('form.subtitleFooterContent')}>
               <div className="space-y-4">
                 <div>
-                  <label htmlFor={`footer-headline-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Headline</label>
+                  <label htmlFor={`footer-headline-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.headline')}</label>
                   <Input
                     id={`footer-headline-${selectedSection.id}`}
                     value={c.headline?.en ?? (typeof c.headline === 'string' ? c.headline : 'Work with me')}
                     onChange={(e) => updateSectionContent(selectedSection.id, 'headline', 'en', e.target.value)}
                     className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                    placeholder="e.g. Work with me"
+                    placeholder={t('placeholder.footerHeadline')}
                   />
                 </div>
 
                 <div>
-                  <label htmlFor={`footer-subheading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">Subheading (Optional)</label>
+                  <label htmlFor={`footer-subheading-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.subheadingOptional')}</label>
                   <Input
                     id={`footer-subheading-${selectedSection.id}`}
                     value={c.subheading?.en ?? (typeof c.subheading === 'string' ? c.subheading : '')}
                     onChange={(e) => updateSectionContent(selectedSection.id, 'subheading', 'en', e.target.value)}
                     className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                    placeholder="e.g. Let's build something great together."
+                    placeholder={t('placeholder.footerSubheading')}
                   />
                 </div>
               </div>
             </FormCard>
 
-            <FormCard title="Social / Contact Links" subtitle="Add, edit, or remove your links">
+            <FormCard title={t('form.socialLinks')} subtitle={t('form.subtitleSocialLinks')}>
               <div className="space-y-3">
                 {footerLinks.map((link: any, idx: number) => (
                   <div key={idx} className="flex items-center gap-2 p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
-                    <select
+                    <Select
                       value={link.label || link.platform || 'LinkedIn'}
-                      onChange={(e) => {
+                      onChange={(value) => {
                         const newLinks = [...footerLinks]
-                        newLinks[idx] = { ...newLinks[idx], label: e.target.value, platform: e.target.value }
+                        newLinks[idx] = { ...newLinks[idx], label: value, platform: value }
                         updateProfile((p: any) => ({ ...p, contactLinks: newLinks }))
                         updateSectionContentRaw(selectedSection.id, 'links', newLinks)
                       }}
-                      className="w-32 rounded-lg border border-[var(--color-border)] bg-transparent px-3 h-[44px] min-h-[44px] text-[15px] font-medium text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-                    >
-                      <option value="LinkedIn">LinkedIn</option>
-                      <option value="GitHub">GitHub</option>
-                      <option value="Twitter">Twitter / X</option>
-                      <option value="Instagram">Instagram</option>
-                      <option value="Facebook">Facebook</option>
-                      <option value="Email">Email</option>
-                      <option value="WhatsApp">WhatsApp</option>
-                      <option value="YouTube">YouTube</option>
-                      <option value="TikTok">TikTok</option>
-                      <option value="Website">Website</option>
-                    </select>
+                      className="w-32"
+                      options={[
+                        { value: 'LinkedIn', label: t('social.linkedin') },
+                        { value: 'GitHub', label: t('social.github') },
+                        { value: 'Twitter', label: t('social.twitter') },
+                        { value: 'Instagram', label: t('social.instagram') },
+                        { value: 'Facebook', label: t('social.facebook') },
+                        { value: 'Email', label: t('social.email') },
+                        { value: 'WhatsApp', label: t('social.whatsapp') },
+                        { value: 'YouTube', label: t('social.youtube') },
+                        { value: 'TikTok', label: t('social.tiktok') },
+                        { value: 'Website', label: t('social.website') },
+                      ]}
+                    />
                     <Input
                       value={link.url || ''}
                       onChange={(e) => {
@@ -2908,19 +2887,26 @@ case 'skills':
                         updateProfile((p: any) => ({ ...p, contactLinks: newLinks }))
                         updateSectionContentRaw(selectedSection.id, 'links', newLinks)
                       }}
-                      placeholder="https://... or email"
+                      placeholder={t('placeholder.emailOrUrl')}
                       className="flex-1 min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
                     />
                     <button
-                      aria-label="Remove link"
-                      onClick={() => {
-                        if (!window.confirm('Remove this link?')) return
+                      aria-label={t('common.removeLink')}
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: t('confirm.removeLinkTitle'),
+                          message: t('confirm.removeLinkMessage'),
+                          confirmLabel: t('confirm.confirm'),
+                          cancelLabel: t('confirm.cancel'),
+                          destructive: true,
+                        })
+                        if (!ok) return
                         const newLinks = footerLinks.filter((_: any, i: number) => i !== idx)
                         updateProfile((p: any) => ({ ...p, contactLinks: newLinks }))
                         updateSectionContentRaw(selectedSection.id, 'links', newLinks)
                       }}
                       className="p-2 text-[var(--color-danger)] hover:opacity-80 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] rounded-md"
-                      title="Remove link"
+                      title={t('common.removeLink')}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -2928,7 +2914,7 @@ case 'skills':
                 ))}
                 {footerLinks.length === 0 && (
                   <p className="text-xs text-[var(--color-text-muted)] text-center py-4 border border-dashed rounded-lg border-[var(--color-border)]">
-                    No links added yet.
+                    {t('empty.links')}
                   </p>
                 )}
                 <AddActionCard
@@ -2937,7 +2923,7 @@ case 'skills':
                     updateProfile((p: any) => ({ ...p, contactLinks: newLinks }))
                     updateSectionContentRaw(selectedSection.id, 'links', newLinks)
                   }}
-                  label="Add Social / Contact Link"
+                  label={t('actions.addSocialLink')}
                 />
               </div>
             </FormCard>
@@ -3043,24 +3029,24 @@ case 'skills':
   const effectivePreviewMode: 'desktop' | 'mobile' = isMobileViewport ? 'mobile' : previewMode
 
   return (
-    <div className={`builder-root flex h-[100dvh] w-full max-w-[100vw] flex-col overflow-hidden overflow-x-hidden bg-[var(--color-page)] select-none ${builderDarkMode ? 'dark' : ''}`} data-theme={builderDarkMode ? 'dark' : 'light'}>
+    <div lang={locale} dir={dir} className={`builder-root flex h-[100dvh] w-full max-w-[100vw] flex-col overflow-hidden overflow-x-hidden bg-[var(--color-page)] select-none ${builderDarkMode ? 'dark' : ''}`} data-theme={builderDarkMode ? 'dark' : 'light'}>
       {/* FREE plan upgrade banner — sticky at the very top for free users */}
       {isFreePlan && (
         <div
           className="flex shrink-0 items-center justify-center gap-2 px-3 py-2 text-center text-xs font-bold sticky top-0 z-40"
           style={{ backgroundColor: 'var(--color-primary)', color: 'var(--on-primary)' }}
           role="note"
-          aria-label="ترقية للخطة المدفوعة"
+          aria-label={t('banner.upgradeAria')}
         >
           <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <span className="truncate">🔒 أنت على الخطة المجانية · بعض المزايا غير متاحة</span>
+          <span className="truncate">{t('banner.freePlanNotice')}</span>
           <a
             href={upgradeHref}
             target={hasWhatsapp ? '_blank' : undefined}
             rel={hasWhatsapp ? 'noreferrer' : undefined}
             className="shrink-0 rounded-full bg-[var(--color-surface)] px-3 py-1 text-[11px] font-bold text-[var(--color-text-primary)] hover:opacity-90 transition-opacity min-h-[32px] inline-flex items-center"
           >
-            ترقية الآن عبر واتساب
+            {t('banner.upgradeNow')}
           </a>
         </div>
       )}
@@ -3069,19 +3055,17 @@ case 'skills':
           <div className="bg-[var(--color-surface)] rounded-xl w-full max-w-md shadow-2xl overflow-hidden">
             <div className="p-5 space-y-3">
               <h2 className="text-base font-bold text-[var(--color-text-primary)]">
-                Newer changes found
+                {t('conflict.title')}
               </h2>
               <p className="text-sm text-[var(--color-text-secondary)]">
-                This portfolio was saved elsewhere (another tab or device) after you started
-                editing. Reloading discards your unsaved edits; overwriting keeps them and
-                saves on top of the latest version.
+                {t('conflict.message')}
               </p>
               <div className="flex gap-2 pt-1">
                 <Button variant="secondary" className="flex-1" onClick={handleConflictReload}>
-                  Reload latest
+                  {t('conflict.reload')}
                 </Button>
                 <Button variant="primary" className="flex-1" onClick={handleConflictOverwrite}>
-                  Overwrite with mine
+                  {t('conflict.overwrite')}
                 </Button>
               </div>
             </div>
@@ -3097,7 +3081,7 @@ case 'skills':
           <button
             onClick={() => setLeftDrawerOpen(true)}
             className="md:hidden flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
-            aria-label="Open navigation"
+            aria-label={t('topbar.openNavigation')}
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -3111,14 +3095,14 @@ case 'skills':
           <div className="flex items-center gap-0.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
             <button
               type="button"
-              title="Undo"
+              title={t('topbar.undo')}
               className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer"
             >
               <Undo2 className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
-              title="Redo"
+              title={t('topbar.redo')}
               className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer"
             >
               <Redo2 className="h-3.5 w-3.5" />
@@ -3152,7 +3136,7 @@ case 'skills':
 
         {/* Right: device switcher + account + actions */}
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
-          <div className="hidden md:flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5" aria-label="Preview mode">
+          <div className="hidden md:flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5" aria-label={t('topbar.previewMode')}>
             <button
               onClick={() => setPreviewMode('desktop')}
               className={`flex h-9 w-9 min-h-[36px] min-w-[36px] items-center justify-center rounded-md transition-colors cursor-pointer ${
@@ -3160,8 +3144,8 @@ case 'skills':
                   ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
               }`}
-              title="Desktop View"
-              aria-label="Desktop preview"
+              title={t('topbar.desktopView')}
+              aria-label={t('topbar.desktopPreview')}
               aria-pressed={previewMode === 'desktop'}
             >
               <Monitor className="h-4 w-4" />
@@ -3173,8 +3157,8 @@ case 'skills':
                   ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
               }`}
-              title="Mobile View"
-              aria-label="Mobile preview"
+              title={t('topbar.mobileView')}
+              aria-label={t('topbar.mobilePreview')}
               aria-pressed={previewMode === 'mobile'}
             >
               <Smartphone className="h-4 w-4" />
@@ -3187,11 +3171,11 @@ case 'skills':
             editingProjectPage.slug?.startsWith('project-new-') ||
             editingProjectPage.id?.startsWith('new-')) ? (
             <span
-              title="Save first"
+              title={t('topbar.saveFirst')}
               className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md border border-[var(--color-border)] bg-transparent px-2.5 text-xs font-medium text-[var(--color-text-muted)] opacity-50 cursor-not-allowed select-none"
             >
               <ExternalLink className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">View Live</span>
+              <span className="hidden sm:inline">{t('topbar.viewLive')}</span>
             </span>
           ) : (
             <a
@@ -3207,14 +3191,13 @@ case 'skills':
               className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md border border-[var(--color-border)] bg-transparent px-2.5 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
             >
               <ExternalLink className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">View Live</span>
+              <span className="hidden sm:inline">{t('topbar.viewLive')}</span>
             </a>
           )}
 
           <ProfileMenu
             displayName={profile.displayName || profile.username || 'User'}
-            lang={lang}
-            onToggleLang={() => setLang(lang === 'ar' ? 'en' : 'ar')}
+            onToggleLocale={toggleLocale}
             dark={builderDarkMode}
             onToggleDark={() => setBuilderDarkMode(!builderDarkMode)}
             onLogout={handleLogout}
@@ -3229,16 +3212,16 @@ case 'skills':
             size="sm"
             className="hidden sm:inline-flex h-[36px] min-h-[36px] px-3 text-xs gap-1.5 font-medium"
             onClick={handlePublish}
-            aria-label={profile.status === 'PUBLISHED' ? 'Unpublish portfolio' : 'Publish portfolio'}
+            aria-label={profile.status === 'PUBLISHED' ? t('labels.unpublishAria') : t('labels.publishAria')}
           >
             <Globe className="h-4 w-4 shrink-0" />
-            <span className="hidden lg:inline">{profile.status === 'PUBLISHED' ? 'Unpublish' : 'Publish'}</span>
+            <span className="hidden lg:inline">{profile.status === 'PUBLISHED' ? t('labels.unpublish') : t('labels.publish')}</span>
           </Button>
 
           <button
             onClick={() => setRightSheetOpen(true)}
             className="md:hidden flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] cursor-pointer"
-            aria-label="Open settings"
+            aria-label={t('topbar.openSettings')}
           >
             <Sliders className="h-5 w-5" />
           </button>
@@ -3254,7 +3237,7 @@ case 'skills':
             Desktop on md+ (≥768px). Slide-over drawer on mobile.
         ────────────────────────────────────────────────────────────── */}
         {/* Desktop sidebar */}
-        <aside className="hidden md:flex w-[200px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface-secondary)] overflow-hidden">
+        <aside className="hidden md:flex w-[200px] shrink-0 flex-col border-e border-[var(--color-border)] bg-[var(--color-surface-secondary)] overflow-hidden">
           {renderLeftPanelContent()}
         </aside>
 
@@ -3262,10 +3245,10 @@ case 'skills':
         {leftDrawerOpen && (
           <div className="fixed inset-0 z-50 md:hidden flex">
             <div className="fixed inset-0 bg-black/50" onClick={() => setLeftDrawerOpen(false)} />
-            <div className="relative w-72 max-w-[80vw] bg-[var(--color-surface-secondary)] shadow-2xl flex flex-col h-full z-10" role="dialog" aria-modal="true" aria-label="Sections and pages">
+            <div className="relative w-72 max-w-[80vw] bg-[var(--color-surface-secondary)] shadow-2xl flex flex-col h-full z-10" role="dialog" aria-modal="true" aria-label={t('topbar.sectionsAndPages')}>
               <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)]">
                 <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">{L.navigation}</span>
-                <button onClick={() => setLeftDrawerOpen(false)} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]" aria-label="Close navigation">
+                <button onClick={() => setLeftDrawerOpen(false)} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]" aria-label={t('topbar.closeNavigation')}>
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -3283,9 +3266,7 @@ case 'skills':
           {isFreePlan && (
             <div className="pointer-events-none absolute inset-x-3 top-2 z-10 flex justify-center">
               <p className="rounded-full bg-amber-500/95 px-3 py-1 text-center text-[11px] font-semibold text-white shadow-md">
-                {lang === 'ar'
-                  ? 'المعاينة تعرض النسخة المجانية: الخبرة والمهارات والخدمات وآراء العملاء مخفية عن الزوار.'
-                  : 'Preview shows the free version: Experience, Skills, Services and Testimonials are hidden from visitors.'}
+                {t('preview.freeNotice')}
               </p>
             </div>
           )}
@@ -3333,7 +3314,7 @@ case 'skills':
             4. RIGHT PANEL (~470px on md+, bottom sheet on mobile)
         ────────────────────────────────────────────────────────────── */}
         {/* Desktop sidebar */}
-        <aside className="hidden md:flex w-[320px] lg:w-[470px] lg:min-w-[470px] min-w-0 shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <aside className="hidden md:flex w-[320px] lg:w-[470px] lg:min-w-[470px] min-w-0 shrink-0 flex-col border-s border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
           {/* Only mount the desktop panel while the mobile sheet is closed:
               the sheet renders the same form, so mounting both at once would
               duplicate every field id in the document. */}
@@ -3344,7 +3325,7 @@ case 'skills':
         {rightSheetOpen && (
           <div className="fixed inset-0 z-50 md:hidden flex flex-col justify-end">
             <div className="fixed inset-0 bg-black/50" onClick={() => setRightSheetOpen(false)} />
-            <div className="relative w-full max-w-[100vw] max-h-[85dvh] bg-[var(--color-surface)] rounded-t-2xl shadow-2xl flex flex-col z-10 overflow-hidden overflow-x-hidden" role="dialog" aria-modal="true" aria-label="Edit panel">
+            <div className="relative w-full max-w-[100vw] max-h-[85dvh] bg-[var(--color-surface)] rounded-t-2xl shadow-2xl flex flex-col z-10 overflow-hidden overflow-x-hidden" role="dialog" aria-modal="true" aria-label={t('topbar.editPanel')}>
               <div className="h-1.5 w-10 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto my-2 shrink-0" />
               <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
                 {renderRightPanelWrapper(() => setRightSheetOpen(false))}
@@ -3464,12 +3445,12 @@ case 'skills':
               <button
                 onClick={() => {
                   if (isFreePlan) {
-                    toast('warning', 'صفحات المشاريع متاحة للمشتركين فقط · تواصل معنا للترقية', lockedToastAction)
+                    toast('warning', t('sections.pagesLockedToast'), lockedToastAction)
                     return
                   }
                   setLeftTab('pages')
                 }}
-                title={isFreePlan ? '🔒 صفحات المشاريع للمشتركين فقط' : undefined}
+                title={isFreePlan ? t('sections.lockedPagesTitle') : undefined}
                 role="tab"
                 aria-selected={leftTab === 'pages' && !isFreePlan}
                 className={`flex-1 py-1.5 min-h-[44px] text-xs font-semibold rounded-full transition-colors text-center flex items-center justify-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
@@ -3502,8 +3483,8 @@ case 'skills':
                 }}
                 className="w-full flex items-center gap-2 p-2.5 rounded-lg text-xs font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 transition-colors cursor-pointer"
               >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back to Home
+                <ArrowLeft className="h-3.5 w-3.5 rtl:rotate-180" />
+                {t('sections.backToHome')}
               </button>
 
               {/* Active page card (highlighted) */}
@@ -3514,11 +3495,11 @@ case 'skills':
                   </div>
                   <div className="flex items-center justify-between pt-1">
                     <div>
-                      <p className="text-xs font-semibold text-[var(--color-text-primary)]">{editingProjectPage.title || 'Untitled'}</p>
+                      <p className="text-xs font-semibold text-[var(--color-text-primary)]">{editingProjectPage.title || t('common.untitled')}</p>
                       <p className="text-[10px] text-[var(--color-text-muted)] font-mono">/projects/{editingProjectPage.slug}</p>
                     </div>
                     <span className="rounded-full bg-[var(--color-primary)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--color-primary)]">
-                      Editing
+                      {t('sections.editing')}
                     </span>
                   </div>
                 </div>
@@ -3529,7 +3510,7 @@ case 'skills':
               {leftTab === 'sections' ? (
             <>
               <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-                Portfolio Sections
+                {t('sections.portfolioSections')}
               </p>
               <DndContext
                 sensors={sensors}
@@ -3570,7 +3551,7 @@ case 'skills':
           ) : (
             <div className="space-y-3 pt-1">
               <p className="px-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-                Site Pages
+                {t('sections.sitePages')}
               </p>
               {/* Home Page Thumbnail Card */}
               <div
@@ -3595,11 +3576,11 @@ case 'skills':
                 </div>
                 <div className="flex items-center justify-between pt-1">
                   <div>
-                    <p className="text-xs font-semibold text-[var(--color-text-primary)]">Home</p>
+                    <p className="text-xs font-semibold text-[var(--color-text-primary)]">{t('sections.home')}</p>
                     <p className="text-[10px] text-[var(--color-text-muted)] font-mono">/</p>
                   </div>
                   <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                    Live
+                    {t('common.live')}
                   </span>
                 </div>
               </div>
@@ -3617,7 +3598,7 @@ case 'skills':
                       }
                       handleSelectProjectPage(pp)
                     }}
-                    title={isFreePlan ? '🔒 ميزة للمشتركين فقط' : undefined}
+                    title={isFreePlan ? t('sections.lockedTitle') : undefined}
                     className={`group flex items-center justify-between p-2.5 rounded-lg border transition-all ${
                       isFreePlan
                         ? 'opacity-50 cursor-not-allowed border-transparent'
@@ -3635,23 +3616,23 @@ case 'skills':
                         <FileText className="h-3.5 w-3.5 text-[var(--color-text-muted)] opacity-60 group-hover:opacity-100 shrink-0" />
                       )}
                       <div className="truncate">
-                        <span className="text-xs truncate block">{pp.title || 'Untitled'}</span>
+                        <span className="text-xs truncate block">{pp.title || t('common.untitled')}</span>
                         <span className="text-[10px] text-[var(--color-text-muted)] font-mono">/projects/{pp.slug}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       {pp.isPublished && (
-                        <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 mr-1">
-                          Live
+                        <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 me-1">
+                          {t('common.live')}
                         </span>
                       )}
                       {pp.showInProjects === false && !linkedPageSlugs.has(pp.slug) && (
                         <span
-                          title="Not linked to a project — reachable by direct link until a card links to it"
-                          className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-400 mr-1"
+                          title={t('sections.notLinkedTooltip')}
+                          className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-400 me-1"
                         >
                           <AlertTriangle className="h-3 w-3" />
-                          Not linked
+                          {t('sections.notLinked')}
                         </span>
                       )}
                       <button
@@ -3660,7 +3641,7 @@ case 'skills':
                           handleDeleteProjectPage(pp.id)
                         }}
                         className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-danger)] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity"
-                        title="Delete"
+                        title={t('common.delete')}
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>
@@ -3679,7 +3660,7 @@ case 'skills':
                   handleCreateProjectPage()
                 }}
                 disabled={creatingProjectPage}
-                title={isFreePlan ? '🔒 ميزة للمشتركين فقط' : undefined}
+                title={isFreePlan ? t('sections.lockedTitle') : undefined}
                 className="w-full flex items-center justify-center gap-1.5 py-2 min-h-[44px] text-[11px] font-semibold text-[var(--color-primary)] border border-dashed border-[var(--color-primary)]/40 rounded-lg hover:bg-[var(--color-primary)]/5 transition-colors cursor-pointer disabled:opacity-50"
               >
                 {creatingProjectPage ? (
@@ -3687,7 +3668,7 @@ case 'skills':
                 ) : (
                   <Plus className="h-3.5 w-3.5" />
                 )}
-                {creatingProjectPage ? 'Creating...' : 'New Project Page'}
+                {creatingProjectPage ? t('sections.creating') : t('sections.newProjectPage')}
               </button>
             </div>
           )}
@@ -3701,7 +3682,7 @@ case 'skills':
             <div className="flex items-center gap-2 px-1">
               <div className="h-px flex-1 bg-[var(--color-border)]" />
               <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-                Insights
+                {t('sections.insights')}
               </span>
               <div className="h-px flex-1 bg-[var(--color-border)]" />
             </div>
@@ -3709,11 +3690,11 @@ case 'skills':
               <button
                 type="button"
                 onClick={showLockedToast}
-                title="🔒 ميزة للمشتركين فقط"
+                title={t('sections.lockedTitle')}
                 className="w-full flex min-h-[44px] items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-not-allowed opacity-50 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)]"
               >
                 <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span>{getPortfolioLang(profile?.appearance) === 'ar' ? 'الإحصائيات' : 'Analytics'}</span>
+                <span>{t('sections.analytics')}</span>
               </button>
             ) : (
               <Link
@@ -3721,7 +3702,7 @@ case 'skills':
                 className="w-full flex min-h-[44px] items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-primary)]"
               >
                 <BarChart3 className="h-3.5 w-3.5" />
-                <span>{getPortfolioLang(profile?.appearance) === 'ar' ? 'الإحصائيات' : 'Analytics'}</span>
+                <span>{t('sections.analytics')}</span>
               </Link>
             )}
             <button
@@ -3737,7 +3718,7 @@ case 'skills':
               }`}
             >
               <Palette className="h-3.5 w-3.5" />
-              <span>Theme & Bio Settings</span>
+              <span>{t('sections.themeBioSettings')}</span>
             </button>
           </div>
         )}
@@ -3748,10 +3729,10 @@ case 'skills':
   // Sub-component wrapping Right Panel contents
   function renderRightPanelWrapper(onCloseMobile?: () => void) {
     const titleLabel = activePage !== 'home' && editingProjectPage && !selectedSection
-      ? editingProjectPage.title || 'Project Page'
+      ? editingProjectPage.title || t('panel.projectPage')
       : selectedSection
-        ? selectedSection.sectionType.charAt(0).toUpperCase() + selectedSection.sectionType.slice(1)
-        : 'Theme & Bio'
+        ? t(`section.${selectedSection.sectionType}`)
+        : t('panel.themeBio')
 
     return (
       <div className="flex flex-col h-full overflow-hidden bg-[var(--color-surface-secondary)]">
@@ -3759,7 +3740,7 @@ case 'skills':
         <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-[var(--color-border)] px-5 bg-[var(--color-surface)]">
           <div className="flex items-center gap-2 truncate">
             <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-              Edit
+              {t('panel.edit')}
             </span>
             <span className="text-xs text-[var(--color-text-muted)]">|</span>
             <span className="text-xs sm:text-sm font-semibold text-[var(--color-text-primary)] truncate">
@@ -3775,11 +3756,11 @@ case 'skills':
                   setSelectedSectionType(null)
                   setActivePage('home')
                 }}
-                className="text-[11px] font-medium text-[var(--color-primary)] hover:underline flex items-center gap-1 cursor-pointer mr-1"
-                title="Back to Theme"
+                className="text-[11px] font-medium text-[var(--color-primary)] hover:underline flex items-center gap-1 cursor-pointer me-1"
+                title={t('panel.theme')}
               >
                 <Palette className="h-3 w-3" />
-                <span className="hidden sm:inline">Theme</span>
+                <span className="hidden sm:inline">{t('panel.theme')}</span>
               </button>
             )}
             {onCloseMobile && (
@@ -3804,17 +3785,17 @@ case 'skills':
             {isDirty ? (
               <span className="inline-flex items-center gap-1.5 text-[var(--color-text-muted)]">
                 <span className="h-2 w-2 rounded-full bg-amber-500" />
-                <span className="text-[11px] font-medium">Unsaved changes</span>
+                <span className="text-[11px] font-medium">{t('panel.unsavedChanges')}</span>
                 {draftSavedAt ? (
-                  <span className="text-[11px] opacity-70" title="Draft saved locally">
-                    · مسودة محفوظة
+                  <span className="text-[11px] opacity-70" title={t('panel.draftSavedTitle')}>
+                    · {t('panel.draftSaved')}
                   </span>
                 ) : null}
               </span>
             ) : saveStatus === 'saved' ? (
               <span className="inline-flex items-center gap-1 text-[var(--color-success)]">
                 <Check className="h-3.5 w-3.5" />
-                <span className="text-[11px] font-medium">Saved</span>
+                <span className="text-[11px] font-medium">{t('panel.saved')}</span>
               </span>
             ) : null}
           </div>
@@ -3827,12 +3808,12 @@ case 'skills':
             {saveStatus === 'saving' ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Saving Changes...</span>
+                <span>{t('panel.savingChanges')}</span>
               </>
             ) : (
               <>
                 <Check className="h-4 w-4" />
-                <span>Save Changes</span>
+                <span>{t('panel.saveChanges')}</span>
               </>
             )}
           </Button>

@@ -3,6 +3,8 @@
 
 import { ChevronUp, ChevronDown, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
+import { useBuilderI18n } from './i18n/BuilderI18nContext'
+import { useConfirm } from './ui/ConfirmModal'
 
 interface CustomEditorProps {
   sectionId: string
@@ -25,6 +27,8 @@ export function CustomEditor({
   AddActionCard,
   IconPicker,
 }: CustomEditorProps) {
+  const { t } = useBuilderI18n()
+  const confirm = useConfirm()
   const c = content || {}
   const paragraphs: string[] = Array.isArray(c.paragraphs) ? c.paragraphs : []
 
@@ -40,15 +44,28 @@ export function CustomEditor({
     setParagraphs(next)
   }
 
+  const removeParagraph = async (idx: number) => {
+    const ok = await confirm({
+      title: t('confirm.removeParagraphTitle'),
+      message: t('confirm.removeParagraphMessage'),
+      confirmLabel: t('confirm.confirm'),
+      cancelLabel: t('confirm.cancel'),
+      destructive: true,
+    })
+    if (!ok) return
+    setParagraphs(paragraphs.filter((_: any, i: number) => i !== idx))
+  }
+
   return (
     <div className="space-y-6">
-      <FormCard title="Section Content" subtitle="Title and free paragraphs">
+      <FormCard title={t('form.sectionContent')} subtitle={t('form.subtitleCustom')}>
         <div>
           <label htmlFor={`${sectionId}-title`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
-            Title
+            {t('field.title')}
           </label>
           <Input
             id={`${sectionId}-title`}
+            dir="ltr"
             value={typeof c.title === 'string' ? c.title : c.title?.en || ''}
             onChange={(e) => updateSectionContent(sectionId, 'title', 'en', e.target.value)}
             className="h-[44px] min-h-[44px] w-full px-[12px] py-[10px] text-[15px]"
@@ -56,7 +73,7 @@ export function CustomEditor({
         </div>
         <div className="mt-4" role="group" aria-labelledby={`${sectionId}-section-icon-label`}>
           <label id={`${sectionId}-section-icon-label`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
-            Section Icon
+            {t('field.sectionIcon')}
           </label>
           <IconPicker
             value={c.icon}
@@ -65,17 +82,18 @@ export function CustomEditor({
         </div>
       </FormCard>
 
-      <FormCard title="Paragraphs" subtitle="Plain text, one block each">
+      <FormCard title={t('form.paragraphs')} subtitle={t('form.subtitleParagraphs')}>
         <div className="space-y-4">
           {paragraphs.map((text: string, idx: number) => (
             <ItemCard
               key={idx}
-              title={(text || '').slice(0, 40) || `Paragraph #${idx + 1}`}
+              title={(text || '').slice(0, 40) || t('item.paragraphN', { n: idx + 1 })}
               onRemove={() => setParagraphs(paragraphs.filter((_: any, i: number) => i !== idx))}
             >
               <div className="mt-2 flex flex-col gap-3">
                 <textarea
-                  aria-label={`Paragraph ${idx + 1}`}
+                  aria-label={t('item.paragraphN', { n: idx + 1 })}
+                  dir="auto"
                   value={typeof text === 'string' ? text : ''}
                   onChange={(e) => {
                     const next = [...paragraphs]
@@ -88,10 +106,10 @@ export function CustomEditor({
                 <div className="flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={() => { if (!window.confirm('Remove this paragraph? This cannot be undone.')) return; setParagraphs(paragraphs.filter((_: any, i: number) => i !== idx)) }}
-                    aria-label="Remove paragraph"
+                    onClick={() => void removeParagraph(idx)}
+                    aria-label={t('common.removeParagraph')}
                     className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-                    title="Remove paragraph"
+                    title={t('common.removeParagraph')}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -100,9 +118,9 @@ export function CustomEditor({
                       type="button"
                       onClick={() => moveParagraph(idx, -1)}
                       disabled={idx === 0}
-                      aria-label="Move paragraph up"
+                      aria-label={t('common.moveUp', { item: t('item.paragraphN', { n: idx + 1 }) })}
                       className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-                      title="Move up"
+                      title={t('common.moveUp', { item: t('item.paragraphN', { n: idx + 1 }) })}
                     >
                       <ChevronUp className="h-4 w-4" />
                     </button>
@@ -110,9 +128,9 @@ export function CustomEditor({
                       type="button"
                       onClick={() => moveParagraph(idx, 1)}
                       disabled={idx === paragraphs.length - 1}
-                      aria-label="Move paragraph down"
+                      aria-label={t('common.moveDown', { item: t('item.paragraphN', { n: idx + 1 }) })}
                       className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md border border-[var(--color-border)] p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-                      title="Move down"
+                      title={t('common.moveDown', { item: t('item.paragraphN', { n: idx + 1 }) })}
                     >
                       <ChevronDown className="h-4 w-4" />
                     </button>
@@ -124,10 +142,10 @@ export function CustomEditor({
 
           {paragraphs.length === 0 && (
             <p className="rounded-lg border border-dashed border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-text-muted)]">
-              No paragraphs yet.
+              {t('empty.paragraphs')}
             </p>
           )}
-          <AddActionCard onClick={() => setParagraphs([...paragraphs, ''])} label="Add Paragraph" />
+          <AddActionCard onClick={() => setParagraphs([...paragraphs, ''])} label={t('actions.addParagraph')} />
         </div>
       </FormCard>
     </div>

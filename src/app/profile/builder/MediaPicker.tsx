@@ -6,6 +6,8 @@ import { createClient } from '@supabase/supabase-js'
 import { X, Search, Image as ImageIcon, Loader2, Upload } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { useBuilderI18n } from './i18n/BuilderI18nContext'
+import { FileButton } from './ui/FileButton'
 
 // Public bucket for portfolio images. Created once in the Supabase dashboard
 // (Storage → New bucket → name: portfolio-media, Public: ON).
@@ -34,6 +36,7 @@ export function MediaPicker({
   onClose: () => void
   onSelect: (item: any) => void
 }) {
+  const { t } = useBuilderI18n()
   const [files, setFiles] = useState<StoredFile[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -91,14 +94,14 @@ export function MediaPicker({
     const load = async () => {
       const supabase = getBrowserClient()
       if (!supabase) {
-        setError('Supabase is not configured (missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY).')
+        setError(t('media.noConfig'))
         setLoading(false)
         return
       }
       const prefix = userId ? `${userId}/` : ''
       const { data, error: listError } = await supabase.storage.from(BUCKET).list(prefix)
       if (listError) {
-        setError(`Could not list bucket "${BUCKET}": ${listError.message}`)
+        setError(t('media.listError', { bucket: BUCKET, message: listError.message }))
         setLoading(false)
         return
       }
@@ -113,7 +116,7 @@ export function MediaPicker({
       setLoading(false)
     }
     load()
-  }, [userId, reloadKey])
+  }, [userId, reloadKey, t])
 
   const handleUpload = async (file: File) => {
     const supabase = getBrowserClient()
@@ -134,7 +137,7 @@ export function MediaPicker({
       onSelect({ type: 'external_image', imageUrl: entry.url, title: safeName })
       onClose()
     } catch (err: any) {
-      setError(err?.message || 'Upload failed.')
+      setError(err?.message || t('media.uploadFailed'))
     } finally {
       setUploading(false)
     }
@@ -164,17 +167,17 @@ export function MediaPicker({
         className="bg-[var(--color-surface)] rounded-xl w-full max-w-2xl max-h-[85dvh] flex flex-col shadow-2xl overflow-hidden focus:outline-none"
       >
         <div className="flex items-center justify-between p-4 border-b border-[var(--color-border)]">
-          <h2 id={titleId} className="text-lg font-semibold">Add Media to Project</h2>
+          <h2 id={titleId} className="text-lg font-semibold">{t('media.title')}</h2>
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t('misc.closeAria')}
             className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-1 hover:bg-[var(--color-surface-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
           >
             <X className="h-5 w-5 text-[var(--color-text-muted)]" />
           </button>
         </div>
 
-        <div role="tablist" aria-label="Media source" className="flex border-b border-[var(--color-border)]">
+        <div role="tablist" aria-label={t('media.source')} className="flex border-b border-[var(--color-border)]">
           <button
             role="tab"
             aria-selected={mode === 'library'}
@@ -183,7 +186,7 @@ export function MediaPicker({
               mode === 'library' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)]'
             }`}
           >
-            Media Library
+            {t('media.library')}
           </button>
           <button
             role="tab"
@@ -193,7 +196,7 @@ export function MediaPicker({
               mode === 'external' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)]'
             }`}
           >
-            External Link
+            {t('media.external')}
           </button>
         </div>
 
@@ -201,34 +204,32 @@ export function MediaPicker({
           {mode === 'library' ? (
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--color-text-muted)]" />
+                <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
                 <Input
                   type="search"
-                  aria-label="Search your uploads"
-                  placeholder="Search your uploads..."
+                  aria-label={t('media.searchAria')}
+                  placeholder={t('placeholder.searchUploads')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 bg-[var(--color-surface)]"
+                  className="bg-[var(--color-surface)] ps-9"
                 />
               </div>
-              <div className="relative overflow-hidden shrink-0">
-                <Button variant="secondary" className="h-10 px-3" disabled={uploading}>
-                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                  <span className="ml-1 text-xs">{uploading ? 'Uploading...' : 'Upload'}</span>
-                </Button>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) handleUpload(file)
-                  }}
-                />
-              </div>
+              <FileButton
+                accept="image/*"
+                disabled={uploading}
+                onFiles={(files) => {
+                  const file = files?.[0]
+                  if (file) void handleUpload(file)
+                }}
+                aria-label={t('common.upload')}
+                className="h-10 shrink-0"
+              >
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                <span className="text-xs">{uploading ? t('common.uploading') : t('common.upload')}</span>
+              </FileButton>
             </div>
           ) : (
-            <p className="text-sm text-[var(--color-text-muted)]">Add a link to an external article, video, or website.</p>
+            <p className="text-sm text-[var(--color-text-muted)]">{t('media.externalHint')}</p>
           )}
         </div>
 
@@ -236,21 +237,21 @@ export function MediaPicker({
           {mode === 'external' ? (
             <div className="space-y-4 max-w-md mx-auto py-8">
               <div>
-                <label htmlFor="media-external-url" className="text-sm font-medium mb-1 block">URL</label>
-                <Input id="media-external-url" type="url" inputMode="url" autoComplete="off" placeholder="https://..." value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} />
+                <label htmlFor="media-external-url" className="mb-1 block text-sm font-medium">{t('common.url')}</label>
+                <Input id="media-external-url" type="url" inputMode="url" autoComplete="off" placeholder={t('placeholder.url')} value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} />
               </div>
               <div>
-                <label htmlFor="media-external-title" className="text-sm font-medium mb-1 block">Title (Optional)</label>
-                <Input id="media-external-title" placeholder="My Guest Post" value={externalTitle} onChange={(e) => setExternalTitle(e.target.value)} />
+                <label htmlFor="media-external-title" className="mb-1 block text-sm font-medium">{t('media.titleOptional')}</label>
+                <Input id="media-external-title" placeholder={t('placeholder.externalTitle')} value={externalTitle} onChange={(e) => setExternalTitle(e.target.value)} />
               </div>
               <Button variant="primary" className="w-full" onClick={handleAddExternal} disabled={!externalUrl}>
-                Add Link
+                {t('media.addLink')}
               </Button>
             </div>
           ) : loading ? (
             <div role="status" className="flex flex-col items-center justify-center h-40 gap-3 text-[var(--color-text-muted)]">
               <Loader2 className="h-6 w-6 animate-spin" />
-              <p className="text-sm">Loading media library...</p>
+              <p className="text-sm">{t('media.loading')}</p>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center gap-3 py-8">
@@ -264,11 +265,11 @@ export function MediaPicker({
                   setReloadKey((k) => k + 1)
                 }}
               >
-                Try again
+                {t('common.tryAgain')}
               </Button>
             </div>
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-center py-8 text-[var(--color-text-muted)]">No uploads yet. Use Upload to add your first image.</p>
+            <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">{t('empty.uploads')}</p>
           ) : (
             <div className="grid grid-cols-3 gap-2">
               {filtered.map((file) => (
@@ -277,13 +278,13 @@ export function MediaPicker({
                   onClick={() => handleSelectFile(file)}
                   className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                   title={file.name}
-                  aria-label={`Select ${file.name}`}
+                  aria-label={t('media.selectAria', { name: file.name })}
                 >
                   <img src={file.url} alt={file.name} className="h-full w-full object-cover" loading="lazy" />
                   <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-2 py-1 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity">
                     {file.name}
                   </span>
-                  <span className="absolute right-1 top-1 rounded bg-[var(--color-surface)] p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="absolute end-1 top-1 rounded bg-[var(--color-surface)] p-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <ImageIcon className="h-3 w-3" />
                   </span>
                 </button>

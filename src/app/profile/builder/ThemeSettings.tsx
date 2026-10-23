@@ -2,11 +2,14 @@
 'use client'
 
 import { useId, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Upload } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { getPortfolioLang } from '@/lib/portfolio-language'
+import { useBuilderI18n } from './i18n/BuilderI18nContext'
+import { Select } from './ui/Select'
+import { FileButton } from './ui/FileButton'
 
 function ColorField({
   label,
@@ -14,15 +17,16 @@ function ColorField({
   defaultValue,
   onChange,
   hint,
+  pickerLabel,
 }: {
   label: string
   value?: string
   defaultValue: string
   onChange: (val: string) => void
   hint?: string
+  pickerLabel: string
 }) {
   const uid = useId()
-  // Normalize for swatch display: if user types "60a5fa" or "#60a5fa", format to valid hex
   const clean = (raw: string) => {
     if (!raw) return defaultValue
     const trimmed = raw.trim()
@@ -37,16 +41,16 @@ function ColorField({
       <label htmlFor={uid} className="text-xs font-medium text-[var(--color-text-secondary)]">{label}</label>
       <div className="flex gap-2 items-center">
         <div
-          className="h-9 w-9 shrink-0 rounded-lg border border-[var(--color-border)] shadow-sm relative overflow-hidden cursor-pointer"
+          className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-[var(--color-border)] shadow-sm cursor-pointer"
           style={{ backgroundColor: swatchColor }}
-          title="Click to open color picker"
+          title={pickerLabel}
         >
           <input
             id={uid}
             type="color"
             value={swatchColor}
             onChange={(e) => onChange(e.target.value)}
-            className="absolute inset-[-10px] w-[50px] h-[50px] cursor-pointer opacity-0"
+            className="absolute inset-[-10px] h-[50px] w-[50px] cursor-pointer opacity-0"
             aria-label={label}
           />
         </div>
@@ -62,7 +66,7 @@ function ColorField({
             }
           }}
           placeholder={defaultValue}
-          className="flex-1 uppercase font-mono text-xs h-9"
+          className="h-9 flex-1 font-mono text-xs uppercase"
         />
       </div>
       {hint && <p className="text-[10px] text-[var(--color-text-muted)]">{hint}</p>}
@@ -71,6 +75,7 @@ function ColorField({
 }
 
 export function ThemeSettings({ profile, updateProfile }: { profile: any, updateProfile: any }) {
+  const { t } = useBuilderI18n()
   const appearance = profile.appearance || {}
   const [uploadingLogo, setUploadingLogo] = useState(false)
 
@@ -81,8 +86,6 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
     }))
   }
 
-  // Portfolio language is persisted under both keys so old readers
-  // (`defaultLanguage`) and new readers (`n`) always agree — no migration.
   const handleLanguageChange = (value: string) => {
     updateProfile((p: any) => ({
       ...p,
@@ -117,262 +120,272 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
     }))
   }
 
+  const handleLogoUpload = async (file: File | undefined) => {
+    if (!file) return
+    setUploadingLogo(true)
+    try {
+      const result = await uploadToCloudinary(file)
+      handleAppearanceChange('logoUrl', result.url)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
-      {/* Portfolio Settings */}
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold">Portfolio Settings</h3>
-          <Button variant="ghost" size="sm" onClick={handleResetDefaults} className="h-7 text-xs px-2 text-[var(--color-primary)] cursor-pointer">
-            Reset to defaults
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold">{t('theme.portfolioSettings')}</h3>
+          <Button variant="ghost" size="sm" onClick={handleResetDefaults} className="h-7 px-2 text-xs text-[var(--color-primary)] cursor-pointer">
+            {t('theme.resetDefaults')}
           </Button>
         </div>
         <div className="space-y-3">
           <div>
-            <label htmlFor="theme-username" className="text-xs text-[var(--color-text-secondary)]">Username (URL)</label>
-            <Input 
+            <label htmlFor="theme-username" className="text-xs text-[var(--color-text-secondary)]">{t('theme.username')}</label>
+            <Input
               id="theme-username"
-              value={profile.username || ''} 
-              onChange={e => updateProfile((p:any) => ({...p, username: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '')}))} 
-              className="mt-1" 
-              placeholder="e.g. john" 
+              value={profile.username || ''}
+              onChange={e => updateProfile((p: any) => ({ ...p, username: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '') }))}
+              className="mt-1"
+              placeholder={t('placeholder.username')}
             />
-            <p className="text-[10px] text-[var(--color-text-muted)] mt-1">portfoliohub.com/u/{profile.username || ''}</p>
+            <p className="mt-1 text-[10px] text-[var(--color-text-muted)]" dir="ltr">portfoliohub.com/u/{profile.username || ''}</p>
           </div>
 
           <div>
-            <label htmlFor="theme-color-mode" className="text-xs text-[var(--color-text-secondary)]">Default Color Mode</label>
-            <select 
+            <label htmlFor="theme-color-mode" className="text-xs text-[var(--color-text-secondary)]">{t('theme.defaultColorMode')}</label>
+            <Select
               id="theme-color-mode"
-              value={appearance.colorMode || 'light'} 
-              onChange={e => handleAppearanceChange('colorMode', e.target.value)}
-              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-            >
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
+              className="mt-1"
+              value={appearance.colorMode || 'light'}
+              onChange={(value) => handleAppearanceChange('colorMode', value)}
+              options={[
+                { value: 'light', label: t('theme.light') },
+                { value: 'dark', label: t('theme.dark') },
+              ]}
+            />
           </div>
 
           <div>
-            <label htmlFor="theme-font" className="text-xs text-[var(--color-text-secondary)]">Font Family</label>
-            <select 
+            <label htmlFor="theme-font" className="text-xs text-[var(--color-text-secondary)]">{t('theme.fontFamily')}</label>
+            <Select
               id="theme-font"
-              value={appearance.font || 'Inter'} 
-              onChange={e => handleAppearanceChange('font', e.target.value)}
-              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-            >
-              <option value="Inter">Inter</option>
-              <option value="Poppins">Poppins</option>
-              <option value="Raleway">Raleway</option>
-              <option value="Nunito">Nunito</option>
-              <option value="Lato">Lato</option>
-              <option value="Montserrat">Montserrat</option>
-              <option value="Rubik">Rubik</option>
-              <optgroup label="— Luxury Serif —">
-                <option value="Playfair Display">Playfair Display</option>
-                <option value="Cormorant Garamond">Cormorant Garamond</option>
-                <option value="DM Serif Display">DM Serif Display</option>
-                <option value="Bodoni Moda">Bodoni Moda</option>
-                <option value="Libre Baskerville">Libre Baskerville</option>
-                <option value="Lora">Lora</option>
-              </optgroup>
-            </select>
+              className="mt-1"
+              value={appearance.font || 'Inter'}
+              onChange={(value) => handleAppearanceChange('font', value)}
+              options={[
+                { value: 'Inter', label: 'Inter' },
+                { value: 'Poppins', label: 'Poppins' },
+                { value: 'Raleway', label: 'Raleway' },
+                { value: 'Nunito', label: 'Nunito' },
+                { value: 'Lato', label: 'Lato' },
+                { value: 'Montserrat', label: 'Montserrat' },
+                { value: 'Rubik', label: 'Rubik' },
+                {
+                  label: t('theme.luxurySerif'),
+                  options: [
+                    { value: 'Playfair Display', label: 'Playfair Display' },
+                    { value: 'Cormorant Garamond', label: 'Cormorant Garamond' },
+                    { value: 'DM Serif Display', label: 'DM Serif Display' },
+                    { value: 'Bodoni Moda', label: 'Bodoni Moda' },
+                    { value: 'Libre Baskerville', label: 'Libre Baskerville' },
+                    { value: 'Lora', label: 'Lora' },
+                  ],
+                },
+              ]}
+            />
           </div>
         </div>
       </div>
 
-      {/* 🎨 Site Colors */}
-      <div className="border-t border-[var(--color-border)] pt-6 space-y-5">
-        <h3 className="text-sm font-semibold flex items-center gap-1.5">
-          <span>🎨</span> Site Colors
+      <div className="space-y-5 border-t border-[var(--color-border)] pt-6">
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+          <span>🎨</span> {t('theme.siteColors')}
         </h3>
 
-        {/* Light Mode */}
-        <div className="space-y-3 p-3.5 rounded-xl border border-[var(--color-border)] bg-gray-50/50 dark:bg-gray-800/30">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-primary)]">Light Mode</h4>
+        <div className="space-y-3 rounded-xl border border-[var(--color-border)] bg-gray-50/50 p-3.5 dark:bg-gray-800/30">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-primary)]">{t('theme.lightMode')}</h4>
           <ColorField
-            label="Background Color (light)"
+            label={t('theme.bgLight')}
             value={appearance.bgColorLight}
             defaultValue="#f9fafb"
             onChange={(val) => handleAppearanceChange('bgColorLight', val)}
+            pickerLabel={t('misc.openColorPicker')}
           />
           <ColorField
-            label="Text Color (light)"
+            label={t('theme.textLight')}
             value={appearance.textColorLight}
             defaultValue="#1f2937"
             onChange={(val) => handleAppearanceChange('textColorLight', val)}
+            pickerLabel={t('misc.openColorPicker')}
           />
         </div>
 
-        {/* Dark Mode */}
-        <div className="space-y-3 p-3.5 rounded-xl border border-[var(--color-border)] bg-gray-50/50 dark:bg-gray-800/30">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-primary)]">Dark Mode</h4>
+        <div className="space-y-3 rounded-xl border border-[var(--color-border)] bg-gray-50/50 p-3.5 dark:bg-gray-800/30">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-primary)]">{t('theme.darkMode')}</h4>
           <ColorField
-            label="Background Color (dark)"
+            label={t('theme.bgDark')}
             value={appearance.bgColorDark}
             defaultValue="#111827"
             onChange={(val) => handleAppearanceChange('bgColorDark', val)}
+            pickerLabel={t('misc.openColorPicker')}
           />
           <ColorField
-            label="Text Color (dark)"
+            label={t('theme.textDark')}
             value={appearance.textColorDark}
             defaultValue="#f3f4f6"
             onChange={(val) => handleAppearanceChange('textColorDark', val)}
+            pickerLabel={t('misc.openColorPicker')}
           />
         </div>
 
-        {/* Global (apply to both modes) */}
-        <div className="space-y-3 p-3.5 rounded-xl border border-[var(--color-border)] bg-gray-50/50 dark:bg-gray-800/30">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-primary)]">Global (apply to both modes)</h4>
+        <div className="space-y-3 rounded-xl border border-[var(--color-border)] bg-gray-50/50 p-3.5 dark:bg-gray-800/30">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-primary)]">{t('theme.global')}</h4>
           <ColorField
-            label="Primary Color"
+            label={t('theme.primaryColor')}
             value={appearance.primaryColor}
             defaultValue="#60a5fa"
             onChange={(val) => handleAppearanceChange('primaryColor', val)}
+            pickerLabel={t('misc.openColorPicker')}
           />
           <ColorField
-            label="Border Color"
+            label={t('theme.borderColor')}
             value={appearance.borderColor}
             defaultValue="#e5e7eb"
             onChange={(val) => handleAppearanceChange('borderColor', val)}
-            hint="Controls box and card borders across the site."
+            hint={t('theme.borderHint')}
+            pickerLabel={t('misc.openColorPicker')}
           />
           <ColorField
-            label="Outline / Focus Color"
+            label={t('theme.outlineColor')}
             value={appearance.outlineColor}
             defaultValue="#60a5fa"
             onChange={(val) => handleAppearanceChange('outlineColor', val)}
-            hint="Controls focus rings and outlines across the site."
+            hint={t('theme.outlineHint')}
+            pickerLabel={t('misc.openColorPicker')}
           />
         </div>
       </div>
 
-      {/* Language */}
       <div className="border-t border-[var(--color-border)] pt-6">
-        <h3 className="text-sm font-semibold mb-3">Language & Direction</h3>
+        <h3 className="mb-3 text-sm font-semibold">{t('theme.languageDirection')}</h3>
         <div>
-          <label htmlFor="theme-language" className="text-xs text-[var(--color-text-secondary)]">Portfolio Language</label>
-          <select
+          <label htmlFor="theme-language" className="text-xs text-[var(--color-text-secondary)]">{t('theme.portfolioLanguage')}</label>
+          <Select
             id="theme-language"
+            className="mt-1"
             value={getPortfolioLang(appearance)}
-            onChange={(e) => handleLanguageChange(e.target.value)}
-            className="mt-1 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-xs text-[var(--color-text-primary)] focus-visible:border-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] cursor-pointer"
-          >
-            <option value="en">English (LTR)</option>
-            <option value="ar">العربية (RTL)</option>
-            <option value="both">Both (Multilingual Toggle)</option>
-          </select>
-          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
-            Sets the primary display direction and language for your public portfolio.
+            onChange={handleLanguageChange}
+            options={[
+              { value: 'en', label: t('theme.englishLtr') },
+              { value: 'ar', label: t('theme.arabicRtl') },
+              { value: 'both', label: t('theme.both') },
+            ]}
+          />
+          <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">
+            {t('theme.languageHint')}
           </p>
         </div>
       </div>
 
-      {/* Branding */}
       <div className="border-t border-[var(--color-border)] pt-6">
-        <h3 className="text-sm font-semibold mb-3">Branding</h3>
+        <h3 className="mb-3 text-sm font-semibold">{t('theme.branding')}</h3>
         <div className="space-y-3">
           <div>
-            <label htmlFor="theme-logo-url" className="text-xs text-[var(--color-text-secondary)]">Logo Image</label>
-            <div className="flex gap-2 mt-1">
+            <label htmlFor="theme-logo-url" className="text-xs text-[var(--color-text-secondary)]">{t('theme.logoImage')}</label>
+            <div className="mt-1 flex gap-2">
               <Input
                 id="theme-logo-url"
-                value={appearance.logoUrl || ''} 
+                value={appearance.logoUrl || ''}
                 onChange={e => handleAppearanceChange('logoUrl', e.target.value)}
-                placeholder="Image URL"
+                placeholder={t('placeholder.imageUrl')}
                 className="flex-1"
               />
-              <div className="relative overflow-hidden shrink-0">
-                <Button variant="secondary" className="h-9 px-3" disabled={uploadingLogo} aria-label="Upload logo image">
-                  {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Upload'}
-                </Button>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0]
-                    if (!file) return
-                    setUploadingLogo(true)
-                    try {
-                      const result = await uploadToCloudinary(file)
-                      handleAppearanceChange('logoUrl', result.url)
-                    } catch (err) {
-                      console.error(err)
-                    } finally {
-                      setUploadingLogo(false)
-                    }
-                  }}
-                />
-              </div>
+              <FileButton
+                accept="image/*"
+                disabled={uploadingLogo}
+                onFiles={(files) => void handleLogoUpload(files?.[0])}
+                aria-label={t('theme.uploadLogoAria')}
+                className="h-10 shrink-0 px-3 text-xs"
+              >
+                {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {uploadingLogo ? t('common.uploading') : t('common.upload')}
+              </FileButton>
             </div>
             {appearance.logoUrl && (
-              <img src={appearance.logoUrl} alt="Logo Preview" className="mt-2 h-9 w-auto object-contain border border-[var(--color-border)] rounded" />
+              <img src={appearance.logoUrl} alt={t('misc.logoPreview')} className="mt-2 h-9 w-auto rounded border border-[var(--color-border)] object-contain" />
             )}
-            <p className="text-[10px] text-[var(--color-text-muted)] mt-1">Shown in the navbar. Leave empty to show initials.</p>
+            <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">{t('theme.logoHint')}</p>
           </div>
         </div>
       </div>
 
-      {/* Floating Buttons */}
       <div className="border-t border-[var(--color-border)] pt-6">
-        <h3 className="text-sm font-semibold mb-3">Floating Buttons</h3>
+        <h3 className="mb-3 text-sm font-semibold">{t('theme.floatingButtons')}</h3>
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <label htmlFor="theme-show-scroll-top" className="text-xs text-[var(--color-text-secondary)]">Show Scroll to Top Button</label>
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="theme-show-scroll-top" className="text-xs text-[var(--color-text-secondary)]">{t('theme.showScrollTop')}</label>
             <button
               type="button"
               id="theme-show-scroll-top"
               role="switch"
               aria-checked={(appearance.actionButtons || {}).showScrollToTop !== false}
-              aria-label="Show scroll to top button"
+              aria-label={t('theme.showScrollTopAria')}
               onClick={() => handleActionButtonChange('showScrollToTop', !((appearance.actionButtons || {}).showScrollToTop !== false))}
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
                 (appearance.actionButtons || {}).showScrollToTop !== false ? 'bg-[var(--color-primary)]' : 'bg-gray-300 dark:bg-gray-600'
               }`}
             >
               <span
-                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  (appearance.actionButtons || {}).showScrollToTop !== false ? 'translate-x-4' : 'translate-x-0'
+                className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  (appearance.actionButtons || {}).showScrollToTop !== false
+                    ? 'translate-x-0 ltr:translate-x-4 rtl:-translate-x-4'
+                    : 'translate-x-0'
                 }`}
               />
             </button>
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label htmlFor="theme-show-whatsapp" className="text-xs text-[var(--color-text-secondary)]">Show WhatsApp Floating Button</label>
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="theme-show-whatsapp" className="text-xs text-[var(--color-text-secondary)]">{t('theme.showWhatsapp')}</label>
               <button
                 type="button"
                 id="theme-show-whatsapp"
                 role="switch"
                 aria-checked={(appearance.actionButtons || {}).showWhatsapp !== false}
-                aria-label="Show WhatsApp floating button"
+                aria-label={t('theme.showWhatsappAria')}
                 onClick={() => handleActionButtonChange('showWhatsapp', !((appearance.actionButtons || {}).showWhatsapp !== false))}
                 className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
                   (appearance.actionButtons || {}).showWhatsapp !== false ? 'bg-[var(--color-primary)]' : 'bg-gray-300 dark:bg-gray-600'
                 }`}
               >
                 <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    (appearance.actionButtons || {}).showWhatsapp !== false ? 'translate-x-4' : 'translate-x-0'
+                  className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    (appearance.actionButtons || {}).showWhatsapp !== false
+                      ? 'translate-x-0 ltr:translate-x-4 rtl:-translate-x-4'
+                      : 'translate-x-0'
                   }`}
                 />
               </button>
             </div>
             <div>
-              <label htmlFor="theme-whatsapp-number" className="text-xs text-[var(--color-text-secondary)]">WhatsApp Phone Number</label>
+              <label htmlFor="theme-whatsapp-number" className="text-xs text-[var(--color-text-secondary)]">{t('theme.whatsappNumber')}</label>
               <Input
                 id="theme-whatsapp-number"
                 type="tel"
                 inputMode="tel"
                 autoComplete="tel"
+                dir="ltr"
                 value={(appearance.actionButtons || {}).whatsappNumber || ''}
                 onChange={e => handleActionButtonChange('whatsappNumber', e.target.value)}
                 placeholder="+201234567890"
                 className="mt-1"
               />
-              <p className="text-[10px] text-[var(--color-text-muted)] mt-1">Include country code (e.g. +20...).</p>
+              <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">{t('theme.whatsappHint')}</p>
             </div>
           </div>
         </div>

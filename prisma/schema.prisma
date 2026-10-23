@@ -857,6 +857,7 @@ model UserProfile {
   contactLinks      Json?    @map("contact_links")
   appearance        Json?
   localized         Json?
+  preferredBuilderLocale String? @map("preferred_builder_locale")
   status            String   @default("DRAFT")
   adminHidden       Boolean  @default(false) @map("admin_hidden")
   adminHiddenReason String?  @map("admin_hidden_reason")

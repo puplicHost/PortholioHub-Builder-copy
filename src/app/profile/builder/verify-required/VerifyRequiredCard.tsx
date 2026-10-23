@@ -6,6 +6,7 @@ import { MailWarning } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
+import { useBuilderI18n } from '../i18n/BuilderI18nContext'
 import { resendVerificationEmail } from '@/lib/actions/resend-verification'
 
 export function VerifyRequiredCard({ maskedEmail }: { maskedEmail: string }) {
@@ -14,6 +15,7 @@ export function VerifyRequiredCard({ maskedEmail }: { maskedEmail: string }) {
   const [failed, setFailed] = useState(false)
   const [cooldown, setCooldown] = useState(0)
   const { toast } = useToast()
+  const { locale, dir, t } = useBuilderI18n()
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -36,24 +38,24 @@ export function VerifyRequiredCard({ maskedEmail }: { maskedEmail: string }) {
       }
     } catch {
       setFailed(true)
-      toast('error', 'حصل خطأ، حاول تاني')
+      toast('error', t('verify.error'))
     } finally {
       setSending(false)
     }
-  }, [sending, cooldown, toast])
+  }, [sending, cooldown, toast, t])
 
   return (
-    <div dir="rtl" className="flex min-h-[70vh] items-center justify-center px-4">
+    <div lang={locale} dir={dir} className="flex min-h-[70vh] items-center justify-center px-4">
       <Card className="w-full max-w-md">
         <div className="flex flex-col items-center text-center">
           <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-warning)]/10 text-[var(--color-warning)]">
             <MailWarning className="h-7 w-7" />
           </div>
           <h1 className="text-2xl font-bold text-[var(--color-text-primary)]">
-            تأكيد الإيميل مطلوب
+            {t('verify.title')}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
-            عشان تقدر تستخدم Portfolio Builder، لازم تأكد بريدك الإلكتروني الأول.
+            {t('verify.description')}
           </p>
           <p className="mt-3 rounded-[var(--radius-md)] bg-[var(--color-surface-secondary)] px-4 py-2 text-sm font-medium text-[var(--color-text-primary)]" dir="ltr">
             {maskedEmail}
@@ -61,7 +63,7 @@ export function VerifyRequiredCard({ maskedEmail }: { maskedEmail: string }) {
 
           {sent ? (
             <p role="status" className="mt-5 text-sm font-medium text-[var(--color-success)]">
-              ✅ اتبعت الإيميل! تحقق من بريدك الوارد.
+              ✅ {t('verify.sent')}
             </p>
           ) : (
             <Button
@@ -70,21 +72,21 @@ export function VerifyRequiredCard({ maskedEmail }: { maskedEmail: string }) {
               className="mt-5 w-full"
             >
               {sending
-                ? 'جاري الإرسال...'
+                ? t('verify.resending')
                 : cooldown > 0
-                  ? `إرسال رابط التأكيد (${cooldown})`
-                  : 'إرسال رابط التأكيد'}
+                  ? t('verify.resendCooldown', { seconds: cooldown })
+                  : t('verify.resend')}
             </Button>
           )}
           {failed && !sent && (
-            <p role="alert" className="mt-3 text-xs text-[var(--color-danger)]">حصل خطأ، حاول تاني</p>
+            <p role="alert" className="mt-3 text-xs text-[var(--color-danger)]">{t('verify.error')}</p>
           )}
 
           <Link
             href="/profile/builder"
             className="mt-4 text-sm font-medium text-[var(--color-primary)] hover:underline"
           >
-            العودة إلى البيلدر
+            {t('verify.backToBuilder')}
           </Link>
         </div>
       </Card>
