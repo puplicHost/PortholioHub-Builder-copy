@@ -13,8 +13,6 @@ test('autosave + two-tab conflict modal', async ({ browser }) => {
   const phone = `+2010${String(stamp).slice(-8)}`;
   // Usernames must also be unique per run: a taken username fails the save
   // with a plain error (not the version-conflict modal).
-  const usernameB = `cflb${String(stamp).slice(-6)}`;
-  const usernameA = `cfla${String(stamp).slice(-6)}`;
 
   const context = await browser.newContext();
   const pageA = await context.newPage();

@@ -5,11 +5,6 @@ import { ImageIcon, ExternalLink, Search, ArrowUpDown } from 'lucide-react'
 import { useI18n } from '@/components/I18nProvider'
 import type { PortfolioAnalyticsProject } from '@/lib/actions/portfolio'
 
-interface ProjectViewsProps {
-  items: PortfolioAnalyticsProject[]
-  username?: string
-}
-
 export function ProjectViews({ items, username }: { items: PortfolioAnalyticsProject[]; username?: string }) {
   const { t } = useI18n()
   const [search, setSearch] = useState('')

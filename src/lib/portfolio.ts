@@ -336,7 +336,11 @@ function parseProjects(value: unknown): ProjectItem[] {
     })
 }
 
-function parseLocalized(row: any): LocalizedProfile {
+type UserProfileWithRelations = Prisma.UserProfileGetPayload<{
+  include: { testimonials: true; services: true }
+}>
+
+function parseLocalized(row: UserProfileWithRelations): LocalizedProfile {
   const raw = (row.localized ?? {}) as Record<string, unknown>
   return {
     displayName: toLString(raw.displayName as string | null) || toLString(row.displayName),
@@ -347,7 +351,7 @@ function parseLocalized(row: any): LocalizedProfile {
   }
 }
 
-function mapProfile(row: any): ProfileView {
+function mapProfile(row: UserProfileWithRelations): ProfileView {
   return {
     id: row.id,
     username: row.username,
@@ -364,14 +368,14 @@ function mapProfile(row: any): ProfileView {
     appearance: parseAppearance(row.appearance),
     localized: parseLocalized(row),
     portfolioItems: [],
-    testimonials: (row.testimonials ?? [])
+    testimonials: row.testimonials
       .slice()
-      .sort((a: any, b: any) => a.sortOrder - b.sortOrder)
-      .map((t: any) => ({ id: t.id, author: t.author, role: t.role, body: t.body, sortOrder: t.sortOrder })),
-    services: (row.services ?? [])
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((t) => ({ id: t.id, author: t.author, role: t.role, body: t.body, sortOrder: t.sortOrder })),
+    services: row.services
       .slice()
-      .sort((a: any, b: any) => a.sortOrder - b.sortOrder)
-      .map((s: any) => ({ id: s.id, title: s.title, description: s.description, price: s.price, sortOrder: s.sortOrder })),
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((s) => ({ id: s.id, title: s.title, description: s.description, price: s.price, sortOrder: s.sortOrder })),
   }
 }
 
@@ -411,27 +415,28 @@ export async function getProfileByUserId(userId: string): Promise<ProfileView | 
   return mapProfile(row)
 }
 
-export async function upsertProfileData(userId: string, input: ProfileInput, _isPro: boolean): Promise<ProfileView> {
-  const data: any = {}
+export async function upsertProfileData(userId: string, input: ProfileInput): Promise<ProfileView> {
+  const data: Prisma.UserProfileUncheckedUpdateInput = {}
 
   // Sync the legacy scalar Arabic columns (kept for backward compatibility / external consumers)
   // whenever localized values are provided.
   if (input.localized) {
-    const loc = input.localized as any
+    const loc = input.localized
     if (loc && typeof loc === 'object') {
-      const ar = (field: string) => {
-        const v = (loc as any)[field]
-        if (v && typeof v === 'object') return String(v.ar ?? '')
+      const ar = (field: keyof typeof loc) => {
+        const v = loc[field]
+        if (v && typeof v === 'object' && !Array.isArray(v)) return String((v as Partial<LString>).ar ?? '')
         return String(v ?? '')
       }
       if (loc.displayName !== undefined) data.displayName = ar('displayName')
       if (loc.bio !== undefined) data.bio = ar('bio').slice(0, 2000)
       if (loc.professionalTitle !== undefined) data.professionalTitle = ar('professionalTitle').slice(0, 120)
       if (loc.location !== undefined) data.location = ar('location').slice(0, 120)
-      if (loc.skills !== undefined && typeof loc.skills === 'object') {
-        data.skills = (loc.skills.ar ?? []).map(String).slice(0, 50)
+      const localizedSkills = loc.skills
+      if (localizedSkills && typeof localizedSkills === 'object' && Array.isArray(localizedSkills.ar)) {
+        data.skills = localizedSkills.ar.map(String).slice(0, 50)
       }
-      data.localized = loc
+      data.localized = loc as Prisma.InputJsonValue
     }
   }
 
@@ -453,7 +458,7 @@ export async function upsertProfileData(userId: string, input: ProfileInput, _is
       endDate: e.endDate,
       current: e.current,
       description: e.description,
-    }))
+    })) as Prisma.InputJsonValue
   }
 
   if (Array.isArray(input.education)) {
@@ -467,7 +472,7 @@ export async function upsertProfileData(userId: string, input: ProfileInput, _is
       endDate: e.endDate,
       current: e.current,
       description: e.description,
-    }))
+    })) as Prisma.InputJsonValue
   }
 
   if (Array.isArray(input.contactLinks)) {
@@ -476,7 +481,7 @@ export async function upsertProfileData(userId: string, input: ProfileInput, _is
         label: String(c?.label ?? '').trim(),
         url: normalizeContactUrl(c),
       }))
-      .filter((c) => c.url)
+      .filter((c) => c.url) as Prisma.InputJsonValue
   }
 
   if (Array.isArray(input.projects)) {
@@ -488,7 +493,7 @@ export async function upsertProfileData(userId: string, input: ProfileInput, _is
       projectLink: p.projectLink,
       tags: Array.isArray(p.tags) ? p.tags.map((t) => String(t)) : [],
       relatedContent: p.relatedContent,
-    }))
+    })) as Prisma.InputJsonValue
   }
 
   if (typeof input.username === 'string') {
@@ -499,7 +504,9 @@ export async function upsertProfileData(userId: string, input: ProfileInput, _is
     }
   }
 
-  if (input.appearance !== undefined) data.appearance = input.appearance ? input.appearance : Prisma.JsonNull
+  if (input.appearance !== undefined) {
+    data.appearance = input.appearance ? (input.appearance as Prisma.InputJsonValue) : Prisma.JsonNull
+  }
 
   if (Array.isArray(input.testimonials)) {
     data.testimonials = {
@@ -520,7 +527,7 @@ export async function upsertProfileData(userId: string, input: ProfileInput, _is
     create: {
       userId,
       username: await generateUsername('user'),
-      ...data,
+      ...(data as Omit<Prisma.UserProfileUncheckedCreateInput, 'userId' | 'username'>),
     },
     update: data,
     include: {

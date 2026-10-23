@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useSyncExternalStore, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
@@ -42,6 +42,10 @@ export const NAV_ITEMS: NavItemDef[] = [
   { href: '/admin/settings', label: 'Settings', icon: Settings, exact: false },
 ]
 
+// Client-only "mounted" flag without a state-setting effect: the server and
+// hydration snapshot is false, the client snapshot is true.
+const emptySubscribe = () => () => {}
+
 interface AdminLayoutShellProps {
   userEmail: string
   pendingRequestsCount?: number
@@ -57,12 +61,12 @@ export function AdminLayoutShell({
 }: AdminLayoutShellProps) {
   const pathname = usePathname()
   const { resolvedTheme, setTheme } = useTheme()
-  const [themeMounted, setThemeMounted] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
-
-  useEffect(() => {
-    setThemeMounted(true)
-  }, [])
+  const themeMounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
+  // The drawer remembers which route it was opened on, so a navigation closes
+  // it without a route-change effect.
+  const [mobileOpenForPath, setMobileOpenForPath] = useState<string | null>(null)
+  const mobileOpen = mobileOpenForPath === pathname
+  const closeMobile = useCallback(() => setMobileOpenForPath(null), [])
 
   // Persisted collapse state for desktop
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -74,19 +78,14 @@ export function AdminLayoutShell({
     }
   })
 
-  // Close mobile drawer on route changes
-  useEffect(() => {
-    setMobileOpen(false)
-  }, [pathname])
-
   // Close mobile drawer on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMobileOpen(false)
+      if (e.key === 'Escape') closeMobile()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [closeMobile])
 
   const toggleCollapse = () => {
     setCollapsed((prev) => {
@@ -183,7 +182,7 @@ export function AdminLayoutShell({
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs md:hidden animate-in fade-in duration-150"
-          onClick={() => setMobileOpen(false)}
+          onClick={closeMobile}
           aria-hidden="true"
         />
       )}
@@ -203,7 +202,7 @@ export function AdminLayoutShell({
             <span className="text-sm font-bold">Admin Panel</span>
           </div>
           <button
-            onClick={() => setMobileOpen(false)}
+            onClick={closeMobile}
             aria-label="Close navigation"
             className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)] cursor-pointer"
           >
@@ -221,7 +220,7 @@ export function AdminLayoutShell({
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setMobileOpen(false)}
+                onClick={closeMobile}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
                   active
                     ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-semibold'
@@ -270,7 +269,7 @@ export function AdminLayoutShell({
           <div className="flex items-center gap-3 min-w-0">
             {/* Hamburger Button for Mobile */}
             <button
-              onClick={() => setMobileOpen(true)}
+              onClick={() => setMobileOpenForPath(pathname)}
               aria-label="Open navigation menu"
               className="md:hidden flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] cursor-pointer shrink-0"
             >

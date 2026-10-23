@@ -8,12 +8,9 @@ import {
   TrendingUp,
   TrendingDown,
   Sparkles,
-  CreditCard,
   Receipt,
   Tags,
   ArrowLeft,
-  Users,
-  Calendar,
   Layers,
   ArrowUpRight,
 } from 'lucide-react'

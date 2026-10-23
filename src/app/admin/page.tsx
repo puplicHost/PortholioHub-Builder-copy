@@ -3,10 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { Card } from '@/components/ui/Card'
 import {
   Inbox,
-  CreditCard,
   Receipt,
   Users,
-  Globe,
   ArrowRight,
   CheckCircle2,
   AlertTriangle,
@@ -17,9 +15,7 @@ import {
   LifeBuoy,
   Megaphone,
   Wrench,
-  Clock,
   Sparkles,
-  ExternalLink,
 } from 'lucide-react'
 
 export const metadata = {

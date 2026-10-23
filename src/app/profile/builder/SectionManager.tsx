@@ -2,7 +2,7 @@
 'use client'
 
 import { useState } from 'react'
-import { GripVertical, Eye, EyeOff, ChevronDown, ChevronRight, Plus } from 'lucide-react'
+import { Eye, EyeOff, ChevronDown, ChevronRight, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { isSectionVisible, withSectionVisibility } from '@/lib/section-visibility'
 import { getPortfolioLang } from '@/lib/portfolio-language'

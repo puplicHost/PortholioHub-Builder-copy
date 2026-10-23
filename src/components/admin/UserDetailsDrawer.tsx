@@ -73,11 +73,6 @@ function fmtDate(iso: string | null): string {
   return d.toLocaleDateString('en-GB')
 }
 
-function planLabel(p: OverviewPlan | null): string {
-  if (!p) return '—'
-  return typeof p.name === 'string' ? p.name : p.id
-}
-
 export function UserDetailsDrawer({
   userId,
   onClose,
@@ -125,13 +120,17 @@ export function UserDetailsDrawer({
     }
   }, [])
 
+  // The parent keys this component by user id, so per-user state (data,
+  // temp password, dialogs) resets on open/close without an effect.
   useEffect(() => {
-    if (!userId) {
-      setData(null)
-      setTempPassword(null)
-      return
+    if (!userId) return
+    let cancelled = false
+    void (async () => {
+      if (!cancelled) await fetchOverview(userId)
+    })()
+    return () => {
+      cancelled = true
     }
-    fetchOverview(userId)
   }, [userId, fetchOverview])
 
   // Escape to close + lock body scroll while open.

@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { cache } from 'react'
 import { prisma } from '@/lib/prisma'
 import { Metadata } from 'next'
-import { ProjectPageView } from './ProjectPageView'
+import { ProjectPageView, type ProjectPageProfile } from './ProjectPageView'
 import { TrackBeacon } from '@/components/portfolio/TrackBeacon'
 import { isPortfolioVisible } from '@/lib/visibility'
 import { getSubscriptionState } from '@/lib/subscriptions'
@@ -48,7 +48,9 @@ const getPublicProject = cache(async (username: string, slug: string) => {
     },
   })
   const referenced = siblings.some((pg) => {
-    const content = (pg.content as any) || {}
+    const content = (pg.content && typeof pg.content === 'object' && !Array.isArray(pg.content)
+      ? pg.content
+      : {}) as Record<string, unknown>
     if (content.linkType === 'page' && content.linkedPageSlug === slug && isRealSlug(slug)) return true
     return (pg.items || []).some((item) => item.type === 'page_link' && item.externalUrl === slug)
   })
@@ -104,9 +106,9 @@ export default async function ProjectPageDetail({ params }: { params: Promise<{ 
     notFound()
   }
 
-  const profile = projectPage.profile as unknown as Record<string, unknown>
-  const appearance = (profile['appearance'] ?? {}) as Record<string, unknown>
-  const font = typeof appearance['font'] === 'string' ? appearance['font'] : 'Inter'
+  const profile = projectPage.profile as unknown as ProjectPageProfile
+  const appearance = profile.appearance ?? {}
+  const font = appearance.font ?? 'Inter'
 
   const breadcrumbLd = JSON.stringify({
     '@context': 'https://schema.org',

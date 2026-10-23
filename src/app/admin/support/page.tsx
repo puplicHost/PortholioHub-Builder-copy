@@ -21,7 +21,6 @@ import {
   Mail,
   Smartphone,
   CheckCircle2,
-  AlertTriangle,
 } from 'lucide-react'
 
 export const metadata = {

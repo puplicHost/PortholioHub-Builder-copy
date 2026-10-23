@@ -524,13 +524,6 @@ export function ClassicTemplate({
           return `${yrs} ${lang === 'ar' ? 'سنوات' : 'yrs'} ${lang === 'ar' ? 'و' : ''} ${mos} ${lang === 'ar' ? 'أشهر' : 'mos'}`
         }
         const renderExpItem = (item: any) => {
-          const endLabel = item.isCurrent
-            ? (lang === 'ar' ? 'الحالي' : 'Present')
-            : formatExpDate(item.endDate)
-          const dateLabel = item.startDate
-            ? `${formatExpDate(item.startDate)}${endLabel ? ` - ${endLabel}` : ''}`
-            : ''
-          const duration = item.startDate ? calcDuration(item.startDate, item.endDate, item.isCurrent) : ''
           const bullets = (t(item.description) || '').split('\n').filter((l: string) => l.trim())
           return (
             <div key={item.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm">

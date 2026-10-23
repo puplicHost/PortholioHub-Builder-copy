@@ -141,6 +141,7 @@ export function UsersSimpleTable({ rows, meta, basePath, params, hasFilters }: U
       </div>
 
       <UserDetailsDrawer
+        key={drawerUserId ?? 'closed'}
         userId={drawerUserId}
         onClose={() => setDrawerUserId(null)}
         onChanged={() => router.refresh()}

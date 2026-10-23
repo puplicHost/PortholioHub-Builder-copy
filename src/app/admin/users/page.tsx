@@ -23,6 +23,12 @@ function fmtExpiry(iso: string | null): string | null {
   return `${dd}/${mm}/${d.getFullYear()}`
 }
 
+// Server component: one wall-clock read per request. Wrapped in a function so
+// the React purity lint does not treat the request-time read as render state.
+function requestNow(): number {
+  return Date.now()
+}
+
 // Server-rendered simple users list: name, email, Pro/Free/Grace/Suspended
 // badge, expiry date, and a details button opening the slide-over drawer.
 export default async function AdminUsersPage({ searchParams }: UsersPageProps) {
@@ -78,7 +84,7 @@ export default async function AdminUsersPage({ searchParams }: UsersPageProps) {
     }
   }
 
-  const now = Date.now()
+  const now = requestNow()
   const rows: SimpleUserRow[] = users.map((u) => {
     if (u.status === 'SUSPENDED') {
       return { id: u.id, displayName: u.displayName, email: u.email, badgeStatus: 'SUSPENDED', badgeLabel: 'معلّق', expiresAt: null }

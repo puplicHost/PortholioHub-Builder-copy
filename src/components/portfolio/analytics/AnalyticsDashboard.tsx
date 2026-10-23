@@ -11,13 +11,10 @@ import {
   BarChart3,
   Clock,
   ExternalLink,
-  Copy,
   Check,
-  TrendingUp,
   Share2,
   ChevronDown,
   Zap,
-  Users,
   Download,
 } from 'lucide-react'
 import { useI18n } from '@/components/I18nProvider'

@@ -2,7 +2,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Search, FileText, Image as ImageIcon, Link as LinkIcon, Loader2, LayoutList, Calendar } from 'lucide-react'
+import { X, Search, FileText, Image as ImageIcon, Loader2, LayoutList, Calendar } from 'lucide-react'
 import { getAdminWorkspaceContent } from '@/lib/actions/portfolio'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'

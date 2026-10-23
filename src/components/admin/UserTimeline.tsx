@@ -8,8 +8,6 @@ import {
   Globe,
   Shield,
   Clock,
-  CheckCircle2,
-  AlertCircle,
   Mail,
   Key,
 } from 'lucide-react'

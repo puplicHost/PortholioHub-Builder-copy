@@ -5,7 +5,7 @@ import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } f
 import {
   ArrowLeft, Monitor, Smartphone, ExternalLink, Globe,
   Undo2, Redo2, CheckCircle, Check, Loader2, AlertCircle,
-  GripVertical, Eye, EyeOff, ChevronRight, ChevronDown,
+  GripVertical, Eye, EyeOff, ChevronRight,
   Palette, Layout, FileText, Menu, X, Sliders, Plus, Trash2,
   Trophy, Star, Users, Briefcase, Heart, Zap, Target, Award,
   Clock, TrendingUp, Code, Layers, Rocket, PenTool, Sun, Moon,
@@ -39,7 +39,7 @@ import { isSectionVisible, withSectionVisibility } from '@/lib/section-visibilit
 import { getWhatsAppLink, digitsOnly } from '@/lib/whatsapp'
 import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
 import { useRouter } from 'next/navigation'
-import { updatePortfolio, createProjectPage, updateProjectPage, deleteProjectPage, publishProfile, unpublishProfile, getOrCreateProfile } from '@/lib/actions/portfolio'
+import { updatePortfolio, createProjectPage, deleteProjectPage, publishProfile, unpublishProfile, getOrCreateProfile } from '@/lib/actions/portfolio'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { LivePreview } from './LivePreview'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
@@ -1195,7 +1195,7 @@ export function BuilderClient({
       ...p,
       appearance: { ...p.appearance, colorMode: mode },
     }))
-  }, [])
+  }, [setProfile])
 
   // Sections from profile, sorted for display.
   const sections = useMemo(() => {

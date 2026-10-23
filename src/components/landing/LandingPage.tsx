@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import Link from 'next/link'
 import { getWhatsAppLink } from '@/lib/whatsapp'
 import { LandingHeader } from './LandingHeader'
@@ -31,6 +31,50 @@ const LANG_KEY = 'ph_lang'
 const THEME_KEY = 'theme'
 const EXAMPLE_HREF = '/u/bousla'
 
+type LandingLang = 'ar' | 'en'
+type LandingTheme = 'light' | 'dark'
+
+// Persisted language/theme are an external store so the first client render
+// can adopt them without a state-setting effect (the server snapshot keeps
+// hydration stable).
+const prefListeners = new Set<() => void>()
+
+function subscribePrefs(cb: () => void) {
+  prefListeners.add(cb)
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === LANG_KEY || e.key === THEME_KEY) cb()
+  }
+  window.addEventListener('storage', onStorage)
+  return () => {
+    prefListeners.delete(cb)
+    window.removeEventListener('storage', onStorage)
+  }
+}
+
+function readPrefsSnapshot(defaultLang: LandingLang): string {
+  let lang: LandingLang = defaultLang
+  let theme: LandingTheme = 'light'
+  try {
+    const savedLang = localStorage.getItem(LANG_KEY)
+    if (savedLang === 'ar' || savedLang === 'en') lang = savedLang
+    const savedTheme = localStorage.getItem(THEME_KEY)
+    if (savedTheme === 'dark' || savedTheme === 'light') theme = savedTheme
+    else if (window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark'
+  } catch {
+    /* storage unavailable — keep defaults */
+  }
+  return `${lang}|${theme}`
+}
+
+function writePref(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    /* ignore */
+  }
+  for (const cb of prefListeners) cb()
+}
+
 export function LandingPage({
   lang: initialLang,
   name = 'PortfolioHub',
@@ -41,8 +85,19 @@ export function LandingPage({
 }: LandingPageProps) {
   const rootRef = useRef<HTMLDivElement>(null)
 
-  const [lang, setLang] = useState<'ar' | 'en'>(initialLang === 'en' ? 'en' : 'ar')
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const defaultLang: LandingLang = initialLang === 'en' ? 'en' : 'ar'
+  const prefs = useSyncExternalStore(
+    subscribePrefs,
+    () => readPrefsSnapshot(defaultLang),
+    () => `${defaultLang}|light`,
+  )
+  const [lang, theme] = useMemo(() => {
+    const [savedLang, savedTheme] = prefs.split('|')
+    return [
+      savedLang === 'en' ? 'en' : 'ar',
+      savedTheme === 'dark' ? 'dark' : 'light',
+    ] as const
+  }, [prefs])
   const [prices, setPrices] = useState<{ monthly?: number; annual?: number }>({
     monthly: monthlyPrice,
     annual: annualPrice,
@@ -52,40 +107,13 @@ export function LandingPage({
   const ar = lang !== 'en'
   const dir = ar ? 'rtl' : 'ltr'
 
-  /* ── Language: restore from localStorage, mirror the URL default ───── */
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(LANG_KEY)
-      if (saved === 'ar' || saved === 'en') setLang(saved)
-    } catch { /* ignore */ }
-  }, [])
-
-  const changeLang = useCallback((next: 'ar' | 'en') => {
-    setLang(next)
-    try { localStorage.setItem(LANG_KEY, next) } catch { /* ignore */ }
-  }, [])
-
-  /* ── Theme: restore from localStorage → prefers-color-scheme ───────── */
-  useEffect(() => {
-    let next: 'light' | 'dark' = 'light'
-    try {
-      const saved = localStorage.getItem(THEME_KEY)
-      if (saved === 'dark' || saved === 'light') {
-        next = saved
-      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        next = 'dark'
-      }
-    } catch { /* ignore */ }
-    setTheme(next)
+  const changeLang = useCallback((next: LandingLang) => {
+    writePref(LANG_KEY, next)
   }, [])
 
   const toggleTheme = useCallback(() => {
-    setTheme((prev) => {
-      const next = prev === 'dark' ? 'light' : 'dark'
-      try { localStorage.setItem(THEME_KEY, next) } catch { /* ignore */ }
-      return next
-    })
-  }, [])
+    writePref(THEME_KEY, theme === 'dark' ? 'light' : 'dark')
+  }, [theme])
 
   /* ── Prices: hydrate from the public endpoint when not server-supplied
         (keeps the /en route — which passes only `lang` — in sync with the

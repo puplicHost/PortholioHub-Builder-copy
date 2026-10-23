@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Non-shipping snapshots kept for audit history only.
+    "audit-backups/**",
+    "_legacy-backend-reference/**",
   ]),
 ]);
 

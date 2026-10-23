@@ -2,8 +2,31 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import type { Prisma } from '@prisma/client'
 import { sanitizeUrl } from '@/lib/urls'
 import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
+
+/** The subset of the owner profile rendered by a project detail page. */
+export type ProjectPageProfile = {
+  username: string
+  displayName?: string | null
+  localized?: { displayName?: { ar?: string | null; en?: string | null } | null } | null
+  appearance?: {
+    colorMode?: 'light' | 'dark' | null
+    primaryColor?: string | null
+    bgColorLight?: string | null
+    bgColorDark?: string | null
+    borderColor?: string | null
+    outlineColor?: string | null
+    font?: string | null
+    logoUrl?: string | null
+    footerBg?: string | null
+    footerText?: string | null
+    actionButtons?: { showScrollToTop?: boolean } | null
+  } | null
+}
+
+type ProjectPageWithItems = Prisma.ProjectPageGetPayload<{ include: { items: true } }>
 
 function ArrowUp({ className }: { className?: string }) {
   return (
@@ -34,7 +57,7 @@ function adjustColor(color: string, amount: number) {
   return '#' + color.replace(/^#/, '').replace(/../g, color => ('0' + Math.min(255, Math.max(0, parseInt(color, 16) + amount)).toString(16)).substr(-2))
 }
 
-export function ProjectPageView({ profile, projectPage }: { profile: any; projectPage: any }) {
+export function ProjectPageView({ profile, projectPage }: { profile: ProjectPageProfile; projectPage: ProjectPageWithItems }) {
   const appearance = profile.appearance || {}
   const defaultLangMode = getPortfolioLang(appearance)
   const defaultColorMode = appearance.colorMode || 'light'
@@ -122,7 +145,7 @@ export function ProjectPageView({ profile, projectPage }: { profile: any; projec
       <div className="max-w-[1200px] mx-auto px-6 sm:px-12 pb-16">
         {displayMode === 'list' ? (
           <div className="flex flex-col gap-6">
-            {projects.map((item: any) => (
+            {projects.map((item) => (
               <div key={item.id} className="flex flex-col sm:flex-row rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm">
                 <div className="w-full sm:w-[300px] h-[200px] sm:h-auto shrink-0 bg-[var(--color-bg)] flex items-center justify-center border-b sm:border-b-0 sm:border-r border-[var(--color-border)] overflow-hidden">
                   {item.imageUrl ? (
@@ -148,7 +171,7 @@ export function ProjectPageView({ profile, projectPage }: { profile: any; projec
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-            {projects.map((item: any) => (
+            {projects.map((item) => (
               <div key={item.id} className="group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col">
                 <div className="h-[200px] w-full bg-[var(--color-bg)] flex items-center justify-center border-b border-[var(--color-border)] overflow-hidden">
                   {item.imageUrl ? (

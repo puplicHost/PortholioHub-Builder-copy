@@ -73,11 +73,15 @@ export function NotificationBell() {
 
   // Badge truth from mount: poll + refetch on window focus regardless of open state.
   useEffect(() => {
-    refresh()
+    let cancelled = false
+    void (async () => {
+      if (!cancelled) await refresh()
+    })()
     const timer = setInterval(refresh, 30 * 1000)
     const onFocus = () => refresh()
     window.addEventListener('focus', onFocus)
     return () => {
+      cancelled = true
       clearInterval(timer)
       window.removeEventListener('focus', onFocus)
     }

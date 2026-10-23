@@ -574,7 +574,7 @@ export function UserActions({
 
           <div className="space-y-1.5">
             <label className="text-xs text-[var(--color-text-secondary)]">
-              To confirm, type the user's email: <strong className="select-all text-[var(--color-text-primary)]">{userEmail}</strong>
+              To confirm, type the user&apos;s email: <strong className="select-all text-[var(--color-text-primary)]">{userEmail}</strong>
             </label>
             <Input
               value={deleteInput}

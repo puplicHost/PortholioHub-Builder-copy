@@ -23,7 +23,7 @@ export function contactPlaceholder(label: string): string {
 }
 
 export function normalizeContactUrl(link: { label?: string; url?: string }): string {
-  let raw = (link.url ?? '').trim()
+  const raw = (link.url ?? '').trim()
   if (!raw) return ''
   if (/^\s*(javascript|data|vbscript):/i.test(raw)) return ''
   const label = (link.label ?? '').trim()
