@@ -412,6 +412,19 @@ const en: BuilderDictionary = {
     'When off, this page is reachable by its link but does not appear in the Projects section.',
   'misc.linkHint':
     'Pages with no linked project are hidden from public navigation until linked.',
+  'projectManager.cardBadge': 'Card',
+  'projectManager.pageBadge': 'Page',
+  'projectManager.linkedCardTitle': 'Content lives on the linked page',
+  'projectManager.linkedCardSubtitle':
+    'Cards are home-page entries. Project items belong to the page they open.',
+  'projectManager.linkedCardNotice':
+    'This is a project card. Its content is managed on the linked page: {title}.',
+  'projectManager.editLinkedPage': 'Edit linked page',
+  'projectManager.unlinkedCardNotice':
+    'This card has no linked page. Link a page to manage its content, or add items directly to this card (legacy mode).',
+  'projectManager.linkPageCta': 'Choose a page to link',
+  'projectManager.linkedContentMoved':
+    'Content for this card is managed on the linked page ({slug}). Open the Pages tab to edit it.',
   'misc.useIcon': 'Use {key} icon',
   'misc.clearIcon': 'Clear icon',
   'misc.currentlyWorking': 'Currently working here',
@@ -947,6 +960,19 @@ const ar: BuilderDictionary = {
     'عند الإيقاف، يمكن الوصول للصفحة عبر رابطها لكنها لا تظهر في قسم المشاريع.',
   'misc.linkHint':
     'الصفحات غير المرتبطة بمشروع مخفية من التنقل العام حتى يتم ربطها.',
+  'projectManager.cardBadge': 'بطاقة',
+  'projectManager.pageBadge': 'صفحة',
+  'projectManager.linkedCardTitle': 'المحتوى موجود في الصفحة المرتبطة',
+  'projectManager.linkedCardSubtitle':
+    'البطاقات تظهر في الصفحة الرئيسية، وعناصر المشروع ملك للصفحة التي تفتحها.',
+  'projectManager.linkedCardNotice':
+    'هذه بطاقة مشروع. محتواها يُدار من الصفحة المرتبطة: {title}.',
+  'projectManager.editLinkedPage': 'تحرير الصفحة المرتبطة',
+  'projectManager.unlinkedCardNotice':
+    'هذه البطاقة غير مرتبطة بصفحة. اربط صفحة لإدارة محتواها، أو أضف العناصر مباشرة إلى هذه البطاقة (الوضع القديم).',
+  'projectManager.linkPageCta': 'اختر صفحة للربط',
+  'projectManager.linkedContentMoved':
+    'محتوى هذه البطاقة يُدار من الصفحة المرتبطة ({slug}). افتح تبويب الصفحات لتحريره.',
   'misc.useIcon': 'استخدام أيقونة {key}',
   'misc.clearIcon': 'مسح الأيقونة',
   'misc.currentlyWorking': 'أعمل هنا حاليًا',

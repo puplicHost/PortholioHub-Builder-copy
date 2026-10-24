@@ -5,7 +5,7 @@ import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } f
 import {
   ArrowLeft, Monitor, Smartphone, ExternalLink, Globe,
   Undo2, Redo2, CheckCircle, Check, Loader2, AlertCircle,
-  GripVertical, Eye, EyeOff, ChevronRight,
+  GripVertical, Eye, EyeOff, ChevronRight, LayoutGrid,
   Palette, Layout, FileText, Menu, X, Sliders, Plus, Trash2,
   Trophy, Star, Users, Briefcase, Heart, Zap, Target, Award,
   Clock, TrendingUp, Code, Layers, Rocket, PenTool, Sun, Moon,
@@ -570,6 +570,33 @@ function ensureValidProjectItemTypes(projectPages: any[]) {
       type: item.type && VALID_PROJECT_ITEM_TYPES.includes(item.type) ? item.type : 'external_link',
     })),
   }))
+}
+
+/** Minimal shape shared by cards and content pages in `profile.projectPages`. */
+type BuilderProjectPageRow = {
+  id: string
+  title?: string | null
+  slug?: string | null
+  showInProjects?: boolean
+  linkedPageSlug?: string | null
+  content?: unknown
+}
+
+/** Cards are home-page entries; pages are the detail pages that hold content. */
+function isProjectCard(row: BuilderProjectPageRow): boolean {
+  return row.showInProjects !== false
+}
+
+/** Page slug a card points at (top-level field or legacy `content` mirror). */
+function linkedPageSlugOf(row: BuilderProjectPageRow): string {
+  if (typeof row.linkedPageSlug === 'string' && row.linkedPageSlug.trim() !== '') {
+    return row.linkedPageSlug.trim()
+  }
+  if (row.content && typeof row.content === 'object' && !Array.isArray(row.content)) {
+    const slug = (row.content as Record<string, unknown>).linkedPageSlug
+    if (typeof slug === 'string') return slug.trim()
+  }
+  return ''
 }
 
 function getProfileSnapshot(p: any): string {
@@ -1390,6 +1417,41 @@ export function BuilderClient({
     return refs
   }, [profile.projectPages])
 
+  // Resolve a card's linked content page (same profile, real slug).
+  const findLinkedPage = (row: BuilderProjectPageRow | null): BuilderProjectPageRow | null => {
+    if (!row || !isProjectCard(row)) return null
+    const slug = linkedPageSlugOf(row)
+    if (!slug) return null
+    return (projectPages as BuilderProjectPageRow[]).find(
+      (candidate) => candidate.slug === slug && candidate.id !== row.id,
+    ) ?? null
+  }
+
+  const editingProjectCard = editingProjectPage ? isProjectCard(editingProjectPage) : false
+  const editingLinkedSlug = editingProjectPage ? linkedPageSlugOf(editingProjectPage) : ''
+  // Cards open their linked page; pages open their own slug. A card that has
+  // no link yet keeps its legacy behaviour (own slug).
+  const liveProjectSlug = editingProjectPage
+    ? (editingProjectCard
+        ? (editingLinkedSlug || editingProjectPage.slug || '')
+        : (editingProjectPage.slug || ''))
+    : ''
+  const liveHref = profile.username
+    ? activePage !== 'home' && liveProjectSlug
+      ? `/u/${profile.username}/projects/${liveProjectSlug}`
+      : `/u/${profile.username}`
+    : '#'
+  const liveDisabled =
+    activePage !== 'home' &&
+    !!editingProjectPage &&
+    (!isRealSlug(liveProjectSlug) || String(editingProjectPage.id || '').startsWith('new-'))
+
+  const focusLinkControl = (pageId: string) => {
+    const el = document.getElementById(`pp-link-${pageId}`)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (el instanceof HTMLElement) el.focus()
+  }
+
   const handleCreateProjectPage = async () => {
     setCreatingProjectPage(true)
     try {
@@ -1570,6 +1632,8 @@ export function BuilderClient({
     // Project page editing
     if (activePage !== 'home' && editingProjectPage && !selectedSection) {
       const pp = editingProjectPage
+      const ppIsCard = isProjectCard(pp)
+      const ppLinkedPage = findLinkedPage(pp)
       return (
         <div className="space-y-6">
           <FormCard title={t('form.pageConfiguration')}>
@@ -1710,8 +1774,43 @@ export function BuilderClient({
             </div>
           </FormCard>
 
+          {ppIsCard && ppLinkedPage ? (
+            <FormCard title={t('projectManager.linkedCardTitle')} subtitle={t('projectManager.linkedCardSubtitle')}>
+              <div className="flex flex-col gap-3 rounded-xl border border-[var(--color-primary)]/25 bg-[var(--color-primary)]/5 p-4">
+                <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+                  {t('projectManager.linkedCardNotice', {
+                    title: ppLinkedPage.title || ppLinkedPage.slug || '',
+                  })}
+                </p>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="self-start"
+                  onClick={() => handleSelectProjectPage(ppLinkedPage)}
+                >
+                  <ExternalLink className="h-4 w-4 me-1.5" />
+                  {t('projectManager.editLinkedPage')}
+                </Button>
+              </div>
+            </FormCard>
+          ) : (
           <FormCard title={t('form.projectItems')} subtitle={t('form.subtitleProjectItems')}>
             <div className="space-y-4">
+              {ppIsCard && (
+                <div role="note" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                  <p className="text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
+                    {t('projectManager.unlinkedCardNotice')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => focusLinkControl(pp.id)}
+                    className="mt-2 inline-flex min-h-[32px] items-center gap-1 text-[12px] font-semibold text-[var(--color-primary)] hover:underline cursor-pointer"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                    {t('projectManager.linkPageCta')}
+                  </button>
+                </div>
+              )}
               <div>
                 <label id={`pp-display-mode-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.displayMode')}</label>
                 <div role="group" aria-labelledby={`pp-display-mode-${pp.id}`} className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
@@ -1861,6 +1960,7 @@ export function BuilderClient({
               </div>
             </div>
           </FormCard>
+          )}
         </div>
       )
     }
@@ -3165,11 +3265,7 @@ case 'skills':
             </button>
           </div>
 
-          {activePage !== 'home' &&
-          editingProjectPage &&
-          (editingProjectPage.slug?.startsWith('new-') ||
-            editingProjectPage.slug?.startsWith('project-new-') ||
-            editingProjectPage.id?.startsWith('new-')) ? (
+          {liveDisabled ? (
             <span
               title={t('topbar.saveFirst')}
               className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md border border-[var(--color-border)] bg-transparent px-2.5 text-xs font-medium text-[var(--color-text-muted)] opacity-50 cursor-not-allowed select-none"
@@ -3179,13 +3275,7 @@ case 'skills':
             </span>
           ) : (
             <a
-              href={
-                profile.username
-                  ? activePage !== 'home' && editingProjectPage?.slug
-                    ? `/u/${profile.username}/projects/${editingProjectPage.slug}`
-                    : `/u/${profile.username}`
-                  : '#'
-              }
+              href={liveHref}
               target="_blank"
               rel="noreferrer"
               className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md border border-[var(--color-border)] bg-transparent px-2.5 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
@@ -3612,11 +3702,26 @@ case 'skills':
                     <div className="flex items-center gap-2 truncate">
                       {isFreePlan ? (
                         <Lock className="h-3.5 w-3.5 text-[var(--color-text-muted)] shrink-0" aria-hidden="true" />
+                      ) : pp.showInProjects !== false ? (
+                        <LayoutGrid className="h-3.5 w-3.5 text-[var(--color-text-muted)] opacity-60 group-hover:opacity-100 shrink-0" aria-hidden="true" />
                       ) : (
-                        <FileText className="h-3.5 w-3.5 text-[var(--color-text-muted)] opacity-60 group-hover:opacity-100 shrink-0" />
+                        <FileText className="h-3.5 w-3.5 text-[var(--color-text-muted)] opacity-60 group-hover:opacity-100 shrink-0" aria-hidden="true" />
                       )}
-                      <div className="truncate">
-                        <span className="text-xs truncate block">{pp.title || t('common.untitled')}</span>
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <span className="text-xs truncate">{pp.title || t('common.untitled')}</span>
+                          <span
+                            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
+                              pp.showInProjects !== false
+                                ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                                : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-muted)]'
+                            }`}
+                          >
+                            {pp.showInProjects !== false
+                              ? t('projectManager.cardBadge')
+                              : t('projectManager.pageBadge')}
+                          </span>
+                        </div>
                         <span className="text-[10px] text-[var(--color-text-muted)] font-mono">/projects/{pp.slug}</span>
                       </div>
                     </div>

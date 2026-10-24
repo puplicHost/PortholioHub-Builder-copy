@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { getWhatsAppLink } from '@/lib/whatsapp'
 
-const EXAMPLE_HREF = '/u/bousla'
+const EXAMPLE_HREF = 'https://www.portfolio-hub.online/u/abdelrhmahassan'
 const CUSTOM_URL = 'https://portholiohub.pages.dev/'
 
 export type HomePageProps = {
@@ -283,10 +283,10 @@ export function HomePage({
               <p className="sub">بيلدر بورتفوليو بالسحب والإفلات — من غير كود، من غير ديزاينر، من غير انتظار. سيب لينك واحد بس لأي عميل بدل ما تبعت ملفات متفرقة كل مرة.</p>
               <div className="hero-cta">
                 <Link href="/register" className="btn btn-primary">ابدأ مجاناً — من غير كريدت كارد</Link>
-                <Link href={EXAMPLE_HREF} className="btn btn-secondary">
+                <a href={EXAMPLE_HREF} className="btn btn-secondary" target="_blank" rel="noopener noreferrer">
                   شوف مثال حي
                   <Mi name="arrow_back" />
-                </Link>
+                </a>
               </div>
               <p className="hero-note">جاهز في دقائق — أونلاين قبل ما تخلص قهوتك ☕</p>
               <div className="hero-video-wrap">
@@ -298,7 +298,7 @@ export function HomePage({
                 </div>
                 <div className="video-frame">
                   <iframe
-                    src="https://www.youtube.com/embed/elTwZYJrDZg?rel=0&modestbranding=1&playsinline=1"
+                    src="https://www.youtube.com/embed/VIDNRRdj1Jc?rel=0&modestbranding=1&playsinline=1"
                     title="PortfolioHub - ابنِ بورتفوليو احترافي بالعربي"
                     loading="lazy"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"

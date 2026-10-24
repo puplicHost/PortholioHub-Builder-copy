@@ -464,6 +464,15 @@ export async function updatePortfolio(data: {
           const usedSlugs = new Set<string>()
           const keptProjectIds = new Set<string>()
           const itemRows: Prisma.ProjectItemCreateManyInput[] = []
+          // Cards and content pages are separate rows (P0-3). Content belongs
+          // to the page, so items sent with a card that links to one are moved
+          // to the linked page below instead of being stored on the card
+          // (where the public detail route would never read them).
+          const slugToRealId = new Map<string, string>()
+          const contentPageIds = new Set<string>()
+          const linkedCardTargets: { cardId: string; linkedSlug: string }[] = []
+          const normalizeSlugKey = (value: string) =>
+            value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
           for (const { proj, isTempId } of planned) {
             const existingContent = (proj.content as any) || {}
@@ -520,6 +529,19 @@ export async function updatePortfolio(data: {
               projectsOut.push({ id: realProjectId, slug, title: projectData.title })
             }
             keptProjectIds.add(realProjectId)
+            slugToRealId.set(slug, realProjectId)
+            if (proj.showInProjects === false) contentPageIds.add(realProjectId)
+
+            const rowLinkType = proj.linkType || existingContent.linkType
+            const rowLinkedSlug = proj.linkedPageSlug || existingContent.linkedPageSlug
+            if (
+              proj.showInProjects !== false &&
+              rowLinkType === 'page' &&
+              typeof rowLinkedSlug === 'string' &&
+              rowLinkedSlug.trim() !== ''
+            ) {
+              linkedCardTargets.push({ cardId: realProjectId, linkedSlug: rowLinkedSlug.trim() })
+            }
 
             if (proj.items && proj.items.length > 0) {
               for (let idx = 0; idx < proj.items.length; idx++) {
@@ -536,12 +558,19 @@ export async function updatePortfolio(data: {
                 const textContent = item.textContent || null
                 const imageUrl = sanitizeUrl(item.imageUrl) || null
                 const workspaceItemId = item.workspaceItemId || null
+                const title = item.title || item.linkLabel || null
 
+                const hasTitle = title && String(title).trim() !== ''
                 const hasExt = externalUrl && String(externalUrl).trim() !== ''
                 const hasText = textContent && String(textContent).trim() !== ''
                 const hasImg = imageUrl && String(imageUrl).trim() !== ''
                 const hasWs = workspaceItemId && String(workspaceItemId).trim() !== ''
-                if (!hasExt && !hasText && !hasImg && !hasWs) continue
+                // A title-only item is valid content (the editor creates items
+                // titled "New Item" before anything else is filled in). Only
+                // skip items that are completely empty so we never persist
+                // orphan placeholders.
+                const isEmpty = !hasTitle && !hasExt && !hasText && !hasImg && !hasWs
+                if (isEmpty) continue
 
                 itemRows.push({
                   projectId: realProjectId,
@@ -550,9 +579,30 @@ export async function updatePortfolio(data: {
                   externalUrl,
                   textContent,
                   imageUrl,
-                  title: item.title || item.linkLabel || null,
+                  title,
                   sortOrder: item.sortOrder !== undefined ? item.sortOrder : idx,
                 })
+              }
+            }
+          }
+
+          // Re-target card items at the linked page row. This keeps stale
+          // clients (or payloads from before this fix) from persisting items
+          // on a card, and preserves the data instead of dropping it. When the
+          // linked page is not part of this save, the card keeps its items for
+          // backward compatibility.
+          if (linkedCardTargets.length > 0) {
+            const cardToPage = new Map<string, string>()
+            for (const { cardId, linkedSlug } of linkedCardTargets) {
+              const pageId = slugToRealId.get(normalizeSlugKey(linkedSlug))
+              if (pageId && pageId !== cardId && contentPageIds.has(pageId)) {
+                cardToPage.set(cardId, pageId)
+              }
+            }
+            if (cardToPage.size > 0) {
+              for (const row of itemRows) {
+                const targetPageId = cardToPage.get(row.projectId)
+                if (targetPageId) row.projectId = targetPageId
               }
             }
           }
@@ -893,6 +943,81 @@ export async function updateProjectPage(id: string, data: any) {
   } catch (error: any) {
     console.error('updateProjectPage error:', error)
     return { success: false, error: error.message || 'Failed to update project page' }
+  }
+}
+
+function readPageLink(content: Prisma.JsonValue | null): { linkType?: string; linkedPageSlug?: string } {
+  if (!content || typeof content !== 'object' || Array.isArray(content)) return {}
+  const record = content as Record<string, unknown>
+  return {
+    linkType: typeof record.linkType === 'string' ? record.linkType : undefined,
+    linkedPageSlug: typeof record.linkedPageSlug === 'string' ? record.linkedPageSlug : undefined,
+  }
+}
+
+/**
+ * One-time migration helper for data created before cards/pages were split.
+ * Moves items stored on a card row to the content page it links to. Never
+ * runs automatically — call it manually (admin trigger) after taking a backup.
+ */
+export async function migrateCardItemsToLinkedPage(): Promise<{
+  success: boolean
+  moved?: number
+  cards?: number
+  error?: string
+}> {
+  try {
+    const user = await getCurrentUser()
+    if (!user) return { success: false, error: 'Unauthorized' }
+
+    const profile = await prisma.userProfile.findUnique({
+      where: { userId: user.id },
+      select: {
+        projectPages: {
+          select: {
+            id: true,
+            slug: true,
+            showInProjects: true,
+            content: true,
+            items: { select: { id: true } },
+          },
+        },
+      },
+    })
+    if (!profile) return { success: false, error: 'Profile not found' }
+
+    const pageBySlug = new Map(profile.projectPages.map((page) => [page.slug, page]))
+    const moves: { fromId: string; toId: string; itemIds: string[] }[] = []
+
+    for (const card of profile.projectPages) {
+      if (card.showInProjects === false) continue
+      const link = readPageLink(card.content)
+      if (link.linkType !== 'page' || !link.linkedPageSlug) continue
+      const target = pageBySlug.get(link.linkedPageSlug)
+      if (!target || target.id === card.id || target.showInProjects !== false) continue
+      if (card.items.length === 0) continue
+      moves.push({ fromId: card.id, toId: target.id, itemIds: card.items.map((item) => item.id) })
+    }
+
+    if (moves.length > 0) {
+      await prisma.$transaction(
+        moves.map((move) =>
+          prisma.projectItem.updateMany({
+            where: { id: { in: move.itemIds } },
+            data: { projectId: move.toId },
+          }),
+        ),
+      )
+    }
+
+    return {
+      success: true,
+      moved: moves.reduce((total, move) => total + move.itemIds.length, 0),
+      cards: moves.length,
+    }
+  } catch (error: any) {
+    console.error('migrateCardItemsToLinkedPage error:', error)
+    return { success: false, error: error.message || 'Failed to migrate card items' }
   }
 }
 

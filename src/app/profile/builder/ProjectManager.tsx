@@ -217,6 +217,13 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
 
   // ─── Card Mode Edit Form ──────────────────────────────────────────
   if (isCardMode && editingItem) {
+    // A linked card is only a home-page entry; its items belong to the page
+    // row (the public detail route reads page.items). Hide the card-level
+    // content picker so new items cannot be stranded on the card.
+    const cardLinkedSlug =
+      editingItem.linkType === 'page' && typeof editingItem.linkedPageSlug === 'string'
+        ? editingItem.linkedPageSlug.trim()
+        : ''
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -370,38 +377,46 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
           )}
         </div>
 
-        <div className="space-y-3 border-t border-[var(--color-border)] pt-4" role="group" aria-labelledby="pmc-linked-content">
-          <div className="flex items-center justify-between">
-            <label id="pmc-linked-content" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkedContent')}</label>
-            <Button size="sm" variant="secondary" onClick={() => setIsPickerOpen(true)} className="h-7 px-2 text-xs">
-              <Plus className="me-1 h-3 w-3" /> {t('common.add')}
-            </Button>
+        {cardLinkedSlug ? (
+          <div role="note" className="rounded-xl border border-[var(--color-primary)]/25 bg-[var(--color-primary)]/5 p-3">
+            <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">
+              {t('projectManager.linkedContentMoved', { slug: cardLinkedSlug })}
+            </p>
           </div>
-          <div className="space-y-2">
-            {(editingItem.items || []).map((item: any, idx: number) => (
-              <div key={idx} className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-2 text-xs">
-                <div className="flex items-center gap-2 truncate">
-                  <span className="rounded bg-[var(--color-border)] px-1.5 py-0.5 text-[10px] font-medium capitalize">
-                    {item.type?.replace('workspace_', '') || t('common.item')}
-                  </span>
-                  <span className="truncate">{item.title || item.workspaceItemId || item.externalUrl || t('common.item')}</span>
+        ) : (
+          <div className="space-y-3 border-t border-[var(--color-border)] pt-4" role="group" aria-labelledby="pmc-linked-content">
+            <div className="flex items-center justify-between">
+              <label id="pmc-linked-content" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkedContent')}</label>
+              <Button size="sm" variant="secondary" onClick={() => setIsPickerOpen(true)} className="h-7 px-2 text-xs">
+                <Plus className="me-1 h-3 w-3" /> {t('common.add')}
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {(editingItem.items || []).map((item: any, idx: number) => (
+                <div key={idx} className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-2 text-xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="rounded bg-[var(--color-border)] px-1.5 py-0.5 text-[10px] font-medium capitalize">
+                      {item.type?.replace('workspace_', '') || t('common.item')}
+                    </span>
+                    <span className="truncate">{item.title || item.workspaceItemId || item.externalUrl || t('common.item')}</span>
+                  </div>
+                  <button
+                    aria-label={t('project.removeLinked')}
+                    onClick={() => void removeCardLinkedContent(idx)} className="rounded-md p-1.5 text-[var(--color-danger)] hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <button
-                  aria-label={t('project.removeLinked')}
-                  onClick={() => void removeCardLinkedContent(idx)} className="rounded-md p-1.5 text-[var(--color-danger)] hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
-            {(!editingItem.items || editingItem.items.length === 0) && (
-              <p className="rounded border border-dashed border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-text-muted)]">
-                {t('empty.linkedContent')}
-              </p>
-            )}
+              ))}
+              {(!editingItem.items || editingItem.items.length === 0) && (
+                <p className="rounded border border-dashed border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-text-muted)]">
+                  {t('empty.linkedContent')}
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        {isPickerOpen && (
+        {isPickerOpen && !cardLinkedSlug && (
           <MediaPicker
             userId={profile.userId}
             onClose={() => setIsPickerOpen(false)}
