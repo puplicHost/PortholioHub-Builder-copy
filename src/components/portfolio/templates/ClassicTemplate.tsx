@@ -11,7 +11,7 @@ import { isSectionVisible } from '@/lib/section-visibility'
 import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
 import { TestimonialsSlider } from '@/components/portfolio/TestimonialsSlider'
 import { PortfolioBottomNav, type PortfolioNavTab } from '@/components/portfolio/PortfolioBottomNav'
-import { Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin, FileText } from 'lucide-react'
+import { Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin } from 'lucide-react'
 
 // Helper to lighten/darken a hex color
 function adjustColor(color: string, amount: number) {
@@ -28,10 +28,21 @@ const ICON_MAP: Record<string, React.ComponentType<any>> = {
   user: UserIcon, message: MessageCircle,
 }
 
-function getIcon(name?: string, className?: string) {
+function getIcon(name?: string | null, className?: string) {
   if (!name) return null
   const Icon = ICON_MAP[name.toLowerCase()]
   return Icon ? <Icon className={className} aria-hidden="true" /> : null
+}
+
+// Focal point stored by the builder as percentages. Unknown/legacy values fall
+// back to the centre so old profiles render exactly as before.
+function normalizeImagePosition(value: any): { x: number; y: number } {
+  const x = Number(value?.x)
+  const y = Number(value?.y)
+  return {
+    x: Number.isFinite(x) ? Math.min(100, Math.max(0, x)) : 50,
+    y: Number.isFinite(y) ? Math.min(100, Math.max(0, y)) : 50,
+  }
 }
 
 // The template is rendered both as a full page and inline inside the
@@ -80,6 +91,7 @@ export function ClassicTemplate({
   onThemeChange?: (mode: 'light' | 'dark') => void
 }) {
   const appearance = profile.appearance || {}
+  const avatarPosition = normalizeImagePosition(appearance.avatarPosition)
   const localized = profile.localized || {}
   const contactLinks = profile.contactLinks || []
   
@@ -132,7 +144,11 @@ export function ClassicTemplate({
   const showScrollToTop = actionButtons.showScrollToTop !== false
   const whatsappNumber = actionButtons.whatsappNumber || ''
   const waDigits = normalizeWhatsappNumber(whatsappNumber)
-  const showWhatsapp = actionButtons.showWhatsapp !== false && !!waDigits
+  // In the builder preview there is no real visitor scroll position and no
+  // requirement to have a phone number saved yet. Keep both toggles visible so
+  // flipping them produces immediate, observable feedback.
+  const showScrollToTopButton = showScrollToTop && (preview || isScrolled)
+  const showWhatsappButton = actionButtons.showWhatsapp !== false && (!!waDigits || preview)
 
   // Item 8: resolve every `{ar,en}` (or flat-string) user-content value for the
   // visitor's language, falling back to the other language when a translation
@@ -355,27 +371,14 @@ export function ClassicTemplate({
         const bioVal = t(c.biography) || t(c.text)
         const biography = bioVal || (lang === 'ar' ? 'لا يوجد نص' : 'No about text provided.')
         const aboutBg = theme === 'dark' ? 'var(--color-card)' : '#FAF7F2'
-        const aboutImage = sanitizeUrl(profile.avatarUrl) || sanitizeUrl(c.imageUrl)
         return (
           <section id="about" key={section.id} className="py-8 cq-sm:py-16" style={{ backgroundColor: aboutBg }}>
             <div className="max-w-[1200px] mx-auto px-4 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               
-              {/* MOBILE VIEW (< md): image + text same row; margin below pushes cards below the fold */}
-              <div className="cq-md:hidden grid grid-cols-12 gap-3 items-start mb-12" dir="ltr">
-                {aboutImage ? (
-                  <div className="col-span-5">
-                    <div className="overflow-hidden rounded-2xl shadow-sm border border-[var(--color-border)]/40 bg-[var(--color-bg)] aspect-[3/4]">
-                      <img
-                        src={portfolioImageUrl(aboutImage, 800)}
-                        alt={displayName}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  </div>
-                ) : null}
-                <div className={`${aboutImage ? 'col-span-7' : 'col-span-12'} flex flex-col justify-start text-left`}>
+              {/* MOBILE VIEW (< md): text only. The profile image now lives in
+                  the hero (square, left) so it is not repeated here. */}
+              <div className="cq-md:hidden mb-12">
+                <div className="flex flex-col justify-start text-start">
                   {biography.split(/\n+/).map((para: string, i: number) => (
                     <p key={i} className="text-[var(--color-text)]/80 leading-[1.9] text-sm font-normal whitespace-pre-wrap text-pretty">
                       {para}
@@ -387,7 +390,7 @@ export function ClassicTemplate({
               {/* DESKTOP VIEW (>= md): heading + text left, stat cards right */}
               <div className="hidden cq-md:block">
                 <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                  {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <UserIcon className="text-[var(--color-primary)]" />}
+                  {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
                   {t(c.title) || (lang === 'ar' ? 'نبذة عني' : 'About Me')}
                 </h2>
                 {renderSectionDescription(c)}
@@ -399,9 +402,11 @@ export function ClassicTemplate({
                     <div className="col-span-2 grid grid-cols-1 cq-lg:grid-cols-2 gap-4">
                       {aboutStats.map((stat: any, i: number) => (
                         <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-all duration-500 shadow-sm">
-                          <div className="flex justify-center mb-3">
-                            {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]') || <Trophy className="w-7 h-7 text-[var(--color-primary)]" />}
-                          </div>
+                          {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]') && (
+                            <div className="flex justify-center mb-3">
+                              {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]')}
+                            </div>
+                          )}
                           <div className="text-3xl font-bold text-[var(--color-primary)] mb-2">{stat.value}</div>
                           <div className="text-sm text-[var(--color-text-muted)] font-medium">{t(stat.label)}</div>
                         </div>
@@ -419,9 +424,11 @@ export function ClassicTemplate({
                 <div className="grid grid-cols-2 gap-4 mt-8 cq-sm:mt-10 cq-md:hidden">
                   {aboutStats.map((stat: any, i: number) => (
                     <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-all duration-500 shadow-sm">
-                      <div className="flex justify-center mb-3">
-                        {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]') || <Trophy className="w-7 h-7 text-[var(--color-primary)]" />}
-                      </div>
+                      {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]') && (
+                        <div className="flex justify-center mb-3">
+                          {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]')}
+                        </div>
+                      )}
                       <div className="text-3xl font-bold text-[var(--color-primary)] mb-2">{stat.value}</div>
                       <div className="text-sm text-[var(--color-text-muted)] font-medium">{t(stat.label)}</div>
                     </div>
@@ -463,7 +470,7 @@ export function ClassicTemplate({
           <section id="skills" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
+                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
                 {t(c.heading) || t(c.title) || (lang === 'ar' ? 'المهارات' : 'Skills & Expertise')}
               </h2>
               {renderSectionDescription(c)}
@@ -525,16 +532,17 @@ export function ClassicTemplate({
         }
         const renderExpItem = (item: any) => {
           const bullets = (t(item.description) || '').split('\n').filter((l: string) => l.trim())
+          const itemIcon = getIcon(item.icon, 'w-5 h-5 text-white')
           return (
             <div key={item.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm">
               <div className="flex items-start gap-4 mb-3">
                 {item.companyLogo ? (
                   <img src={portfolioImageUrl(sanitizeUrl(item.companyLogo), 96)} alt={t(item.companyName)} loading="lazy" decoding="async" width={40} height={40} className="w-10 h-10 rounded-lg object-cover shrink-0" />
-                ) : (
+                ) : itemIcon ? (
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--color-primary)' }}>
-                    {getIcon(item.icon, 'w-5 h-5 text-white') || <Briefcase className="w-5 h-5 text-white" />}
+                    {itemIcon}
                   </div>
-                )}
+                ) : null}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-lg break-words font-bold text-[var(--color-text)]">{t(item.jobTitle) || (lang === 'ar' ? 'المسمى الوظيفي' : 'Job Title')}</h3>
@@ -579,7 +587,7 @@ export function ClassicTemplate({
           <section id="experience" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Briefcase className="text-[var(--color-primary)]" />}
+                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
                 {t(c.heading) || (lang === 'ar' ? 'الخبرات العملية' : 'Work Experience')}
               </h2>
               {t(c.description) && (
@@ -599,6 +607,7 @@ export function ClassicTemplate({
                           : ''
                         const duration = item.startDate ? calcDuration(item.startDate, item.endDate, item.isCurrent) : ''
                         const bullets = (t(item.description) || '').split('\n').filter((l: string) => l.trim())
+                        const itemIcon = getIcon(item.icon, 'w-5 h-5 text-white')
                         return (
                           <div key={item.id} style={{ transitionDelay: `${Math.min(ei * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative transition-all duration-500">
                             <div
@@ -617,11 +626,11 @@ export function ClassicTemplate({
                               <div className="flex items-start gap-4 mb-3">
                                 {item.companyLogo ? (
                                   <img src={portfolioImageUrl(sanitizeUrl(item.companyLogo), 96)} alt={t(item.companyName)} loading="lazy" decoding="async" width={40} height={40} className="w-10 h-10 rounded-lg object-cover shrink-0" />
-                                ) : (
+                                ) : itemIcon ? (
                                   <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--color-primary)' }}>
-                                    {getIcon(item.icon, 'w-5 h-5 text-white') || <Briefcase className="w-5 h-5 text-white" />}
+                                    {itemIcon}
                                   </div>
-                                )}
+                                ) : null}
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <h3 className="text-lg break-words font-bold text-[var(--color-text)]">{t(item.jobTitle) || (lang === 'ar' ? 'المسمى الوظيفي' : 'Job Title')}</h3>
@@ -695,7 +704,7 @@ export function ClassicTemplate({
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <div className="mb-16">
                 <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
-                  {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Briefcase className="text-[var(--color-primary)]" />}
+                  {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
                   {t(c.heading) || t(c.title) || (lang === 'ar' ? 'الخدمات' : 'Services')}
                 </h2>
                 {(t(c.description)) && (
@@ -709,9 +718,11 @@ export function ClassicTemplate({
                   {serviceItems.map((service: any, i: number) => (
                     <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group relative overflow-hidden rounded-xl border border-[var(--color-border)] p-4 cq-sm:p-7 bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
                       <span className="absolute top-0 left-0 right-0 h-1" style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))' }} />
-                      <div className="w-10 h-10 cq-sm:w-12 cq-sm:h-12 rounded-xl flex items-center justify-center mb-4 cq-sm:mb-5 shadow-sm [&>*]:!text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
-                        {getIcon(service.icon, 'w-5 h-5 text-white') || <Code className="w-5 h-5 text-white" />}
-                      </div>
+                      {getIcon(service.icon, 'w-5 h-5 text-white') && (
+                        <div className="w-10 h-10 cq-sm:w-12 cq-sm:h-12 rounded-xl flex items-center justify-center mb-4 cq-sm:mb-5 shadow-sm [&>*]:!text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
+                          {getIcon(service.icon, 'w-5 h-5 text-white')}
+                        </div>
+                      )}
                       <h3 className="text-base cq-sm:text-xl break-words font-bold mb-2 cq-sm:mb-3 text-[var(--color-text)] tracking-tight">{t(service.title)}</h3>
                       {t(service.description) ? (
                         <p className="text-[var(--color-text-muted)] text-[13px] cq-sm:text-[15px] leading-relaxed break-words mb-4 cq-sm:mb-5 line-clamp-3">{t(service.description)}</p>
@@ -747,7 +758,7 @@ export function ClassicTemplate({
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <div className="mb-12 text-center">
                 <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center justify-center gap-3">
-                  {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <MessageCircle className="text-[var(--color-primary)]" />}
+                  {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
                   {t(c.title) || (lang === 'ar' ? 'آراء العملاء' : 'Testimonials')}
                 </h2>
                 {(t(c.subtitle) || t(c.description)) && (
@@ -775,7 +786,7 @@ export function ClassicTemplate({
           <section id="projects" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Palette className="text-[var(--color-primary)]" />}
+                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
                 {t(c.title) || (lang === 'ar' ? 'المشاريع' : 'Featured Projects')}
               </h2>
               {renderSectionDescription(c)}
@@ -988,7 +999,7 @@ export function ClassicTemplate({
           <section id="gallery" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
+                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
                 {t(c.title) || (lang === 'ar' ? 'معرض الأعمال' : 'Gallery')}
               </h2>
               {renderSectionDescription(c)}
@@ -1017,7 +1028,7 @@ export function ClassicTemplate({
           <section id="files" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <FileText className="h-7 w-7 text-[var(--color-primary)]" />}
+                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
                 {t(c.title) || (lang === 'ar' ? 'ملفات للتحميل' : 'Downloads')}
               </h2>
               {renderSectionDescription(c)}
@@ -1056,7 +1067,7 @@ export function ClassicTemplate({
           <section id="contact-info" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Mail className="h-7 w-7 text-[var(--color-primary)]" />}
+                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
                 {t(c.title) || t(c.headline) || (lang === 'ar' ? 'تواصل معي' : 'Contact')}
               </h2>
               {renderSectionDescription(c)}
@@ -1100,7 +1111,7 @@ export function ClassicTemplate({
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               {t(c.title) ? (
                 <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                  {getIcon(sectionIcon, 'text-[var(--color-primary)]') || <Layout className="text-[var(--color-primary)]" />}
+                  {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
                   {t(c.title)}
                 </h2>
               ) : null}
@@ -1490,23 +1501,30 @@ export function ClassicTemplate({
 
           {/* Floating Action Buttons */}
           <div className="fixed bottom-20 cq-md:bottom-6 left-6 z-50 flex flex-col items-start gap-3">
-            {showWhatsapp && (
+            {showWhatsappButton && (
               <a
-                href={`https://wa.me/${waDigits}`}
+                href={waDigits ? `https://wa.me/${waDigits}` : undefined}
                 target="_blank"
                 rel="noreferrer"
-                onClick={() => trackPortfolioEvent(profile.username, 'whatsapp_click')}
-                className="h-11 w-11 flex items-center justify-center rounded-full text-white shadow-lg hover:scale-110 transition-transform"
+                aria-disabled={!waDigits}
+                onClick={(e) => {
+                  if (!waDigits) {
+                    e.preventDefault()
+                    return
+                  }
+                  trackPortfolioEvent(profile.username, 'whatsapp_click')
+                }}
+                className={`h-11 w-11 flex items-center justify-center rounded-full text-white shadow-lg transition-transform ${waDigits ? 'hover:scale-110' : 'cursor-not-allowed opacity-60'}`}
                 style={{ backgroundColor: 'var(--color-primary)' }}
-                title="Chat on WhatsApp"
+                title={waDigits ? 'Chat on WhatsApp' : (lang === 'ar' ? 'أضف رقم واتساب لتفعيل الزر' : 'Add a WhatsApp number to enable this button')}
               >
                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
               </a>
             )}
-            {showScrollToTop && (
+            {showScrollToTopButton && (
               <button
                 onClick={scrollToTop}
-                className={`h-11 w-11 flex items-center justify-center rounded-full bg-[var(--color-primary)] text-white shadow-lg hover:scale-110 transition-all ${isScrolled ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}
+                className="h-11 w-11 flex items-center justify-center rounded-full bg-[var(--color-primary)] text-white shadow-lg hover:scale-110 transition-all"
                 title="Back to top"
               >
                 <ArrowUp className="h-5 w-5" />
@@ -1522,14 +1540,19 @@ export function ClassicTemplate({
               const bgImage = sanitizeUrl(heroContent.backgroundImage)
               const overlayOpacity = heroContent.overlayOpacity !== undefined ? Number(heroContent.overlayOpacity) : 0.5
 
+              const bgPosition = normalizeImagePosition(heroContent.backgroundPosition)
+
               return (
                 <section 
                   id="hero" 
                   className="relative flex items-center justify-center min-h-[50vh] cq-md:min-h-[62vh] overflow-hidden"
                   style={{ 
-                    background: bgImage
-                      ? `url("${bgImage}") center/cover no-repeat`
+                    backgroundImage: bgImage
+                      ? `url("${bgImage}")`
                       : 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
+                    backgroundSize: bgImage ? 'cover' : 'auto',
+                    backgroundPosition: bgImage ? `${bgPosition.x}% ${bgPosition.y}%` : 'center',
+                    backgroundRepeat: 'no-repeat',
                     paddingTop: '80px',
                     paddingBottom: '35px'
                   }}
@@ -1540,44 +1563,61 @@ export function ClassicTemplate({
                       style={{ opacity: overlayOpacity }}
                     />
                   )}
-                  <div className="max-w-[1200px] mx-auto px-5 cq-sm:px-12 flex flex-col items-center text-center z-10 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative">
-                    {/* Avatar image — desktop only (hidden on mobile) */}
+                  <div
+                    dir="ltr"
+                    className="w-full max-w-[1200px] mx-auto px-5 cq-sm:px-12 z-10 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative grid grid-cols-12 items-center gap-4 cq-md:flex cq-md:flex-col cq-md:items-center cq-md:gap-0 cq-md:text-center"
+                  >
+                    {/* Mobile: square photo on the left, name/title/buttons on
+                        the right. Desktop: round photo above the centred text. */}
                     {profile.avatarUrl ? (
-                      <div className="hidden cq-md:block w-36 h-36 cq-lg:w-44 cq-lg:h-44 rounded-full overflow-hidden border-4 border-white shadow-2xl mb-6 hover:scale-105 transition-transform duration-500 bg-white shrink-0">
-                        <img src={portfolioImageUrl(sanitizeUrl(profile.avatarUrl), 400)} alt={displayName} loading="eager" fetchPriority="high" decoding="async" className="w-full h-full object-cover" />
+                      <div className="col-span-5 w-full aspect-square cq-md:w-36 cq-md:h-36 cq-md:aspect-auto cq-lg:w-44 cq-lg:h-44 rounded-2xl cq-md:rounded-full overflow-hidden border-4 border-white shadow-2xl cq-md:mb-6 hover:scale-105 transition-transform duration-500 bg-white shrink-0">
+                        <img
+                          src={portfolioImageUrl(sanitizeUrl(profile.avatarUrl), 400)}
+                          alt={displayName}
+                          loading="eager"
+                          fetchPriority="high"
+                          decoding="async"
+                          className="w-full h-full object-cover"
+                          style={{ objectPosition: `${avatarPosition.x}% ${avatarPosition.y}%` }}
+                        />
                       </div>
                     ) : (
-                      <div className="hidden cq-md:flex w-36 h-36 cq-lg:w-44 cq-lg:h-44 rounded-full overflow-hidden border-4 border-white shadow-2xl mb-6 hover:scale-105 transition-transform duration-500 bg-white/20 backdrop-blur-md items-center justify-center text-white text-4xl cq-lg:text-5xl font-black select-none shrink-0">
+                      <div className="col-span-5 w-full aspect-square cq-md:w-36 cq-md:h-36 cq-md:aspect-auto cq-lg:w-44 cq-lg:h-44 rounded-2xl cq-md:rounded-full overflow-hidden border-4 border-white shadow-2xl cq-md:mb-6 hover:scale-105 transition-transform duration-500 bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-4xl cq-lg:text-5xl font-black select-none shrink-0">
                         {initial}
                       </div>
                     )}
-                    <h1 className="text-3xl cq-sm:text-4xl cq-md:text-5xl font-bold text-white mb-2.5 cq-sm:mb-4 text-center leading-snug whitespace-pre-line" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
-                      {displayName}
-                    </h1>
-                    {(title || t(heroContent.subtitle)) ? (
-                      <p className="text-sm cq-sm:text-sm cq-md:text-base text-white/90 max-w-xl leading-relaxed mb-5 cq-sm:mb-7 font-normal text-center">
-                        {title || t(heroContent.subtitle)}
-                      </p>
-                    ) : null}
-                    {t(heroContent.description) && (
-                      <p className="text-xs cq-sm:text-sm text-white/80 max-w-xl leading-relaxed mb-5 cq-sm:mb-7 text-center">
-                        {t(heroContent.description)}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap justify-center items-center gap-2.5 cq-sm:gap-4" dir="rtl">
-                      <a 
-                        href="#projects" 
-                        className="px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-2 cursor-pointer min-h-[44px]"
-                      >
-                        <ArrowRight className="h-3.5 w-3.5 cq-sm:h-4 cq-sm:w-4 rtl:rotate-180" />
-                        <span>{lang === 'ar' ? 'شاهد أعمالي' : 'View My Work'}</span>
-                      </a>
-                      <a 
-                        href="#contact" 
-                        className="px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl border-2 border-white text-white font-bold text-sm hover:bg-white/10 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[44px] inline-flex items-center"
-                      >
-                        <span>{lang === 'ar' ? 'تواصل معي' : 'Contact Me'}</span>
-                      </a>
+                    <div
+                      className="col-span-7 min-w-0 flex flex-col items-start text-start cq-md:contents"
+                      dir={lang === 'ar' ? 'rtl' : 'ltr'}
+                    >
+                      <h1 className="text-2xl cq-sm:text-3xl cq-md:text-5xl font-bold text-white mb-1.5 cq-sm:mb-2.5 cq-md:mb-4 text-start cq-md:text-center leading-snug whitespace-pre-line break-words" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
+                        {displayName}
+                      </h1>
+                      {(title || t(heroContent.subtitle)) ? (
+                        <p className="text-sm cq-md:text-base text-white/90 max-w-xl leading-relaxed mb-3 cq-sm:mb-4 cq-md:mb-7 font-normal text-start cq-md:text-center break-words">
+                          {title || t(heroContent.subtitle)}
+                        </p>
+                      ) : null}
+                      {t(heroContent.description) && (
+                        <p className="hidden cq-md:block text-xs cq-sm:text-sm text-white/80 max-w-xl leading-relaxed mb-5 cq-sm:mb-7 text-center">
+                          {t(heroContent.description)}
+                        </p>
+                      )}
+                      <div className="mt-1 flex w-full flex-col items-stretch justify-start gap-2 cq-sm:gap-2.5 cq-md:mt-0 cq-md:w-auto cq-md:flex-row cq-md:flex-wrap cq-md:items-center cq-md:justify-center cq-sm:gap-4" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+                        <a 
+                          href="#projects" 
+                          className="w-full cq-md:w-auto px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                        >
+                          <ArrowRight className="h-3.5 w-3.5 cq-sm:h-4 cq-sm:w-4 rtl:rotate-180" />
+                          <span>{lang === 'ar' ? 'شاهد أعمالي' : 'View My Work'}</span>
+                        </a>
+                        <a 
+                          href="#contact" 
+                          className="w-full cq-md:w-auto px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl border-2 border-white text-white font-bold text-sm hover:bg-white/10 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[44px] inline-flex items-center justify-center"
+                        >
+                          <span>{lang === 'ar' ? 'تواصل معي' : 'Contact Me'}</span>
+                        </a>
+                      </div>
                     </div>
                   </div>
                 </section>

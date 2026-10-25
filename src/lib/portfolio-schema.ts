@@ -86,7 +86,7 @@ const experienceItem = z
     isCurrent: z.boolean().optional(),
     workMode: plainText(60).optional(),
     employmentType: plainText(60).optional(),
-    icon: plainText(60).optional(),
+    icon: plainText(60).nullable().optional(),
     description: lstringOrText(1000).optional(),
   })
   // Legacy rows may carry extra keys (old builder versions). Unknown keys must
@@ -197,7 +197,7 @@ const fileItem = z
 // `items` (serviceItem) shape kept below for previously stored rows.
 const builderServiceItem = z
   .object({
-    icon: plainText(40).optional(),
+    icon: plainText(40).nullable().optional(),
     title: lstringOrText(120).optional(),
     description: lstringOrText(500).optional(),
     features: z.array(plainText(120)).max(50).optional(),
@@ -215,6 +215,12 @@ const heroContent = z
     jobTitle: lstring(120).optional(),
     avatarMediaId: z.string().max(200).optional(),
     backgroundImage: urlOrEmpty.optional(),
+    // Focal point for the hero cover image (percentages). Kept optional so
+    // legacy rows without a stored position render centred.
+    backgroundPosition: z
+      .object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) })
+      .optional()
+      .catch(undefined),
     overlayOpacity: z.number().min(0).max(1).optional(),
     cta: z
       .array(z.object({ label: plainText(60), target: url }).strict())
@@ -226,7 +232,7 @@ const heroContent = z
 const aboutContent = z
   .object({
     title: lstring(120).optional(),
-    icon: plainText(40).optional(),
+    icon: plainText(40).nullable().optional(),
     text: lstring(2000).optional(),
     biography: lstring(2000).optional(),
     description: ldesc(300).optional(),
@@ -236,7 +242,7 @@ const aboutContent = z
           .object({
             value: plainText(60),
             label: lstringOrText(60),
-            icon: plainText(40).optional(),
+            icon: plainText(40).nullable().optional(),
           })
           .strict(),
       )
@@ -248,7 +254,7 @@ const aboutContent = z
 const skillsContent = z
   .object({
     title: lstring(120).optional(),
-    icon: plainText(40).optional(),
+    icon: plainText(40).nullable().optional(),
     heading: lstring(120).optional(),
     description: ldesc(300).optional(),
     skills: z.array(plainText(60)).max(50).optional(),
@@ -271,7 +277,7 @@ const experienceContent = z
   .object({
     heading: lstring(120).optional(),
     title: lstring(120).optional(),
-    icon: plainText(40).optional(),
+    icon: plainText(40).nullable().optional(),
     displayMode: z.enum(['timeline', 'grid', 'list']).optional(),
     description: lstring(500).optional(),
     items: z.array(experienceItem).max(30).optional(),
@@ -281,7 +287,7 @@ const experienceContent = z
 const servicesContent = z
   .object({
     title: lstring(120).optional(),
-    icon: plainText(40).optional(),
+    icon: plainText(40).nullable().optional(),
     description: lstring(500).optional(),
     services: z.array(builderServiceItem).max(30).optional(),
     items: z.array(serviceItem).max(20).optional(),
@@ -291,7 +297,7 @@ const servicesContent = z
 const projectsContent = z
   .object({
     title: lstring(120).optional(),
-    icon: plainText(40).optional(),
+    icon: plainText(40).nullable().optional(),
     displayMode: z.enum(['grid', 'list']).optional(),
     subtitle: lstring(500).optional(),
     description: lstring(500).optional(),
@@ -301,7 +307,7 @@ const projectsContent = z
 const galleryContent = z
   .object({
     title: lstring(120).optional(),
-    icon: plainText(40).optional(),
+    icon: plainText(40).nullable().optional(),
     description: ldesc(300).optional(),
     items: z.array(galleryItem).max(60).optional(),
   })
@@ -310,7 +316,7 @@ const galleryContent = z
 const filesContent = z
   .object({
     title: lstring(120).optional(),
-    icon: plainText(40).optional(),
+    icon: plainText(40).nullable().optional(),
     description: ldesc(300).optional(),
     items: z.array(fileItem).max(60).optional(),
   })
@@ -320,7 +326,7 @@ const testimonialsContent = z
   .object({
     title: lstring(120).optional(),
     subtitle: lstring(500).optional(),
-    icon: plainText(40).optional(),
+    icon: plainText(40).nullable().optional(),
     description: ldesc(300).optional(),
     items: z.array(testimonialItem).max(30).optional(),
   })
@@ -331,7 +337,7 @@ const contactContent = z
     title: lstring(120).optional(),
     headline: lstring(120).optional(),
     subheading: lstring(500).optional(),
-    icon: plainText(40).optional(),
+    icon: plainText(40).nullable().optional(),
     description: ldesc(300).optional(),
     links: z.array(contactLink).max(20).optional(),
   })
@@ -350,7 +356,7 @@ const footerContent = z
 const customContent = z
   .object({
     title: lstring(120).optional(),
-    icon: plainText(40).optional(),
+    icon: plainText(40).nullable().optional(),
     description: ldesc(300).optional(),
     paragraphs: z.array(plainText(2000)).max(20).optional(),
   })
@@ -505,6 +511,11 @@ const appearanceSchema = z
     defaultLanguage: z.enum(['ar', 'en', 'both']).optional().catch(undefined),
     n: z.enum(['ar', 'en', 'both']).optional().catch(undefined),
     actionButtons: z.record(z.string(), z.unknown()).optional().catch(undefined),
+    // Profile-image focal point used by the hero avatar (percentages).
+    avatarPosition: z
+      .object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) })
+      .optional()
+      .catch(undefined),
   })
   .catchall(z.unknown());
 

@@ -75,10 +75,25 @@ const ICON_OPTIONS = [
   { key: 'pen', icon: PenTool },
 ] as const
 
-function IconPicker({ value, onChange }: { value?: string; onChange: (key: string | undefined) => void }) {
-  const { t } = useBuilderI18n()
+function IconPicker({ value, onChange }: { value?: string | null; onChange: (key: string | undefined) => void }) {
+  const { t, locale } = useBuilderI18n()
+  const noIconLabel = locale === 'ar' ? 'بدون أيقونة' : 'No icon'
   return (
     <div className="grid grid-cols-6 gap-1.5">
+      <button
+        type="button"
+        onClick={() => onChange(undefined)}
+        aria-label={noIconLabel}
+        aria-pressed={!value}
+        className={`p-1.5 rounded-md border transition-colors cursor-pointer flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
+          !value
+            ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+            : 'border-[var(--color-border)] bg-transparent text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text-primary)]'
+        }`}
+        title={noIconLabel}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
       {ICON_OPTIONS.map(({ key, icon: Icon }) => (
         <button
           key={key}
@@ -96,17 +111,172 @@ function IconPicker({ value, onChange }: { value?: string; onChange: (key: strin
           <Icon className="h-3.5 w-3.5" />
         </button>
       ))}
-      {value && (
+    </div>
+  )
+}
+
+function UploadOverlay({ active, label, progress }: { active: boolean; label: string; progress?: number }) {
+  if (!active) return null
+  const percent = Math.max(0, Math.min(100, Math.round(progress ?? 0)))
+  return (
+    <div
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+      aria-label={label}
+      className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 rounded-[inherit] bg-black/55"
+    >
+      <Loader2 className="h-4 w-4 animate-spin text-white" aria-hidden="true" />
+      <span className="text-[10px] font-bold tabular-nums text-white">{percent}%</span>
+      <span className="mt-0.5 h-1 w-10 overflow-hidden rounded-full bg-white/30" aria-hidden="true">
+        <span
+          className="block h-full rounded-full bg-white transition-[width] duration-150"
+          style={{ width: `${percent}%` }}
+        />
+      </span>
+    </div>
+  )
+}
+
+type ImagePosition = { x: number; y: number }
+
+function clampImagePosition(value: any): ImagePosition {
+  const x = Number(value?.x)
+  const y = Number(value?.y)
+  return {
+    x: Number.isFinite(x) ? Math.min(100, Math.max(0, x)) : 50,
+    y: Number.isFinite(y) ? Math.min(100, Math.max(0, y)) : 50,
+  }
+}
+
+// LinkedIn-style focal point picker: drag inside the frame (or use the two
+// sliders) to choose which part of the image stays visible when `object-fit:
+// cover` crops it. Values are percentages, stored with the image's owner.
+function ImagePositionControl({
+  src,
+  value,
+  onChange,
+  variant = 'square',
+  uploading = false,
+  progress = 0,
+  label,
+}: {
+  src: string
+  value?: ImagePosition | null
+  onChange: (next: ImagePosition) => void
+  variant?: 'square' | 'wide'
+  uploading?: boolean
+  progress?: number
+  label: string
+}) {
+  const { locale } = useBuilderI18n()
+  const ar = locale === 'ar'
+  const position = clampImagePosition(value)
+  const frameRef = useRef<HTMLDivElement | null>(null)
+  const draggingRef = useRef(false)
+
+  const updateFromPointer = (clientX: number, clientY: number) => {
+    const rect = frameRef.current?.getBoundingClientRect()
+    if (!rect || rect.width <= 0 || rect.height <= 0) return
+    onChange({
+      x: Math.min(100, Math.max(0, Math.round(((clientX - rect.left) / rect.width) * 100))),
+      y: Math.min(100, Math.max(0, Math.round(((clientY - rect.top) / rect.height) * 100))),
+    })
+  }
+
+  const slider = (axis: 'x' | 'y') => (
+    <label className="flex items-center gap-2 text-[11px] font-medium text-[var(--color-text-muted)]">
+      <span className="w-16 shrink-0">{axis === 'x' ? (ar ? 'أفقي' : 'Horizontal') : (ar ? 'رأسي' : 'Vertical')}</span>
+      <input
+        type="range"
+        dir="ltr"
+        min={0}
+        max={100}
+        value={position[axis]}
+        onChange={(event) => onChange({ ...position, [axis]: Number(event.target.value) })}
+        aria-label={axis === 'x' ? (ar ? 'الموضع الأفقي' : 'Horizontal position') : (ar ? 'الموضع الرأسي' : 'Vertical position')}
+        className="h-1.5 flex-1 cursor-pointer accent-[var(--color-primary)]"
+      />
+      <span className="w-8 text-end font-mono tabular-nums">{position[axis]}%</span>
+    </label>
+  )
+
+  return (
+    <div className="space-y-2.5">
+      <div
+        ref={frameRef}
+        dir="ltr"
+        role="group"
+        aria-label={label}
+        className={`relative touch-none overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-secondary)] shadow-sm ${
+          variant === 'wide' ? 'h-28 w-full rounded-lg' : 'h-32 w-32 rounded-xl'
+        } ${uploading ? 'cursor-progress' : 'cursor-move'}`}
+        onPointerDown={(event) => {
+          if (uploading) return
+          draggingRef.current = true
+          event.currentTarget.setPointerCapture(event.pointerId)
+          updateFromPointer(event.clientX, event.clientY)
+        }}
+        onPointerMove={(event) => {
+          if (!draggingRef.current || uploading) return
+          updateFromPointer(event.clientX, event.clientY)
+        }}
+        onPointerUp={(event) => {
+          draggingRef.current = false
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId)
+          }
+        }}
+        onPointerCancel={() => {
+          draggingRef.current = false
+        }}
+      >
+        {variant === 'wide' ? (
+          <div
+            className="absolute inset-0 bg-no-repeat"
+            style={{
+              backgroundImage: `url("${src}")`,
+              backgroundSize: 'cover',
+              backgroundPosition: `${position.x}% ${position.y}%`,
+            }}
+          />
+        ) : (
+          <img
+            src={src}
+            alt=""
+            draggable={false}
+            className="h-full w-full select-none object-cover"
+            style={{ objectPosition: `${position.x}% ${position.y}%` }}
+          />
+        )}
+        {!uploading && (
+          <span
+            className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/30 shadow-[0_0_0_2px_rgba(0,0,0,0.35)]"
+            style={{ left: `${position.x}%`, top: `${position.y}%` }}
+            aria-hidden="true"
+          />
+        )}
+        <UploadOverlay active={uploading} progress={progress} label={label} />
+      </div>
+      <div className="space-y-1.5">
+        {slider('x')}
+        {slider('y')}
+      </div>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] leading-snug text-[var(--color-text-muted)]">
+          {ar
+            ? 'اسحب داخل الإطار أو استخدم المنزلقين لاختيار أفضل جزء يظهر من الصورة.'
+            : 'Drag inside the frame or use the sliders to choose the best visible part of the image.'}
+        </p>
         <button
           type="button"
-          onClick={() => onChange(undefined)}
-          aria-label={t('misc.clearIcon')}
-          className="p-1.5 rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 transition-colors cursor-pointer flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-          title={t('misc.clearIcon')}
+          onClick={() => onChange({ x: 50, y: 50 })}
+          className="shrink-0 cursor-pointer rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] font-semibold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-text-primary)]"
         >
-          <X className="h-3.5 w-3.5" />
+          {ar ? 'إعادة الضبط' : 'Reset'}
         </button>
-      )}
+      </div>
     </div>
   )
 }
@@ -795,15 +965,14 @@ export function BuilderClient({
   }
   const [profile, setProfile] = useState(() => {
     if (!initialProfile?.pages?.[0]?.sections) return initialProfile
-    const sections = [...(initialProfile.pages[0].sections || [])]
-    const hasFooter = sections.some((s: any) => s.sectionType === 'footer')
+    let sections = [...(initialProfile.pages[0].sections || [])]
+    let migrated = false
 
     // Contact is a first-class section type (Sprint F3): never converted
     // or removed here. Only ensure a footer exists for old profiles.
-    if (!hasFooter) {
-      const migrated = [...sections]
-      const maxOrder = migrated.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0)
-      migrated.push({
+    if (!sections.some((s: any) => s.sectionType === 'footer')) {
+      const maxOrder = sections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0)
+      sections.push({
         id: `new-footer-${Date.now()}`,
         sectionType: 'footer',
         sectionOrder: maxOrder + 1,
@@ -814,17 +983,68 @@ export function BuilderClient({
         },
         settings: { isVisible: true },
       })
-
-      return {
-        ...initialProfile,
-        pages: [{
-          ...initialProfile.pages[0],
-          sections: migrated,
-        }, ...initialProfile.pages.slice(1)],
-      }
+      migrated = true
     }
 
-    return initialProfile
+    // Older profiles may predate the skills section entirely, which left no
+    // place to add skill groups. Insert one just before the footer and shift
+    // everything after it so the rendered order stays stable.
+    if (!sections.some((s: any) => s.sectionType === 'skills')) {
+      const footer = sections.find((s: any) => s.sectionType === 'footer')
+      const insertOrder = footer
+        ? footer.sectionOrder
+        : sections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0) + 1
+      sections = sections.map((s: any) =>
+        (s.sectionOrder || 0) >= insertOrder ? { ...s, sectionOrder: (s.sectionOrder || 0) + 1 } : s,
+      )
+      sections.push({
+        id: `new-skills-${Date.now()}`,
+        sectionType: 'skills',
+        sectionOrder: insertOrder,
+        content: {
+          heading: { en: 'Skills & Expertise', ar: 'المهارات والخبرات' },
+          groups: [],
+        },
+        settings: { isVisible: true },
+      })
+      migrated = true
+    }
+
+    // Promote the legacy flat `content.skills` list into the group editor so
+    // old skills stay visible and can be extended with new groups.
+    sections = sections.map((s: any) => {
+      if (s.sectionType !== 'skills') return s
+      const content = s.content || {}
+      const groups = Array.isArray(content.groups) ? content.groups : []
+      const hasGroups = groups.some(
+        (g: any) => Array.isArray(g?.skills) && g.skills.some((sk: any) => sk && typeof sk.name === 'string' && sk.name.trim()),
+      )
+      const legacy = Array.isArray(content.skills)
+        ? content.skills.filter((name: unknown) => typeof name === 'string' && name.trim())
+        : []
+      if (hasGroups || legacy.length === 0) return s
+      migrated = true
+      return {
+        ...s,
+        content: {
+          ...content,
+          groups: [{
+            name: 'Skills',
+            skills: legacy.map((name: string) => ({ name, percentage: 80 })),
+          }],
+        },
+      }
+    })
+
+    if (!migrated) return initialProfile
+
+    return {
+      ...initialProfile,
+      pages: [{
+        ...initialProfile.pages[0],
+        sections,
+      }, ...initialProfile.pages.slice(1)],
+    }
   })
   const [leftTab, setLeftTab] = useState<'sections' | 'pages'>('sections')
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
@@ -840,7 +1060,9 @@ export function BuilderClient({
       return false
     }
   })
-  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
+  const isUploading = useCallback((key: string) => uploadProgress[key] !== undefined, [uploadProgress])
+  const uploadPercent = useCallback((key: string) => uploadProgress[key] ?? 0, [uploadProgress])
   const [activePage, setActivePage] = useState<'home' | string>('home')
   const [creatingProjectPage, setCreatingProjectPage] = useState(false)
   // True on real phones (< 768px). Forces the mobile preview frame.
@@ -1196,6 +1418,34 @@ export function BuilderClient({
   const updateProfile = (updater: (prev: any) => any) => {
     setProfile(updater)
   }
+
+  // Shared image upload: one keyed progress value drives the button spinner,
+  // the percentage label, and the overlay on the image preview. Every outcome
+  // is surfaced as a toast.
+  const uploadImage = useCallback(
+    async (key: string, file: File | undefined, apply: (url: string) => void) => {
+      if (!file) return
+      setUploadProgress((prev) => ({ ...prev, [key]: 0 }))
+      try {
+        const result = await uploadToCloudinary(file, (percent) => {
+          setUploadProgress((prev) => (prev[key] === percent ? prev : { ...prev, [key]: percent }))
+        })
+        apply(result.url)
+        toast('success', locale === 'ar' ? 'تم رفع الصورة بنجاح' : 'Image uploaded successfully')
+      } catch (err) {
+        console.error(err)
+        toast('error', t('media.uploadFailed'))
+      } finally {
+        setUploadProgress((prev) => {
+          if (!(key in prev)) return prev
+          const next = { ...prev }
+          delete next[key]
+          return next
+        })
+      }
+    },
+    [locale, t, toast],
+  )
 
   // Theme toggle from inside the live preview canvas: persists the choice to
   // the owner's saved `appearance.colorMode` (survives reload). Stable
@@ -1743,23 +1993,25 @@ export function BuilderClient({
                   />
                   <FileButton
                     accept="image/*"
-                    onFiles={async (files) => {
-                      const file = files?.[0]
-                      if (!file) return
-                      try {
-                        const result = await uploadToCloudinary(file)
-                        updateProjectPageField(pp.id, 'coverImage', result.url)
-                      } catch (err) {
-                        console.error(err)
-                      }
-                    }}
+                    disabled={isUploading(`project-cover-${pp.id}`)}
+                    onFiles={(files) =>
+                      void uploadImage(`project-cover-${pp.id}`, files?.[0], (url) =>
+                        updateProjectPageField(pp.id, 'coverImage', url),
+                      )
+                    }
                     className="h-[44px] min-h-[44px] px-4"
                   >
-                    {t('common.upload')}
+                    {isUploading(`project-cover-${pp.id}`) && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {isUploading(`project-cover-${pp.id}`) ? `${t('common.uploading')} ${uploadPercent(`project-cover-${pp.id}`)}%` : t('common.upload')}
                   </FileButton>
                 </div>
-                {pp.coverImage && (
-                  <img src={pp.coverImage} alt={t('misc.coverPreview')} className="mt-2 w-full h-28 rounded-lg object-cover border border-[var(--color-border)]" />
+                {(pp.coverImage || isUploading(`project-cover-${pp.id}`)) && (
+                  <div className="relative mt-2 h-28 w-full overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
+                    {pp.coverImage && (
+                      <img src={pp.coverImage} alt={t('misc.coverPreview')} className="h-full w-full object-cover" />
+                    )}
+                    <UploadOverlay active={isUploading(`project-cover-${pp.id}`)} progress={uploadPercent(`project-cover-${pp.id}`)} label={t('common.uploading')} />
+                  </div>
                 )}
               </div>
               <div>
@@ -1903,23 +2155,28 @@ export function BuilderClient({
                           />
                           <FileButton
                             accept="image/*"
-                            onFiles={async (files) => {
-                              const file = files?.[0]
-                              if (!file) return
-                              try {
-                                const result = await uploadToCloudinary(file)
+                            disabled={isUploading(`project-item-${pp.id}-${item.id}`)}
+                            onFiles={(files) =>
+                              void uploadImage(`project-item-${pp.id}-${item.id}`, files?.[0], (url) => {
                                 const newItems = [...(pp.items || [])]
-                                newItems[idx].imageUrl = result.url
+                                newItems[idx].imageUrl = url
                                 updateProjectPageField(pp.id, 'items', newItems)
-                              } catch (err) {
-                                console.error(err)
-                              }
-                            }}
+                              })
+                            }
                             className="h-[44px] min-h-[44px] px-3"
                           >
-                            {t('common.upload')}
+                            {isUploading(`project-item-${pp.id}-${item.id}`) && <Loader2 className="h-4 w-4 animate-spin" />}
+                            {isUploading(`project-item-${pp.id}-${item.id}`) ? `${t('common.uploading')} ${uploadPercent(`project-item-${pp.id}-${item.id}`)}%` : t('common.upload')}
                           </FileButton>
                         </div>
+                        {(item.imageUrl || isUploading(`project-item-${pp.id}-${item.id}`)) && (
+                          <div className="relative mt-2 h-24 w-full overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
+                            {item.imageUrl && (
+                              <img src={item.imageUrl} alt={item.title || t('common.imageUrl')} className="h-full w-full object-cover" />
+                            )}
+                            <UploadOverlay active={isUploading(`project-item-${pp.id}-${item.id}`)} progress={uploadPercent(`project-item-${pp.id}-${item.id}`)} label={t('common.uploading')} />
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label htmlFor={`pp-item-${item.id}-link`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('project.externalLink')}</label>
@@ -1992,23 +2249,16 @@ export function BuilderClient({
                 />
                 <FileButton
                   accept="image/*"
-                  disabled={uploadingAvatar}
-                  onFiles={async (files) => {
-                    const file = files?.[0]
-                    if (!file) return
-                    setUploadingAvatar(true)
-                    try {
-                      const result = await uploadToCloudinary(file)
-                      updateProfile((p: any) => ({ ...p, avatarUrl: result.url }))
-                    } catch (err) {
-                      console.error(err)
-                    } finally {
-                      setUploadingAvatar(false)
-                    }
-                  }}
+                  disabled={isUploading('avatar')}
+                  onFiles={(files) =>
+                    void uploadImage('avatar', files?.[0], (url) =>
+                      updateProfile((p: any) => ({ ...p, avatarUrl: url })),
+                    )
+                  }
                   className="h-[44px] min-h-[44px] px-4"
                 >
-                  {uploadingAvatar ? t('common.uploading') : t('common.upload')}
+                  {isUploading('avatar') && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {isUploading('avatar') ? `${t('common.uploading')} ${uploadPercent('avatar')}%` : t('common.upload')}
                 </FileButton>
                 {profile.avatarUrl && (
                   <button
@@ -2021,9 +2271,32 @@ export function BuilderClient({
                   </button>
                 )}
               </div>
-              {profile.avatarUrl && (
-                <div className="mt-2 flex items-center gap-3">
-                  <img src={profile.avatarUrl} alt={t('misc.avatarPreview')} className="w-16 h-16 rounded-full object-cover border border-[var(--color-border)] shadow-sm" />
+              {(profile.avatarUrl || isUploading('avatar')) && (
+                <div className="mt-2">
+                  {profile.avatarUrl ? (
+                    <>
+                      <p className="mb-2 text-[13px] font-semibold text-[var(--color-text-primary)]">
+                        {locale === 'ar' ? 'موضع الصورة داخل الإطار' : 'Image position inside the frame'}
+                      </p>
+                      <ImagePositionControl
+                        src={profile.avatarUrl}
+                        value={profile.appearance?.avatarPosition}
+                        uploading={isUploading('avatar')}
+                        progress={uploadPercent('avatar')}
+                        label={locale === 'ar' ? 'موضع الصورة الشخصية' : 'Profile image position'}
+                        onChange={(next) =>
+                          updateProfile((p: any) => ({
+                            ...p,
+                            appearance: { ...(p.appearance || {}), avatarPosition: next },
+                          }))
+                        }
+                      />
+                    </>
+                  ) : (
+                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface-secondary)] shadow-sm">
+                      <UploadOverlay active={isUploading('avatar')} progress={uploadPercent('avatar')} label={t('common.uploading')} />
+                    </div>
+                  )}
                 </div>
               )}
             </FormCard>
@@ -2042,19 +2315,16 @@ export function BuilderClient({
                     />
                     <FileButton
                       accept="image/*"
-                      onFiles={async (files) => {
-                        const file = files?.[0]
-                        if (!file) return
-                        try {
-                          const result = await uploadToCloudinary(file)
-                          updateSectionContentRaw(selectedSection.id, 'backgroundImage', result.url)
-                        } catch (err) {
-                          console.error(err)
-                        }
-                      }}
+                      disabled={isUploading(`hero-background-${selectedSection.id}`)}
+                      onFiles={(files) =>
+                        void uploadImage(`hero-background-${selectedSection.id}`, files?.[0], (url) =>
+                          updateSectionContentRaw(selectedSection.id, 'backgroundImage', url),
+                        )
+                      }
                       className="h-[44px] min-h-[44px] px-4"
                     >
-                      {t('common.upload')}
+                      {isUploading(`hero-background-${selectedSection.id}`) && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {isUploading(`hero-background-${selectedSection.id}`) ? `${t('common.uploading')} ${uploadPercent(`hero-background-${selectedSection.id}`)}%` : t('common.upload')}
                     </FileButton>
                     {c.backgroundImage && (
                       <button
@@ -2067,11 +2337,28 @@ export function BuilderClient({
                       </button>
                     )}
                   </div>
-                  {c.backgroundImage && (
+                  {c.backgroundImage ? (
                     <div className="mt-2">
-                      <img src={c.backgroundImage} alt={t('misc.backgroundPreview')} className="w-full h-28 rounded-lg object-cover border border-[var(--color-border)] shadow-sm" />
+                      <p className="mb-2 text-[13px] font-semibold text-[var(--color-text-primary)]">
+                        {locale === 'ar' ? 'موضع صورة الخلفية' : 'Background image position'}
+                      </p>
+                      <ImagePositionControl
+                        src={c.backgroundImage}
+                        value={c.backgroundPosition}
+                        variant="wide"
+                        uploading={isUploading(`hero-background-${selectedSection.id}`)}
+                        progress={uploadPercent(`hero-background-${selectedSection.id}`)}
+                        label={locale === 'ar' ? 'موضع صورة الخلفية' : 'Background image position'}
+                        onChange={(next) =>
+                          updateSectionContentRaw(selectedSection.id, 'backgroundPosition', next)
+                        }
+                      />
                     </div>
-                  )}
+                  ) : isUploading(`hero-background-${selectedSection.id}`) ? (
+                    <div className="relative mt-2 h-28 w-full overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] shadow-sm">
+                      <UploadOverlay active progress={uploadPercent(`hero-background-${selectedSection.id}`)} label={t('common.uploading')} />
+                    </div>
+                  ) : null}
                 </div>
 
                 <div>
@@ -2537,6 +2824,14 @@ case 'skills':
                       <div>
                         <label htmlFor={`exp-${item.id}-logo`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.companyLogoUrl')}</label>
                         <div className="flex gap-2">
+                          {(item.companyLogo || isUploading(`experience-logo-${item.id}`)) && (
+                            <div className="relative h-[44px] w-[44px] shrink-0 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
+                              {item.companyLogo && (
+                                <img src={item.companyLogo} alt={t('field.companyLogoUrl')} className="h-full w-full object-cover" />
+                              )}
+                              <UploadOverlay active={isUploading(`experience-logo-${item.id}`)} progress={uploadPercent(`experience-logo-${item.id}`)} label={t('common.uploading')} />
+                            </div>
+                          )}
                           <Input
                             id={`exp-${item.id}-logo`}
                             value={item.companyLogo || ''}
@@ -2550,21 +2845,18 @@ case 'skills':
                           />
                           <FileButton
                             accept="image/*"
-                            onFiles={async (files) => {
-                              const file = files?.[0]
-                              if (!file) return
-                              try {
-                                const result = await uploadToCloudinary(file)
+                            disabled={isUploading(`experience-logo-${item.id}`)}
+                            onFiles={(files) =>
+                              void uploadImage(`experience-logo-${item.id}`, files?.[0], (url) => {
                                 const newItems = [...experienceItems]
-                                newItems[idx].companyLogo = result.url
+                                newItems[idx].companyLogo = url
                                 updateSectionContentRaw(selectedSection.id, 'items', newItems)
-                              } catch (err) {
-                                console.error(err)
-                              }
-                            }}
+                              })
+                            }
                             className="h-[44px] min-h-[44px] px-3"
                           >
-                            {t('common.upload')}
+                            {isUploading(`experience-logo-${item.id}`) && <Loader2 className="h-4 w-4 animate-spin" />}
+                            {isUploading(`experience-logo-${item.id}`) ? `${t('common.uploading')} ${uploadPercent(`experience-logo-${item.id}`)}%` : t('common.upload')}
                           </FileButton>
                         </div>
                       </div>

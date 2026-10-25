@@ -10,7 +10,10 @@ interface CloudinaryUploadResult {
 const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || ''
 const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || ''
 
-export async function uploadToCloudinary(file: File): Promise<CloudinaryUploadResult> {
+export async function uploadToCloudinary(
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<CloudinaryUploadResult> {
   if (!cloudName || !uploadPreset) {
     throw new Error('Cloudinary is not configured. Set NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET.')
   }
@@ -19,26 +22,43 @@ export async function uploadToCloudinary(file: File): Promise<CloudinaryUploadRe
   formData.append('file', file)
   formData.append('upload_preset', uploadPreset)
 
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
-    method: 'POST',
-    body: formData,
+  // XHR (not fetch) because only XHR exposes upload progress events. The
+  // callback receives whole percentages so callers can render "42%" without
+  // flooding React with a state update for every network tick.
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`)
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable || event.total <= 0) return
+      onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)))
+    }
+
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(`Upload failed: ${xhr.responseText}`))
+        return
+      }
+      try {
+        const json = JSON.parse(xhr.responseText)
+        onProgress?.(100)
+        resolve({
+          cloudinary_id: json.public_id,
+          url: json.secure_url,
+          width: json.width || null,
+          height: json.height || null,
+          bytes: json.bytes,
+          format: json.format,
+        })
+      } catch {
+        reject(new Error('Upload failed: invalid response'))
+      }
+    }
+
+    xhr.onerror = () => reject(new Error('Upload failed: network error'))
+    xhr.onabort = () => reject(new Error('Upload failed: aborted'))
+    xhr.send(formData)
   })
-
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Upload failed: ${body}`)
-  }
-
-  const json = await res.json()
-
-  return {
-    cloudinary_id: json.public_id,
-    url: json.secure_url,
-    width: json.width || null,
-    height: json.height || null,
-    bytes: json.bytes,
-    format: json.format,
-  }
 }
 
 const SUPPORTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4']

@@ -155,7 +155,7 @@ export function NotificationBell() {
         <div
           role="menu"
           aria-label={ar ? 'الإشعارات' : 'Notifications'}
-          className="absolute right-0 rtl:right-auto rtl:left-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg"
+          className="absolute end-0 z-50 mt-2 w-[22rem] min-w-[min(20rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg max-sm:fixed max-sm:end-auto max-sm:left-3 max-sm:right-3 max-sm:top-16 max-sm:mt-0 max-sm:w-auto max-sm:min-w-0 max-sm:max-w-none"
         >
           <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2">
             <span className="text-xs font-bold text-[var(--color-text-primary)]">
@@ -180,6 +180,7 @@ export function NotificationBell() {
             )}
             {items.map((item) => {
               const Icon = iconForType(item.type)
+              const body = pickText(item.body, lang)
               return (
                 <button
                   key={item.id}
@@ -195,14 +196,20 @@ export function NotificationBell() {
                   >
                     <Icon className="h-3.5 w-3.5" />
                   </span>
-                  <span className="min-w-0 flex-1">
+                  <span className="min-w-0 flex-1 overflow-hidden">
                     <span
-                      className={`block text-xs truncate ${
+                      className={`block text-xs line-clamp-2 break-words ${
                         item.isRead ? 'font-normal text-[var(--color-text-secondary)]' : 'font-semibold text-[var(--color-text-primary)]'
                       }`}
+                      dir="auto"
                     >
                       {pickText(item.title, lang)}
                     </span>
+                    {body && (
+                      <span className="mt-0.5 block text-[11px] leading-snug text-[var(--color-text-muted)] line-clamp-2 break-words" dir="auto">
+                        {body}
+                      </span>
+                    )}
                     <span className="block text-[10px] text-[var(--color-text-muted)]" dir="ltr">
                       <span className="block text-end">{new Date(item.createdAt).toLocaleString()}</span>
                     </span>

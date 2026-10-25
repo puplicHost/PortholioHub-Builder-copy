@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Eye, EyeOff } from 'lucide-react'
 import { useI18n } from '@/components/I18nProvider'
 import { usePlatformName } from '@/components/PlatformProvider'
 import { AuthShell } from '@/components/auth/AuthShell'
@@ -18,6 +19,7 @@ export function RegisterForm() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -98,16 +100,32 @@ export function RegisterForm() {
         </div>
         <div className="auth-field">
           <label htmlFor="register-password" className="auth-label">{t('auth.password')}</label>
-          <input
-            id="register-password"
-            className="auth-input"
-            type="password"
-            required
-            autoComplete="new-password"
-            placeholder={t('auth.newPasswordPlaceholder')}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <div className="relative">
+            <input
+              id="register-password"
+              className="auth-input"
+              type={showPassword ? 'text' : 'password'}
+              required
+              autoComplete="new-password"
+              placeholder={t('auth.newPasswordPlaceholder')}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{ paddingInlineEnd: '2.75rem' }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={
+                showPassword
+                  ? lang === 'ar' ? 'إخفاء كلمة المرور' : 'Hide password'
+                  : lang === 'ar' ? 'إظهار كلمة المرور' : 'Show password'
+              }
+              aria-pressed={showPassword}
+              className="absolute inset-y-0 end-0 flex w-11 cursor-pointer items-center justify-center rounded-e-[10px] text-[var(--c-muted)] transition-colors hover:text-[var(--c-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--c-accent)]"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
         {error && <p className="auth-error" role="alert">{error}</p>}
         <button type="submit" className="auth-btn" disabled={loading}>
