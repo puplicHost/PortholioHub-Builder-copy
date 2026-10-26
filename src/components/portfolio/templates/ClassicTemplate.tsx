@@ -295,6 +295,8 @@ export function ClassicTemplate({
 
 
   const [isScrolled, setIsScrolled] = useState(false)
+  const [isScrolledPast24, setIsScrolledPast24] = useState(false)
+  const [previewHeight, setPreviewHeight] = useState<number | null>(null)
   const [activeId, setActiveId] = useState('hero')
   const [educationLightbox, setEducationLightbox] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -316,14 +318,39 @@ export function ClassicTemplate({
 
   useEffect(() => {
     const target = getScrollParent(rootRef.current)
+    let rafId: number | null = null
+
     const handleScroll = () => {
-      setIsScrolled((target ? target.scrollTop : window.scrollY) > 50)
+      if (rafId) return
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        const scrollY = target ? target.scrollTop : window.scrollY
+        setIsScrolled(scrollY > 50)
+        setIsScrolledPast24(scrollY > 24)
+      })
     }
+
     handleScroll()
     const el: HTMLElement | Window = target ?? window
     el.addEventListener('scroll', handleScroll, { passive: true })
-    return () => el.removeEventListener('scroll', handleScroll)
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId)
+      el.removeEventListener('scroll', handleScroll)
+    }
   }, [])
+
+  useEffect(() => {
+    if (!preview) return
+    const scrollParent = getScrollParent(rootRef.current)
+    if (!scrollParent) return
+    const updateHeight = () => {
+      setPreviewHeight(scrollParent.clientHeight)
+    }
+    updateHeight()
+    const ro = new ResizeObserver(updateHeight)
+    ro.observe(scrollParent)
+    return () => ro.disconnect()
+  }, [preview])
 
   const scrollToTop = () => {
     const target = getScrollParent(rootRef.current)
@@ -430,6 +457,9 @@ export function ClassicTemplate({
     return items.some((item: any) => Boolean(item?.logoUrl))
   }
   const visibleSections = sections.filter(isSectionVisible).filter(hasRenderableEducation).filter(hasRenderableClients)
+  const firstVisibleSection = visibleSections[0]
+  const isHeroFirst = Boolean(firstVisibleSection && firstVisibleSection.sectionType === 'hero')
+  const isNavbarTransparent = isHeroFirst && !isScrolledPast24
 
   const isSectionRenderable = (section: any) => {
     if (!section || !isSectionVisible(section)) return false
@@ -1373,20 +1403,47 @@ export function ClassicTemplate({
             <ExternalLink className="h-4 w-4 shrink-0" />
           )
 
+        const renderExtraLinkIcon = (iconType?: string) => {
+          switch (iconType) {
+            case 'pdf':
+              return <FileText className="h-3.5 w-3.5 shrink-0" />
+            case 'sheet':
+              return <Table2 className="h-3.5 w-3.5 shrink-0" />
+            case 'doc':
+              return <FileText className="h-3.5 w-3.5 shrink-0" />
+            case 'folder':
+              return <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+            case 'generic':
+            default:
+              return <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+          }
+        }
+
         const renderProjectLinks = (project: any) => {
           const linkType = project.linkType || (project.content as any)?.linkType || 'none'
           const linkedSlug = project.linkedPageSlug || (project.content as any)?.linkedPageSlug
           const isTempSlug = !linkedSlug || String(linkedSlug).startsWith('new-') || String(linkedSlug).startsWith('project-new-')
           const label = projectLinkLabel(project)
+
+          // Extra link buttons from project.items
+          const extraLinkItems = (Array.isArray(project.items) ? project.items : []).filter((item: any) => {
+            const itemLabel = String(item.title || item.label || item.linkLabel || '').trim()
+            const rawUrl = sanitizeUrl(item.externalUrl || item.url || '')
+            return Boolean(itemLabel && rawUrl && /^https?:\/\//i.test(rawUrl))
+          })
+
           return (
             <>
+              {/* Main Button */}
               {linkType === 'page' && !isTempSlug && !isFree ? (
                 <Link
                   href={`/u/${profile.username}/projects/${linkedSlug}`}
-                  className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
+                  className="text-sm font-semibold flex items-center gap-1.5 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
+                  title={label}
+                  aria-label={label}
                 >
                   {renderProjectLinkIcon(project)}
-                  {label}
+                  <span className="truncate max-w-[180px]">{label}</span>
                 </Link>
               ) : null}
               {linkType === 'external' && project.externalLink ? (
@@ -1394,45 +1451,34 @@ export function ClassicTemplate({
                   href={sanitizeUrl(project.externalLink)}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
+                  className="text-sm font-semibold flex items-center gap-1.5 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
+                  title={label}
+                  aria-label={label}
                 >
                   {renderProjectLinkIcon(project)}
-                  {label}
+                  <span className="truncate max-w-[180px]">{label}</span>
                 </a>
               ) : null}
-              {project.items?.map((item: any, i: number) => {
-                const itemLinkType = item.linkType || (item.type === 'page_link' ? 'page' : 'none')
-                const itemSlug = item.linkedPageSlug || (item.type === 'page_link' ? item.externalUrl : null)
-                const itemLabel = item.linkLabel || item.title
-                const isItemTempSlug = !itemSlug || String(itemSlug).startsWith('new-') || String(itemSlug).startsWith('project-new-')
-                // FREE users never route to internal project pages — external URLs only.
-                if (itemLinkType === 'page' && !isItemTempSlug && !isFree) {
-                  return (
-                    <Link
-                      key={i}
-                      href={`/u/${profile.username}/projects/${itemSlug}`}
-                      className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
-                    >
-                      <ExternalLink className="h-4 w-4 shrink-0" />
-                      {itemLabel || (lang === 'ar' ? 'عرض المشروع' : 'View Project')}
-                    </Link>
-                  )
-                }
-                if (itemLinkType === 'external' && item.externalUrl) {
-                  return (
-                    <a
-                      key={i}
-                      href={sanitizeUrl(item.externalUrl)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
-                    >
-                      <ExternalLink className="h-4 w-4 shrink-0" />
-                      {itemLabel || (lang === 'ar' ? 'عرض المشروع' : 'View Project')}
-                    </a>
-                  )
-                }
-                return null
+
+              {/* Extra Buttons (Linked Content) in saved order */}
+              {extraLinkItems.map((item: any, i: number) => {
+                const itemLabel = String(item.title || item.label || item.linkLabel || '').trim()
+                const rawUrl = sanitizeUrl(item.externalUrl || item.url || '')
+                const iconType = item.iconType || (['generic', 'pdf', 'sheet', 'doc', 'folder'].includes(item.textContent) ? item.textContent : 'generic')
+                return (
+                  <a
+                    key={item.id || i}
+                    href={rawUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={itemLabel}
+                    aria-label={itemLabel}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border border-[var(--color-border)] text-[var(--color-text)] bg-[color-mix(in_srgb,var(--color-bg)_70%,transparent)] hover:bg-[var(--color-bg)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition-all max-w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] shadow-2xs"
+                  >
+                    {renderExtraLinkIcon(iconType)}
+                    <span className="truncate max-w-[160px]">{itemLabel}</span>
+                  </a>
+                )
               })}
             </>
           )
@@ -1442,16 +1488,14 @@ export function ClassicTemplate({
           const linkType = project.linkType || (project.content as any)?.linkType || 'none'
           const linkedSlug = project.linkedPageSlug || (project.content as any)?.linkedPageSlug
           const isTempSlug = !linkedSlug || String(linkedSlug).startsWith('new-') || String(linkedSlug).startsWith('project-new-')
-          if (linkType === 'page' && !isTempSlug && !isFree) return true
-          if (linkType === 'external' && Boolean(project.externalLink)) return true
+          const hasMainLink = (linkType === 'page' && !isTempSlug && !isFree) || (linkType === 'external' && Boolean(project.externalLink))
+          if (hasMainLink) return true
+
           if (Array.isArray(project.items)) {
             return project.items.some((item: any) => {
-              const itemLinkType = item.linkType || (item.type === 'page_link' ? 'page' : 'none')
-              const itemSlug = item.linkedPageSlug || (item.type === 'page_link' ? item.externalUrl : null)
-              const isItemTempSlug = !itemSlug || String(itemSlug).startsWith('new-') || String(itemSlug).startsWith('project-new-')
-              if (itemLinkType === 'page' && !isItemTempSlug && !isFree) return true
-              if (itemLinkType === 'external' && Boolean(item.externalUrl)) return true
-              return false
+              const itemLabel = String(item.title || item.label || item.linkLabel || '').trim()
+              const rawUrl = sanitizeUrl(item.externalUrl || item.url || '')
+              return Boolean(itemLabel && rawUrl && /^https?:\/\//i.test(rawUrl))
             })
           }
           return false
@@ -2274,9 +2318,45 @@ export function ClassicTemplate({
         @media (min-width: 768px) {
           html { scroll-padding-top: 5rem; }
         }
+        @keyframes heroMesh1 {
+          0% { transform: translate3d(0, 0, 0) scale(1); }
+          50% { transform: translate3d(45px, -35px, 0) scale(1.08); }
+          100% { transform: translate3d(-35px, 30px, 0) scale(0.94); }
+        }
+        @keyframes heroMesh2 {
+          0% { transform: translate3d(0, 0, 0) scale(1); }
+          50% { transform: translate3d(-50px, 40px, 0) scale(1.1); }
+          100% { transform: translate3d(40px, -30px, 0) scale(0.92); }
+        }
+        @keyframes heroMesh3 {
+          0% { transform: translate3d(0, 0, 0) scale(1); }
+          50% { transform: translate3d(35px, 45px, 0) scale(0.95); }
+          100% { transform: translate3d(-30px, -40px, 0) scale(1.07); }
+        }
+        .hero-blob-1 { animation: heroMesh1 22s ease-in-out infinite alternate; will-change: transform; }
+        .hero-blob-2 { animation: heroMesh2 28s ease-in-out infinite alternate; will-change: transform; }
+        .hero-blob-3 { animation: heroMesh3 20s ease-in-out infinite alternate; will-change: transform; }
+        @container (min-width: 48rem) {
+          #hero {
+            clip-path: polygon(0 0, 100% 0, 100% calc(100% - 56px), 0 100%);
+          }
+          [dir="rtl"] #hero {
+            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 calc(100% - 56px));
+          }
+        }
+        @media (min-width: 768px) {
+          #hero {
+            clip-path: polygon(0 0, 100% 0, 100% calc(100% - 56px), 0 100%);
+          }
+          [dir="rtl"] #hero {
+            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 calc(100% - 56px));
+          }
+        }
         @media (prefers-reduced-motion: reduce) {
           html { scroll-behavior: auto; }
           .fade-up { opacity: 1 !important; transform: none !important; transition: none !important; }
+          .hero-blob-1, .hero-blob-2, .hero-blob-3 { animation: none !important; }
+          nav { transition: none !important; }
         }
       `}} />
       
@@ -2288,18 +2368,42 @@ export function ClassicTemplate({
         <div className={`w-full ${preview ? 'min-h-full' : 'min-h-screen'} bg-[var(--color-bg)] text-[var(--color-text)] relative`} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
           
           {/* Navigation Bar — desktop only (md+); mobile uses the bottom
-              nav. Carries a blurred, theme-tinted background so it stays
-              legible over any hero (incl. the builder's desktop preview,
-              which never scrolls). */}
-          <nav className={`hidden cq-md:block fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${isScrolled ? 'py-2.5 cq-sm:py-3 shadow-md' : 'py-3 cq-sm:py-5'}`} style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 88%, transparent)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderBottom: '1px solid var(--color-border)' }}>
+              nav. Transparent at top of hero, smoothly transitions to solid/blurred past 24px. */}
+          <nav
+            className={`hidden cq-md:block fixed top-0 left-0 right-0 z-40 transition-all duration-300 motion-reduce:transition-none ${
+              isNavbarTransparent
+                ? 'py-4 cq-sm:py-5 shadow-none'
+                : isScrolledPast24
+                  ? 'py-2.5 cq-sm:py-3 shadow-md'
+                  : 'py-3 cq-sm:py-5 shadow-sm'
+            }`}
+            style={{
+              backgroundColor: isNavbarTransparent
+                ? 'transparent'
+                : 'color-mix(in srgb, var(--color-bg) 88%, transparent)',
+              backdropFilter: isNavbarTransparent ? 'none' : 'blur(10px)',
+              WebkitBackdropFilter: isNavbarTransparent ? 'none' : 'blur(10px)',
+              borderBottom: isNavbarTransparent
+                ? '1px solid transparent'
+                : '1px solid var(--color-border)',
+            }}
+          >
             <div className="max-w-[1200px] mx-auto px-4 cq-sm:px-12">
               {/* DESKTOP (md+): 2-sided split — Brand on start, [Contact Me + Hamburger] on end */}
               <div className="flex w-full items-center justify-between gap-4">
                 <a
                   href="#hero"
                   className={`truncate max-w-[260px] text-lg font-bold tracking-tight transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
-                    theme === 'light' ? 'text-[var(--color-text)] hover:text-[var(--color-primary)]' : 'text-white hover:text-white/80'
+                    isNavbarTransparent
+                      ? 'hover:opacity-85'
+                      : theme === 'light'
+                        ? 'text-[var(--color-text)] hover:text-[var(--color-primary)]'
+                        : 'text-[var(--color-text)] hover:opacity-80'
                   }`}
+                  style={{
+                    color: isNavbarTransparent ? 'var(--color-on-primary)' : undefined,
+                    textShadow: isNavbarTransparent ? '0 1px 4px color-mix(in srgb, var(--color-primary) 50%, black)' : undefined,
+                  }}
                 >
                   {displayName}
                 </a>
@@ -2308,8 +2412,15 @@ export function ClassicTemplate({
                 <div className="flex items-center gap-2.5 sm:gap-3">
                   <a
                     href="#contact"
-                    className="inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-semibold text-white shadow-sm hover:-translate-y-0.5 active:scale-[0.97] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-primary)]"
-                    style={{ backgroundColor: 'var(--color-primary)' }}
+                    className="inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 shadow-sm hover:-translate-y-0.5 active:scale-[0.97]"
+                    style={{
+                      backgroundColor: isNavbarTransparent
+                        ? 'var(--color-on-primary)'
+                        : 'var(--color-primary)',
+                      color: isNavbarTransparent
+                        ? 'var(--color-primary)'
+                        : 'var(--color-on-primary)',
+                    }}
                   >
                     {lang === 'ar' ? 'تواصل معي' : 'Contact Me'}
                   </a>
@@ -2325,11 +2436,23 @@ export function ClassicTemplate({
                             ? (lang === 'ar' ? 'إغلاق القائمة' : 'Close menu')
                             : (lang === 'ar' ? 'فتح القائمة' : 'Open menu')
                         }
-                        className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
-                          theme === 'light'
-                            ? 'border border-[var(--color-border)] bg-[var(--color-bg)]/80 text-[var(--color-text)] hover:bg-[var(--color-bg-alt)]'
-                            : 'border border-white/20 bg-white/10 text-white hover:bg-white/15'
-                        }`}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] shadow-sm"
+                        style={{
+                          backgroundColor: isNavbarTransparent
+                            ? 'color-mix(in srgb, var(--color-on-primary) 18%, transparent)'
+                            : theme === 'light'
+                              ? 'color-mix(in srgb, var(--color-bg) 80%, transparent)'
+                              : 'color-mix(in srgb, var(--color-text) 10%, transparent)',
+                          borderColor: isNavbarTransparent
+                            ? 'color-mix(in srgb, var(--color-on-primary) 30%, transparent)'
+                            : 'var(--color-border)',
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          color: isNavbarTransparent
+                            ? 'var(--color-on-primary)'
+                            : 'var(--color-text)',
+                          backdropFilter: isNavbarTransparent ? 'blur(4px)' : undefined,
+                        }}
                       >
                         {isNavMenuOpen ? (
                           <X className="h-5 w-5" aria-hidden="true" />
@@ -2461,80 +2584,231 @@ export function ClassicTemplate({
               return (
                 <section 
                   id="hero" 
-                  className="relative flex items-center justify-center min-h-[50vh] cq-md:min-h-[62vh] overflow-hidden pt-10 pb-8 cq-md:pt-20 cq-md:pb-[35px]"
+                  className="relative flex items-center justify-center min-h-[50vh] cq-md:min-h-[50vh] cq-md:min-h-[50svh] overflow-hidden pt-12 pb-8 cq-md:pt-20 cq-md:pb-24 cq-md:-mb-14 z-10"
                   style={{ 
                     backgroundImage: bgImage
                       ? `url("${bgImage}")`
-                      : 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
+                      : 'linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 85%, var(--color-on-primary)) 0%, color-mix(in srgb, var(--color-primary) 70%, var(--color-bg)) 100%)',
                     backgroundSize: bgImage ? 'cover' : 'auto',
                     backgroundPosition: bgImage ? `${bgPosition.x}% ${bgPosition.y}%` : 'center',
                     backgroundRepeat: 'no-repeat',
+                    minHeight: preview ? (previewHeight ? `${Math.round(previewHeight * 0.5)}px` : '50%') : '50svh',
                   }}
                 >
                   {bgImage && (
                     <div
-                      className="absolute inset-0 bg-black pointer-events-none transition-opacity"
-                      style={{ opacity: overlayOpacity }}
+                      className="absolute inset-0 pointer-events-none transition-opacity"
+                      style={{
+                        backgroundColor: 'color-mix(in srgb, var(--color-bg) 70%, black)',
+                        opacity: overlayOpacity,
+                      }}
                     />
                   )}
+
+                  {/* LIVING HERO BACKGROUND */}
+                  {/* Layer 2: 3 Animated Mesh Blobs */}
                   <div
-                    dir="ltr"
-                    className="w-full max-w-[1200px] mx-auto px-5 cq-sm:px-12 z-10 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative flex flex-col items-center text-center"
+                    className="absolute inset-0 overflow-hidden pointer-events-none select-none z-0"
+                    style={{ opacity: bgImage ? 0.25 : 0.45 }}
+                    aria-hidden="true"
                   >
-                    {/* Mobile: centred stacked hero (photo → name → title →
-                        CTAs → socials). Desktop: the original centred layout,
-                        with the photo above the text. */}
-                    {profile.avatarUrl ? (
-                      <div className="w-[150px] cq-sm:w-[160px] aspect-[3/4] cq-md:w-36 cq-md:h-36 cq-md:aspect-auto cq-lg:w-44 cq-lg:h-44 rounded-2xl cq-md:rounded-full overflow-hidden border-4 border-white shadow-2xl mb-5 cq-md:mb-6 hover:scale-105 transition-transform duration-500 bg-white shrink-0">
-                        <img
-                          src={portfolioImageUrl(sanitizeUrl(profile.avatarUrl), 400)}
-                          alt={displayName}
-                          loading="eager"
-                          fetchPriority="high"
-                          decoding="async"
-                          className="w-full h-full object-cover"
-                          style={{ objectPosition: `${avatarPosition.x}% ${avatarPosition.y}%` }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-[150px] cq-sm:w-[160px] aspect-[3/4] cq-md:w-36 cq-md:h-36 cq-md:aspect-auto cq-lg:w-44 cq-lg:h-44 rounded-2xl cq-md:rounded-full overflow-hidden border-4 border-white shadow-2xl mb-5 cq-md:mb-6 hover:scale-105 transition-transform duration-500 bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-4xl cq-lg:text-5xl font-black select-none shrink-0">
-                        {initial}
-                      </div>
-                    )}
                     <div
-                      className="flex w-full flex-col items-center"
-                      dir={lang === 'ar' ? 'rtl' : 'ltr'}
+                      className="hero-blob hero-blob-1 absolute -top-[15%] -start-[10%] w-[380px] h-[380px] cq-md:w-[620px] cq-md:h-[620px] rounded-full filter blur-[70px] cq-md:blur-[95px] will-change-transform"
+                      style={{
+                        background: 'radial-gradient(circle, color-mix(in srgb, var(--color-primary-light, var(--color-primary)) 75%, var(--color-on-primary)) 0%, transparent 70%)',
+                      }}
+                    />
+                    <div
+                      className="hero-blob hero-blob-2 absolute -bottom-[20%] -end-[10%] w-[420px] h-[420px] cq-md:w-[680px] cq-md:h-[680px] rounded-full filter blur-[80px] cq-md:blur-[105px] will-change-transform"
+                      style={{
+                        background: 'radial-gradient(circle, color-mix(in srgb, var(--color-primary) 65%, var(--color-bg)) 0%, transparent 70%)',
+                      }}
+                    />
+                    <div
+                      className="hero-blob hero-blob-3 absolute top-[30%] start-[25%] w-[320px] h-[320px] cq-md:w-[520px] cq-md:h-[520px] rounded-full filter blur-[65px] cq-md:blur-[85px] will-change-transform"
+                      style={{
+                        background: 'radial-gradient(circle, color-mix(in srgb, var(--color-primary) 50%, var(--color-on-primary)) 0%, transparent 70%)',
+                      }}
+                    />
+                  </div>
+
+                  {/* Layer 3: Subtle tactile dot-grid texture */}
+                  <div
+                    className="absolute inset-0 pointer-events-none select-none z-0"
+                    style={{
+                      backgroundImage: 'radial-gradient(color-mix(in srgb, var(--color-on-primary) 40%, transparent) 1px, transparent 1px)',
+                      backgroundSize: '24px 24px',
+                      opacity: 0.06,
+                    }}
+                    aria-hidden="true"
+                  />
+
+                  <div
+                    className="w-full max-w-[1200px] mx-auto px-5 cq-sm:px-12 z-10 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative"
+                  >
+                    {/* MOBILE HERO (< md): Centered stacked column (photo -> name -> title -> CTAs -> socials) */}
+                    <div
+                      dir="ltr"
+                      className="cq-md:hidden w-full flex flex-col items-center text-center"
                     >
-                      <h1 className="w-full text-[28px] cq-sm:text-3xl cq-md:text-5xl font-bold text-white mb-2 cq-sm:mb-2.5 cq-md:mb-4 text-center leading-snug whitespace-pre-line break-words" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
+                      {profile.avatarUrl ? (
+                        <div className="w-[150px] cq-sm:w-[160px] aspect-[3/4] rounded-2xl overflow-hidden border-4 border-white shadow-2xl mb-5 hover:scale-105 transition-transform duration-500 bg-white shrink-0">
+                          <img
+                            src={portfolioImageUrl(sanitizeUrl(profile.avatarUrl), 400)}
+                            alt={displayName}
+                            loading="eager"
+                            fetchPriority="high"
+                            decoding="async"
+                            className="w-full h-full object-cover"
+                            style={{ objectPosition: `${avatarPosition.x}% ${avatarPosition.y}%` }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-[150px] cq-sm:w-[160px] aspect-[3/4] rounded-2xl overflow-hidden border-4 border-white shadow-2xl mb-5 hover:scale-105 transition-transform duration-500 bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-4xl cq-lg:text-5xl font-black select-none shrink-0">
+                          {initial}
+                        </div>
+                      )}
+                      <div
+                        className="flex w-full flex-col items-center"
+                        dir={lang === 'ar' ? 'rtl' : 'ltr'}
+                      >
+                        <h1 className="w-full text-[28px] cq-sm:text-3xl font-bold text-white mb-2 cq-sm:mb-2.5 text-center leading-snug whitespace-pre-line break-words" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
+                          {displayName}
+                        </h1>
+                        {(title || t(heroContent.subtitle)) ? (
+                          <p className="text-[15px] cq-sm:text-base text-white/90 max-w-xl leading-relaxed mb-6 font-normal text-center break-words">
+                            {title || t(heroContent.subtitle)}
+                          </p>
+                        ) : null}
+                        <div className="flex w-full flex-col items-stretch gap-3 cq-sm:max-w-[420px]" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+                          <a 
+                            href="#projects" 
+                            className="w-full px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[48px]"
+                          >
+                            <ArrowRight className="h-3.5 w-3.5 cq-sm:h-4 cq-sm:w-4 rtl:rotate-180" />
+                            <span>{lang === 'ar' ? 'شاهد أعمالي' : 'View My Work'}</span>
+                          </a>
+                          <a 
+                            href="#contact" 
+                            className="w-full px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl border border-white/40 bg-white/10 text-white font-bold text-sm hover:bg-white/20 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[48px] inline-flex items-center justify-center"
+                          >
+                            <span>{lang === 'ar' ? 'تواصل معي' : 'Contact Me'}</span>
+                          </a>
+                        </div>
+                        {heroSocialLinks.length > 0 && (
+                          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                            {heroSocialLinks.map(({ link, href }: any, idx: number) => {
+                              const platform = link.platform || link.label || 'globe'
+                              const label = t(link.label) || link.platform || (lang === 'ar' ? 'رابط' : 'Link')
+                              return (
+                                <a
+                                  key={idx}
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  aria-label={label}
+                                  title={label}
+                                  className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[var(--color-primary)] shadow-md transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                                >
+                                  {heroSocialIcon(platform)}
+                                </a>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* DESKTOP HERO (>= md): Centered vertical stack */}
+                    <div
+                      dir={lang === 'ar' ? 'rtl' : 'ltr'}
+                      className="hidden cq-md:flex w-full max-w-3xl mx-auto flex-col items-center text-center my-auto"
+                    >
+                      {/* 1. Circular photo ~180-200px (theme background ring + soft shadow) */}
+                      {profile.avatarUrl ? (
+                        <div
+                          className="w-[180px] h-[180px] cq-lg:w-[200px] cq-lg:h-[200px] rounded-full overflow-hidden shadow-2xl mb-6 shrink-0 ring-4 ring-[var(--color-bg)] hover:scale-105 transition-transform duration-500"
+                          style={{
+                            backgroundColor: 'var(--color-bg)',
+                          }}
+                        >
+                          <img
+                            src={portfolioImageUrl(sanitizeUrl(profile.avatarUrl), 800)}
+                            alt={displayName}
+                            loading="eager"
+                            fetchPriority="high"
+                            decoding="async"
+                            className="w-full h-full object-cover rounded-full"
+                            style={{ objectPosition: `${avatarPosition.x}% ${avatarPosition.y}%` }}
+                          />
+                        </div>
+                      ) : null}
+
+                      {/* 2. Name (h1, large, bold, centered) */}
+                      <h1
+                        className="w-full text-4xl cq-lg:text-5xl font-bold mb-3 cq-lg:mb-4 text-center leading-snug whitespace-pre-line break-words text-[var(--color-on-primary)]"
+                        style={{
+                          textShadow: '0 2px 10px color-mix(in srgb, var(--color-primary) 50%, black)',
+                        }}
+                      >
                         {displayName}
                       </h1>
+
+                      {/* 3. Job title / Subtitle below, lighter weight, centered */}
                       {(title || t(heroContent.subtitle)) ? (
-                        <p className="text-[15px] cq-sm:text-base text-white/90 max-w-xl leading-relaxed mb-6 cq-md:mb-7 font-normal text-center break-words">
+                        <p
+                          className="text-base cq-lg:text-xl font-normal leading-relaxed mb-4 cq-lg:mb-6 max-w-xl text-center break-words"
+                          style={{
+                            color: 'color-mix(in srgb, var(--color-on-primary) 92%, transparent)',
+                          }}
+                        >
                           {title || t(heroContent.subtitle)}
                         </p>
                       ) : null}
+
+                      {/* Optional description */}
                       {t(heroContent.description) && (
-                        <p className="hidden cq-md:block text-xs cq-sm:text-sm text-white/80 max-w-xl leading-relaxed mb-5 cq-sm:mb-7 text-center">
+                        <p
+                          className="text-xs cq-lg:text-sm leading-relaxed mb-6 max-w-xl text-center break-words"
+                          style={{
+                            color: 'color-mix(in srgb, var(--color-on-primary) 80%, transparent)',
+                          }}
+                        >
                           {t(heroContent.description)}
                         </p>
                       )}
-                      <div className="flex w-full flex-col items-stretch gap-3 cq-sm:max-w-[420px] cq-md:mt-0 cq-md:w-auto cq-md:max-w-none cq-md:flex-row cq-md:flex-wrap cq-md:items-center cq-md:justify-center cq-md:gap-4" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+
+                      {/* 4. Buttons row: primary solid + secondary outline/glass, centered */}
+                      <div className={`flex flex-wrap items-center justify-center gap-3.5 cq-lg:gap-4 ${heroSocialLinks.length > 0 ? 'mb-6' : ''}`}>
                         <a 
                           href="#projects" 
-                          className="w-full cq-md:w-auto px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[48px] cq-md:min-h-[44px]"
+                          className="px-6 py-2.5 rounded-xl font-bold text-sm shadow-md hover:-translate-y-0.5 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                          style={{
+                            backgroundColor: 'var(--color-on-primary)',
+                            color: 'var(--color-primary)',
+                          }}
                         >
-                          <ArrowRight className="h-3.5 w-3.5 cq-sm:h-4 cq-sm:w-4 rtl:rotate-180" />
+                          <ArrowRight className="h-4 w-4 rtl:rotate-180" />
                           <span>{lang === 'ar' ? 'شاهد أعمالي' : 'View My Work'}</span>
                         </a>
                         <a 
                           href="#contact" 
-                          className="w-full cq-md:w-auto px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl border border-white/40 bg-white/10 text-white font-bold text-sm hover:bg-white/20 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[48px] cq-md:min-h-[44px] inline-flex items-center justify-center"
+                          className="px-6 py-2.5 rounded-xl font-bold text-sm hover:-translate-y-0.5 active:scale-[0.98] transition-all cursor-pointer min-h-[44px] inline-flex items-center justify-center backdrop-blur-xs"
+                          style={{
+                            backgroundColor: 'color-mix(in srgb, var(--color-on-primary) 12%, transparent)',
+                            borderColor: 'color-mix(in srgb, var(--color-on-primary) 35%, transparent)',
+                            borderWidth: '1px',
+                            borderStyle: 'solid',
+                            color: 'var(--color-on-primary)',
+                          }}
                         >
                           <span>{lang === 'ar' ? 'تواصل معي' : 'Contact Me'}</span>
                         </a>
                       </div>
+
+                      {/* 5. Social icons row below buttons */}
                       {heroSocialLinks.length > 0 && (
-                        <div className="mt-6 flex flex-wrap items-center justify-center gap-3 cq-md:hidden">
+                        <div className="flex flex-wrap items-center justify-center gap-3">
                           {heroSocialLinks.map(({ link, href }: any, idx: number) => {
                             const platform = link.platform || link.label || 'globe'
                             const label = t(link.label) || link.platform || (lang === 'ar' ? 'رابط' : 'Link')
@@ -2546,7 +2820,11 @@ export function ClassicTemplate({
                                 rel="noopener noreferrer"
                                 aria-label={label}
                                 title={label}
-                                className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[var(--color-primary)] shadow-md transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                                className="flex h-10 w-10 items-center justify-center rounded-full shadow-md transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-on-primary)]"
+                                style={{
+                                  backgroundColor: 'var(--color-on-primary)',
+                                  color: 'var(--color-primary)',
+                                }}
                               >
                                 {heroSocialIcon(platform)}
                               </a>

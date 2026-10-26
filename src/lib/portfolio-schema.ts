@@ -535,6 +535,18 @@ export function validateSections(sections: unknown): ContentCheck {
   return { ok: true };
 }
 
+// Linked external item for extra project buttons
+export const linkedExternalItemSchema = z
+  .object({
+    id: z.string().optional(),
+    label: z.string().optional(),
+    url: z.string().optional(),
+    iconType: z.enum(['generic', 'pdf', 'sheet', 'doc', 'folder']).optional().nullable(),
+  })
+  .passthrough();
+
+export type LinkedExternalItem = z.infer<typeof linkedExternalItemSchema>;
+
 // Project payloads keep their legacy polymorphic shape; only counts and
 // gallery sizes are enforced here (strict object validation would
 // false-reject existing workspace/external item variants).

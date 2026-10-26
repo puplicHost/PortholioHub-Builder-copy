@@ -341,6 +341,33 @@ describe('Feature 7: Project Groups & Card Reordering', () => {
       // Clean hero secondary button (no persistent opaque border)
       expect(templateContent).toContain('border border-white/40 bg-white/10 text-white font-bold text-sm hover:bg-white/20')
 
+      // Mobile hero remains completely untouched
+      expect(templateContent).toContain('cq-md:hidden w-full flex flex-col items-center text-center')
+
+      // Desktop hero: centered vertical stack, circular photo with theme background ring, and slanted bottom edge
+      expect(templateContent).toContain('hidden cq-md:flex w-full max-w-3xl mx-auto flex-col items-center text-center my-auto')
+      expect(templateContent).toContain('w-[180px] h-[180px] cq-lg:w-[200px] cq-lg:h-[200px] rounded-full overflow-hidden shadow-2xl mb-6 shrink-0 ring-4 ring-[var(--color-bg)]')
+      expect(templateContent).toContain('clip-path: polygon(0 0, 100% 0, 100% calc(100% - 56px), 0 100%)')
+      expect(templateContent).toContain('clip-path: polygon(0 0, 100% 0, 100% 100%, 0 calc(100% - 56px))')
+
+      // Desktop hero: full-screen height, animated mesh blobs, and dot-grid texture
+      expect(templateContent).toContain('hero-blob-1')
+      expect(templateContent).toContain('hero-blob-2')
+      expect(templateContent).toContain('hero-blob-3')
+      expect(templateContent).toContain('backgroundSize: \'24px 24px\'')
+      expect(templateContent).toContain('isNavbarTransparent')
+
+      // Verify no hardcoded color literals remain in the desktop hero block
+      const desktopHeroBlock = templateContent.substring(
+        templateContent.indexOf('{/* DESKTOP HERO (>= md): Centered vertical stack */}'),
+        templateContent.indexOf('</section>', templateContent.indexOf('id="hero"'))
+      )
+      expect(desktopHeroBlock).not.toContain('bg-white')
+      expect(desktopHeroBlock).not.toContain('text-white')
+      expect(desktopHeroBlock).not.toContain('border-white')
+      expect(desktopHeroBlock).not.toContain('bg-blue')
+      expect(desktopHeroBlock).not.toContain('from-sky')
+
       // No duplicate copyright in Developed with PortfolioHub
       expect(templateContent).not.toContain('© {year} · {lang === \'ar\' ? \'بُني بواسطة\' : \'Developed with\'}')
       expect(templateContent).not.toContain('© {new Date().getFullYear()} · {lang === \'ar\' ? \'بُني بواسطة\' : \'Developed with\'}')
@@ -401,6 +428,138 @@ describe('Feature 7: Project Groups & Card Reordering', () => {
       expect(builderContent).toContain("{t('field.groupIcon')}")
       expect(builderContent).toContain('value={group.icon}')
       expect(builderContent).toContain('newGroups[gIdx] = { ...group, icon: val || null }')
+    })
+
+    it('verifies Feature 9: Extra link buttons on project cards (schema, template, sanitization, and builder)', async () => {
+      const fs = await import('fs')
+      const path = await import('path')
+      const { linkedExternalItemSchema } = await import('@/lib/portfolio-schema')
+      const { sanitizeUrl } = await import('@/lib/urls')
+
+      // 1. Schema: old data without iconType validates, new data with iconType validates
+      const oldItemParsed = linkedExternalItemSchema.safeParse({
+        id: 'item-1',
+        label: 'My Drive',
+        url: 'https://drive.google.com/file',
+      })
+      expect(oldItemParsed.success).toBe(true)
+
+      const newItemParsed = linkedExternalItemSchema.safeParse({
+        id: 'item-2',
+        label: 'PDF Report',
+        url: 'https://example.com/report.pdf',
+        iconType: 'pdf',
+      })
+      expect(newItemParsed.success).toBe(true)
+      if (newItemParsed.success) {
+        expect(newItemParsed.data.iconType).toBe('pdf')
+      }
+
+      // Valid icon types
+      for (const iconType of ['generic', 'pdf', 'sheet', 'doc', 'folder'] as const) {
+        expect(linkedExternalItemSchema.safeParse({ label: 'Doc', url: 'https://example.com', iconType }).success).toBe(true)
+      }
+
+      // 2. Logic simulation matching ClassicTemplate's hasProjectLinks & extraLinkItems
+      const getExtraLinkItems = (project: any) => {
+        return (Array.isArray(project.items) ? project.items : []).filter((item: any) => {
+          const itemLabel = String(item.title || item.label || item.linkLabel || '').trim()
+          const rawUrl = sanitizeUrl(item.externalUrl || item.url || '')
+          return Boolean(itemLabel && rawUrl && /^https?:\/\//i.test(rawUrl))
+        })
+      }
+
+      const hasProjectLinksSim = (project: any) => {
+        const linkType = project.linkType || (project.content as any)?.linkType || 'none'
+        const linkedSlug = project.linkedPageSlug || (project.content as any)?.linkedPageSlug
+        const isTempSlug = !linkedSlug || String(linkedSlug).startsWith('new-') || String(linkedSlug).startsWith('project-new-')
+        const hasMainLink = (linkType === 'page' && !isTempSlug) || (linkType === 'external' && Boolean(project.externalLink))
+        if (hasMainLink) return true
+        return getExtraLinkItems(project).length > 0
+      }
+
+      // Test A: Card with main link + 2 extra buttons -> 3 buttons in order
+      const cardWithMainAnd2Extras = {
+        title: 'Project Alpha',
+        linkType: 'external',
+        externalLink: 'https://facebook.com/page',
+        items: [
+          { title: 'Drive', externalUrl: 'https://drive.google.com/folder', iconType: 'folder' },
+          { title: 'PDF', externalUrl: 'https://example.com/spec.pdf', iconType: 'pdf' },
+        ],
+      }
+      expect(hasProjectLinksSim(cardWithMainAnd2Extras)).toBe(true)
+      const extrasA = getExtraLinkItems(cardWithMainAnd2Extras)
+      expect(extrasA.length).toBe(2)
+      expect(extrasA[0].title).toBe('Drive')
+      expect(extrasA[1].title).toBe('PDF')
+
+      // Test B: Card with ONLY extra buttons (main linkType: none)
+      const cardWithOnlyExtras = {
+        title: 'Project Beta',
+        linkType: 'none',
+        items: [
+          { title: 'Sheet', externalUrl: 'https://docs.google.com/spreadsheets/d/1', iconType: 'sheet' },
+        ],
+      }
+      expect(hasProjectLinksSim(cardWithOnlyExtras)).toBe(true)
+      const extrasB = getExtraLinkItems(cardWithOnlyExtras)
+      expect(extrasB.length).toBe(1)
+      expect(extrasB[0].title).toBe('Sheet')
+
+      // Test C: Non-http extra URL skipped
+      const cardWithBadUrl = {
+        title: 'Project Gamma',
+        linkType: 'none',
+        items: [
+          { title: 'Bad Link', externalUrl: 'javascript:alert(1)', iconType: 'generic' },
+          { title: 'Another Bad', externalUrl: 'ftp://files.example.com', iconType: 'generic' },
+        ],
+      }
+      expect(getExtraLinkItems(cardWithBadUrl).length).toBe(0)
+      expect(hasProjectLinksSim(cardWithBadUrl)).toBe(false)
+
+      // Test D: No buttons -> no link row (hasProjectLinks === false)
+      const cardEmpty = {
+        title: 'Project Delta',
+        linkType: 'none',
+        items: [],
+      }
+      expect(hasProjectLinksSim(cardEmpty)).toBe(false)
+
+      // Test E: Old data without iconType renders fine
+      const cardOldData = {
+        title: 'Project Epsilon',
+        linkType: 'none',
+        items: [
+          { title: 'Old Docs', externalUrl: 'https://example.com/docs' },
+        ],
+      }
+      expect(hasProjectLinksSim(cardOldData)).toBe(true)
+      const extrasE = getExtraLinkItems(cardOldData)
+      expect(extrasE.length).toBe(1)
+      expect(extrasE[0].title).toBe('Old Docs')
+      expect(extrasE[0].iconType).toBeUndefined()
+
+      // 3. Template file checks
+      const templateContent = fs.readFileSync(
+        path.resolve(__dirname, '../src/components/portfolio/templates/ClassicTemplate.tsx'),
+        'utf-8'
+      )
+      expect(templateContent).toContain('const renderExtraLinkIcon = (iconType?: string) => {')
+      expect(templateContent).toContain('extraLinkItems.map')
+      expect(templateContent).toContain('renderExtraLinkIcon(iconType)')
+      expect(templateContent).toContain('/^https?:\\/\\//i.test(rawUrl)')
+
+      // 4. ProjectManager checks
+      const pmContent = fs.readFileSync(
+        path.resolve(__dirname, '../src/app/profile/builder/ProjectManager.tsx'),
+        'utf-8'
+      )
+      expect(pmContent).toContain('هذه الروابط تظهر كأزرار إضافية على الكارد.')
+      expect(pmContent).toContain('These links appear as extra buttons on the card.')
+      expect(pmContent).toContain('moveCardLinkedContent')
+      expect(pmContent).toContain('updateCardLinkedItem')
     })
   })
 })

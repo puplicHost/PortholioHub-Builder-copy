@@ -666,15 +666,19 @@ export async function updatePortfolio(data: {
                   item.type && VALID_TYPES.includes(item.type) ? item.type : 'external_link'
 
                 const isPage = item.linkType === 'page'
+                const rawUrl = item.externalUrl || item.url
+                const sanitized = sanitizeUrl(rawUrl)
                 const externalUrl = isPage
                   ? (typeof item.linkedPageSlug === 'string' && item.linkedPageSlug.trim()
                       ? item.linkedPageSlug.trim()
                       : null)
-                  : (sanitizeUrl(item.externalUrl) || null)
-                const textContent = item.textContent || null
+                  : (/^https?:\/\//i.test(sanitized) ? sanitized : null)
+                const textContent = (item.iconType && ['generic', 'pdf', 'sheet', 'doc', 'folder'].includes(item.iconType))
+                  ? item.iconType
+                  : (item.textContent || null)
                 const imageUrl = sanitizeUrl(item.imageUrl) || null
                 const workspaceItemId = item.workspaceItemId || null
-                const title = item.title || item.linkLabel || null
+                const title = item.title || item.linkLabel || item.label || null
 
                 const hasTitle = title && String(title).trim() !== ''
                 const hasExt = externalUrl && String(externalUrl).trim() !== ''
@@ -702,28 +706,20 @@ export async function updatePortfolio(data: {
             }
           }
 
-          // Re-target card items at the linked page row. This keeps stale
-          // clients (or payloads from before this fix) from persisting items
-          // on a card, and preserves the data instead of dropping it. When the
-          // linked page is not part of this save, the card keeps its items for
-          // backward compatibility.
-          if (linkedCardTargets.length > 0) {
-            const cardToPage = new Map<string, string>()
-            for (const { cardId, linkedSlug } of linkedCardTargets) {
-              const pageId = slugToRealId.get(normalizeSlugKey(linkedSlug))
-              if (pageId && pageId !== cardId && contentPageIds.has(pageId)) {
-                cardToPage.set(cardId, pageId)
-              }
-            }
-            if (cardToPage.size > 0) {
-              for (const row of itemRows) {
-                const targetPageId = cardToPage.get(row.projectId)
-                if (targetPageId) row.projectId = targetPageId
+          for (const target of linkedCardTargets) {
+            const targetPageId = slugToRealId.get(target.linkedSlug)
+            if (!targetPageId) continue
+            for (const row of itemRows) {
+              if (
+                row.projectId === target.cardId &&
+                (!row.externalUrl || !/^https?:\/\//i.test(row.externalUrl))
+              ) {
+                row.projectId = targetPageId
               }
             }
           }
 
-          // All surviving pages: two queries for every item instead of
+          // All surviving pages and cards: two queries for every item instead of
           // delete+create per project.
           if (keptProjectIds.size > 0) {
             await tx.projectItem.deleteMany({
@@ -1053,19 +1049,22 @@ export async function updateProjectPage(id: string, data: any) {
         await prisma.projectItem.createMany({
           data: items.map((item: any, index: number) => {
             const isPage = item.linkType === 'page'
-            // URLs are sanitized on the server (http/https/mailto/tel or
-            // internal path only); legacy bare domains normalized silently.
+            const rawUrl = item.externalUrl || item.url
+            const sanitized = sanitizeUrl(rawUrl)
             const externalUrl = isPage
               ? (typeof item.linkedPageSlug === 'string' && item.linkedPageSlug.trim() ? item.linkedPageSlug.trim() : null)
-              : (sanitizeUrl(item.externalUrl) || null)
+              : (/^https?:\/\//i.test(sanitized) ? sanitized : null)
+            const textContent = (item.iconType && ['generic', 'pdf', 'sheet', 'doc', 'folder'].includes(item.iconType))
+              ? item.iconType
+              : (item.textContent || null)
             return {
               projectId: owned.id,
               type: item.linkType === 'page' ? 'page_link' : item.type,
               workspaceItemId: item.workspaceItemId || null,
               externalUrl,
-              textContent: item.textContent || null,
+              textContent,
               imageUrl: sanitizeUrl(item.imageUrl) || null,
-              title: item.linkLabel || item.title || null,
+              title: item.linkLabel || item.title || item.label || null,
               sortOrder: item.sortOrder ?? index,
             }
           })

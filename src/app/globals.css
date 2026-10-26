@@ -443,3 +443,26 @@ html .landing-page h3,
 html .landing-page h4 {
   font-weight: 600;
 }
+
+/* Living hero background mesh keyframes */
+@keyframes heroMesh1 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(45px, -35px, 0) scale(1.08); }
+  100% { transform: translate3d(-35px, 30px, 0) scale(0.94); }
+}
+@keyframes heroMesh2 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-50px, 40px, 0) scale(1.1); }
+  100% { transform: translate3d(40px, -30px, 0) scale(0.92); }
+}
+@keyframes heroMesh3 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(35px, 45px, 0) scale(0.95); }
+  100% { transform: translate3d(-30px, -40px, 0) scale(1.07); }
+}
+.hero-blob-1 { animation: heroMesh1 22s ease-in-out infinite alternate; will-change: transform; }
+.hero-blob-2 { animation: heroMesh2 28s ease-in-out infinite alternate; will-change: transform; }
+.hero-blob-3 { animation: heroMesh3 20s ease-in-out infinite alternate; will-change: transform; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-blob-1, .hero-blob-2, .hero-blob-3 { animation: none !important; }
+}

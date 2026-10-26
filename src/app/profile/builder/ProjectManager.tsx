@@ -697,18 +697,27 @@ export function ProjectManager({
     handleAddItem(item)
   }
 
-  const removeCardLinkedContent = async (idx: number) => {
-    const ok = await confirm({
-      title: t('confirm.removeLinkedContentTitle'),
-      message: t('confirm.removeLinkedContentMessage'),
-      confirmLabel: t('confirm.confirm'),
-      cancelLabel: t('confirm.cancel'),
-      destructive: true,
-    })
-    if (!ok) return
+  const removeCardLinkedContent = (idx: number) => {
     const newItems = [...(editingItem.items || [])]
     newItems.splice(idx, 1)
     updateEditingCard('items', newItems)
+  }
+
+  const moveCardLinkedContent = (idx: number, direction: 'up' | 'down') => {
+    const items = [...(editingItem.items || [])]
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (targetIdx < 0 || targetIdx >= items.length) return
+    const temp = items[idx]
+    items[idx] = items[targetIdx]
+    items[targetIdx] = temp
+    updateEditingCard('items', items)
+  }
+
+  const updateCardLinkedItem = (idx: number, field: string, value: any) => {
+    const items = [...(editingItem.items || [])]
+    if (!items[idx]) return
+    items[idx] = { ...items[idx], [field]: value }
+    updateEditingCard('items', items)
   }
 
   // ─── Card Mode Edit Form ──────────────────────────────────────────
@@ -993,40 +1002,217 @@ export function ProjectManager({
               {t('projectManager.linkedContentMoved', { slug: cardLinkedSlug })}
             </p>
           </div>
-        ) : (
-          <div className="space-y-3 border-t border-[var(--color-border)] pt-4" role="group" aria-labelledby="pmc-linked-content">
-            <div className="flex items-center justify-between">
-              <label id="pmc-linked-content" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkedContent')}</label>
-              <Button size="sm" variant="secondary" onClick={() => setIsPickerOpen(true)} className="h-7 px-2 text-xs">
-                <Plus className="me-1 h-3 w-3" /> {t('common.add')}
+        ) : null}
+
+        <div className="space-y-3 border-t border-[var(--color-border)] pt-4" role="group" aria-labelledby="pmc-linked-content">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <label id="pmc-linked-content" className="text-xs font-semibold text-[var(--color-text-primary)]">
+                {t('project.linkedContent')}
+              </label>
+              <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">
+                {locale === 'ar'
+                  ? 'هذه الروابط تظهر كأزرار إضافية على الكارد.'
+                  : 'These links appear as extra buttons on the card.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  const newItem = {
+                    id: `link-${Date.now()}`,
+                    type: 'external_link',
+                    title: '',
+                    externalUrl: '',
+                    iconType: 'generic',
+                  }
+                  updateEditingCard('items', [...(editingItem.items || []), newItem])
+                }}
+                className="h-7 px-2.5 text-xs"
+              >
+                <Plus className="me-1 h-3 w-3" />
+                {locale === 'ar' ? 'إضافة رابط' : 'Add Link'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setIsPickerOpen(true)}
+                className="h-7 px-2 text-xs"
+                title={locale === 'ar' ? 'رفع صورة' : 'Upload Image'}
+              >
+                <Upload className="h-3 w-3" />
               </Button>
             </div>
-            <div className="space-y-2">
-              {(editingItem.items || []).map((item: any, idx: number) => (
-                <div key={idx} className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-2 text-xs">
-                  <div className="flex items-center gap-2 truncate">
-                    <span className="rounded bg-[var(--color-border)] px-1.5 py-0.5 text-[10px] font-medium capitalize">
-                      {item.type?.replace('workspace_', '') || t('common.item')}
-                    </span>
-                    <span className="truncate">{item.title || item.workspaceItemId || item.externalUrl || t('common.item')}</span>
-                  </div>
-                  <button
-                    aria-label={t('project.removeLinked')}
-                    onClick={() => void removeCardLinkedContent(idx)} className="rounded-md p-1.5 text-[var(--color-danger)] hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-              {(!editingItem.items || editingItem.items.length === 0) && (
-                <p className="rounded border border-dashed border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-text-muted)]">
-                  {t('empty.linkedContent')}
-                </p>
-              )}
-            </div>
           </div>
-        )}
 
-        {isPickerOpen && !cardLinkedSlug && (
+          <div className="space-y-2.5">
+            {(editingItem.items || []).map((item: any, idx: number) => {
+              const isImage = item.type === 'external_image' || (item.imageUrl && !item.externalUrl)
+              if (isImage) {
+                return (
+                  <div key={item.id || idx} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-2.5 text-xs">
+                    <div className="flex items-center gap-2.5 truncate">
+                      {item.imageUrl ? (
+                        <img src={item.imageUrl} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
+                      ) : (
+                        <span className="rounded bg-[var(--color-border)] p-1.5">
+                          <ImageIcon className="h-4 w-4 text-[var(--color-text-muted)]" />
+                        </span>
+                      )}
+                      <span className="truncate text-xs font-medium">{item.title || item.name || t('common.item')}</span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        disabled={idx === 0}
+                        onClick={() => moveCardLinkedContent(idx, 'up')}
+                        className="rounded p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 disabled:pointer-events-none"
+                        title={locale === 'ar' ? 'تحريك لأعلى' : 'Move up'}
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={idx === (editingItem.items || []).length - 1}
+                        onClick={() => moveCardLinkedContent(idx, 'down')}
+                        className="rounded p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 disabled:pointer-events-none"
+                        title={locale === 'ar' ? 'تحريك لأسفل' : 'Move down'}
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t('project.removeLinked')}
+                        onClick={() => removeCardLinkedContent(idx)}
+                        className="rounded-md p-1.5 text-[var(--color-danger)] hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                        title={locale === 'ar' ? 'حذف' : 'Delete'}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              }
+
+              // External link item
+              const urlVal = item.externalUrl || item.url || ''
+              const isInvalidUrl = Boolean(urlVal.trim() && !/^https?:\/\//i.test(urlVal.trim()))
+              const currentIconType = item.iconType || (['generic', 'pdf', 'sheet', 'doc', 'folder'].includes(item.textContent) ? item.textContent : 'generic')
+
+              return (
+                <div key={item.id || idx} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 text-xs space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
+                      {locale === 'ar' ? `زر رابط #${idx + 1}` : `Link Button #${idx + 1}`}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={idx === 0}
+                        onClick={() => moveCardLinkedContent(idx, 'up')}
+                        className="rounded p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 disabled:pointer-events-none"
+                        title={locale === 'ar' ? 'تحريك لأعلى' : 'Move up'}
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={idx === (editingItem.items || []).length - 1}
+                        onClick={() => moveCardLinkedContent(idx, 'down')}
+                        className="rounded p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 disabled:pointer-events-none"
+                        title={locale === 'ar' ? 'تحريك لأسفل' : 'Move down'}
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t('project.removeLinked')}
+                        onClick={() => removeCardLinkedContent(idx)}
+                        className="rounded-md p-1.5 text-[var(--color-danger)] hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                        title={locale === 'ar' ? 'حذف' : 'Delete'}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-[var(--color-text-secondary)] block mb-1">
+                        {locale === 'ar' ? 'نص الزر (مطلوب)' : 'Button Label (required)'}
+                      </label>
+                      <Input
+                        value={item.title || item.label || item.linkLabel || ''}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          updateCardLinkedItem(idx, 'title', val)
+                          updateCardLinkedItem(idx, 'label', val)
+                          updateCardLinkedItem(idx, 'linkLabel', val)
+                        }}
+                        placeholder={locale === 'ar' ? 'مثال: Drive، PDF، الكود' : 'e.g. Drive, PDF, Code'}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-[var(--color-text-secondary)] block mb-1">
+                        {locale === 'ar' ? 'نوع الأيقونة' : 'Icon Type'}
+                      </label>
+                      <select
+                        value={currentIconType}
+                        onChange={(e) => {
+                          updateCardLinkedItem(idx, 'iconType', e.target.value)
+                          updateCardLinkedItem(idx, 'textContent', e.target.value)
+                        }}
+                        className="w-full h-8 px-2 text-xs rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                      >
+                        <option value="generic">{locale === 'ar' ? 'عام (رابط خارجي)' : 'Generic (Link)'}</option>
+                        <option value="pdf">PDF</option>
+                        <option value="sheet">{locale === 'ar' ? 'جدول بيانات (Sheet)' : 'Spreadsheet (Sheet)'}</option>
+                        <option value="doc">{locale === 'ar' ? 'مستند (Doc)' : 'Document (Doc)'}</option>
+                        <option value="folder">{locale === 'ar' ? 'مجلد (Folder)' : 'Folder'}</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-[var(--color-text-secondary)] block mb-1">
+                      {locale === 'ar' ? 'رابط الزر (URL)' : 'Button URL'}
+                    </label>
+                    <Input
+                      type="url"
+                      value={urlVal}
+                      onChange={(e) => {
+                        updateCardLinkedItem(idx, 'externalUrl', e.target.value)
+                        updateCardLinkedItem(idx, 'url', e.target.value)
+                      }}
+                      placeholder="https://..."
+                      className={`h-8 text-xs ${isInvalidUrl ? 'border-[var(--color-danger)]' : ''}`}
+                    />
+                    {isInvalidUrl && (
+                      <p className="text-[11px] text-[var(--color-danger)] mt-1">
+                        {locale === 'ar'
+                          ? 'الرابط يجب أن يبدأ بـ http:// أو https://'
+                          : 'URL must start with http:// or https://'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+
+            {(!editingItem.items || editingItem.items.length === 0) && (
+              <p className="rounded-lg border border-dashed border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-text-muted)]">
+                {t('empty.linkedContent')}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {isPickerOpen && (
           <MediaPicker
             userId={profile.userId}
             onClose={() => setIsPickerOpen(false)}
