@@ -64,6 +64,7 @@ import { FilesEditor } from './FilesEditor'
 import { ContactEditor } from './ContactEditor'
 import { CustomEditor } from './CustomEditor'
 import { EducationEditor } from './EducationEditor'
+import { ClientsEditor } from './ClientsEditor'
 import { IconPicker } from './ui/IconPicker'
 import { ImageDeleteButton } from './ui/ImageDeleteButton'
 
@@ -1051,6 +1052,42 @@ export function BuilderClient({
         },
       }
     })
+
+    // Ensure clients section exists: default order after projects (before testimonials/footer),
+    // hidden and empty by default.
+    if (!sections.some((s: any) => s.sectionType === 'clients')) {
+      const projects = sections.find((s: any) => s.sectionType === 'projects')
+      const testimonials = sections.find((s: any) => s.sectionType === 'testimonials')
+      const footer = sections.find((s: any) => s.sectionType === 'footer')
+      const insertOrder = projects
+        ? (projects.sectionOrder || 0) + 1
+        : testimonials
+          ? (testimonials.sectionOrder || 0)
+          : footer
+            ? (footer.sectionOrder || 0)
+            : sections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0) + 1
+
+      sections = sections.map((s: any) =>
+        (s.sectionOrder || 0) >= insertOrder ? { ...s, sectionOrder: (s.sectionOrder || 0) + 1 } : s,
+      )
+      sections.push({
+        id: `new-clients-${Date.now()}`,
+        sectionType: 'clients',
+        sectionOrder: insertOrder,
+        visible: false,
+        content: {
+          title: { en: 'Clients', ar: 'العملاء' },
+          description: { en: '', ar: '' },
+          showTitleUnderline: true,
+          logoShape: 'circle',
+          logoSize: 'md',
+          grayscale: false,
+          items: [],
+        },
+        settings: { isVisible: false },
+      })
+      migrated = true
+    }
 
     if (!migrated) return initialProfile
 
@@ -3648,6 +3685,20 @@ case 'skills':
       case 'testimonials':
         return (
           <TestimonialsEditor
+            sectionId={selectedSection.id}
+            content={c}
+            updateSectionContent={updateSectionContent}
+            updateSectionContentRaw={updateSectionContentRaw}
+            FormCard={FormCard}
+            ItemCard={ItemCard}
+            AddActionCard={AddActionCard}
+            IconPicker={IconPicker}
+          />
+        )
+
+      case 'clients':
+        return (
+          <ClientsEditor
             sectionId={selectedSection.id}
             content={c}
             updateSectionContent={updateSectionContent}

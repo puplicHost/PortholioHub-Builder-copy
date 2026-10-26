@@ -139,6 +139,7 @@ const SECTION_NAV_LABELS: Record<string, { en: string; ar: string }> = {
   education: { en: 'Education', ar: 'التعليم' },
   services: { en: 'Services', ar: 'الخدمات' },
   projects: { en: 'Projects', ar: 'المشاريع' },
+  clients: { en: 'Clients', ar: 'العملاء' },
   gallery: { en: 'Gallery', ar: 'معرض الأعمال' },
   files: { en: 'Downloads', ar: 'الملفات' },
   testimonials: { en: 'Testimonials', ar: 'آراء العملاء' },
@@ -178,6 +179,83 @@ function projectFileAction(fileType: string, lang: 'en' | 'ar'): string {
     generic: { en: 'Open File', ar: 'فتح الملف' },
   }
   return labels[fileType]?.[lang] || labels.generic[lang]
+}
+
+function ClientLogoItem({
+  client,
+  shapeClass,
+  sizeClass,
+  paddingClass,
+  cardBg,
+  isGrayscale,
+  lang,
+  t,
+}: {
+  client: any
+  shapeClass: string
+  sizeClass: string
+  paddingClass: string
+  cardBg: string
+  isGrayscale: boolean
+  lang: string
+  t: (val: any) => string
+}) {
+  const [imgError, setImgError] = useState(false)
+  if (imgError) return null
+
+  const name = t(client.name) || ''
+  const rawUrl = client.url ? sanitizeUrl(client.url) : ''
+  const isHttpUrl = /^https?:\/\//i.test(rawUrl)
+  const logoSrc = sanitizeUrl(client.logoUrl)
+  if (!logoSrc || !/^https?:\/\//i.test(logoSrc)) return null
+
+  const ariaLabel = name
+    ? (isHttpUrl ? (lang === 'ar' ? `زيارة ${name}` : `Visit ${name}`) : name)
+    : (isHttpUrl ? (lang === 'ar' ? 'زيارة الموقع' : 'Visit brand') : undefined)
+
+  const containerBase = `relative flex items-center justify-center shrink-0 border border-[var(--color-border)] shadow-sm overflow-hidden select-none ${shapeClass} ${sizeClass} ${paddingClass}`
+
+  const imgElement = (
+    <img
+      src={portfolioImageUrl(logoSrc, 300)}
+      alt={name}
+      loading="lazy"
+      decoding="async"
+      width={144}
+      height={144}
+      onError={() => setImgError(true)}
+      className={`w-full h-full object-contain pointer-events-none transition-all duration-300 ${
+        isGrayscale ? 'grayscale opacity-75 group-hover:grayscale-0 group-hover:opacity-100 group-focus-visible:grayscale-0 group-focus-visible:opacity-100' : ''
+      }`}
+    />
+  )
+
+  if (isHttpUrl) {
+    return (
+      <a
+        href={rawUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={ariaLabel}
+        title={name || undefined}
+        style={{ backgroundColor: cardBg }}
+        className={`group ${containerBase} cursor-pointer hover:-translate-y-1 hover:shadow-md transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]`}
+      >
+        {imgElement}
+      </a>
+    )
+  }
+
+  return (
+    <div
+      title={name || undefined}
+      aria-label={ariaLabel}
+      style={{ backgroundColor: cardBg }}
+      className={`group ${containerBase}`}
+    >
+      {imgElement}
+    </div>
+  )
 }
 
 export function ClassicTemplate({
@@ -346,7 +424,12 @@ export function ClassicTemplate({
     const items = Array.isArray(section.content?.items) ? section.content.items : []
     return items.some((item: any) => t(item?.title))
   }
-  const visibleSections = sections.filter(isSectionVisible).filter(hasRenderableEducation)
+  const hasRenderableClients = (section: any) => {
+    if (section?.sectionType !== 'clients') return true
+    const items = Array.isArray(section.content?.items) ? section.content.items : []
+    return items.some((item: any) => Boolean(item?.logoUrl))
+  }
+  const visibleSections = sections.filter(isSectionVisible).filter(hasRenderableEducation).filter(hasRenderableClients)
 
   const isSectionRenderable = (section: any) => {
     if (!section || !isSectionVisible(section)) return false
@@ -359,6 +442,10 @@ export function ClassicTemplate({
       case 'services':
       case 'testimonials':
         return true
+      case 'clients': {
+        const items = Array.isArray(c.items) ? c.items : []
+        return items.some((item: any) => Boolean(item?.logoUrl))
+      }
       case 'education': {
         const items = Array.isArray(c.items) ? c.items : []
         return items.some((item: any) => Boolean(t(item?.title)))
@@ -1553,6 +1640,96 @@ export function ClassicTemplate({
           </section>
         )
       }
+      case 'clients': {
+        const clientItems = Array.isArray(c.items) ? c.items : []
+        const validClients = clientItems.filter((item: any) => Boolean(item?.logoUrl))
+        if (validClients.length === 0) return null
+
+        const titleText = (c.title === undefined || c.title === null)
+          ? (lang === 'ar' ? 'العملاء' : 'Clients')
+          : (t(c.title)?.trim() || '')
+        const descText = t(c.description)?.trim() || ''
+        const showUnderline = c.showTitleUnderline !== false
+        const logoShape = c.logoShape || 'circle'
+        const logoSize = c.logoSize || 'md'
+        const isGrayscale = Boolean(c.grayscale)
+        const isCircle = logoShape === 'circle'
+
+        const shapeClass =
+          logoShape === 'rounded'
+            ? 'rounded-2xl'
+            : logoShape === 'square'
+              ? 'rounded-md'
+              : 'rounded-full'
+
+        const sizeClass =
+          logoSize === 'sm'
+            ? 'w-[60px] h-[60px] cq-md:w-[72px] cq-md:h-[72px]'
+            : logoSize === 'lg'
+              ? 'w-[112px] h-[112px] cq-md:w-[144px] cq-md:h-[144px]'
+              : 'w-[88px] h-[88px] cq-md:w-[112px] cq-md:h-[112px]'
+
+        const paddingClass = isCircle
+          ? logoSize === 'sm'
+            ? 'p-2 cq-md:p-2.5'
+            : logoSize === 'lg'
+              ? 'p-4 cq-md:p-5'
+              : 'p-3 cq-md:p-4'
+          : logoSize === 'sm'
+            ? 'p-1.5 cq-md:p-2'
+            : logoSize === 'lg'
+              ? 'p-2.5 cq-md:p-3'
+              : 'p-2 cq-md:p-2.5'
+
+        const cardBg = sectionBg === 'var(--color-bg)' ? 'var(--color-card)' : 'var(--color-bg)'
+
+        return (
+          <section id="clients" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+              {(titleText || descText) && (
+                <div className="mb-8 cq-md:mb-12">
+                  {titleText && (
+                    <div>
+                      <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
+                        {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
+                        <span>{titleText}</span>
+                      </h2>
+                      {showUnderline && (
+                        <span
+                          className="mt-2.5 block h-1 w-12 rounded-full"
+                          style={{ backgroundColor: 'var(--color-primary)' }}
+                          aria-hidden="true"
+                        />
+                      )}
+                    </div>
+                  )}
+                  {descText && (
+                    <p className={`text-[var(--color-text-muted)] leading-relaxed break-words text-base cq-sm:text-lg max-w-2xl ${titleText ? 'mt-4' : ''}`}>
+                      {descText}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-center gap-4 cq-md:gap-6">
+                {validClients.map((client: any, i: number) => (
+                  <ClientLogoItem
+                    key={client.id || i}
+                    client={client}
+                    shapeClass={shapeClass}
+                    sizeClass={sizeClass}
+                    paddingClass={paddingClass}
+                    cardBg={cardBg}
+                    isGrayscale={isGrayscale}
+                    lang={lang}
+                    t={t}
+                  />
+                ))}
+              </div>
+            </div>
+          </section>
+        )
+      }
       case 'gallery': {
         const galleryItems = Array.isArray(c.items) ? c.items : []
         if (galleryItems.length === 0) return null
@@ -1802,6 +1979,7 @@ export function ClassicTemplate({
           experience: { en: 'Experience', ar: 'الخبرة' },
           education: { en: 'Education', ar: 'التعليم' },
           services: { en: 'Services', ar: 'الخدمات' },
+          clients: { en: 'Clients', ar: 'العملاء' },
           testimonials: { en: 'Testimonials', ar: 'التقييمات' },
           contact: { en: 'Contact', ar: 'تواصل' },
           custom: { en: 'More', ar: 'المزيد' },

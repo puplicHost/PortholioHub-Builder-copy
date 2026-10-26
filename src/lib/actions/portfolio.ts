@@ -195,6 +195,60 @@ export async function getOrCreateProfile() {
       migrated = true
     }
 
+    // — Clients: deduplicate if multiple, or insert after projects (before testimonials if present) —
+    const clientSections = sections.filter((s: any) => s.sectionType === 'clients')
+
+    if (clientSections.length > 1 && user.email !== 'bousla421@gmail.com') {
+      const toDelete = clientSections.slice(1)
+      for (const dup of toDelete) {
+        await prisma.pageSection.delete({ where: { id: dup.id } })
+      }
+      const deletedIds = new Set(toDelete.map((d: any) => d.id))
+      sections = sections.filter((s: any) => !deletedIds.has(s.id))
+      migrated = true
+    } else if (clientSections.length === 0 && sections.length > 0 && user.email !== 'bousla421@gmail.com') {
+      const projectsSection = sections.find((s: any) => s.sectionType === 'projects')
+      const testimonialsSection = sections.find((s: any) => s.sectionType === 'testimonials')
+      const footerSection = sections.find((s: any) => s.sectionType === 'footer')
+      const insertOrder = projectsSection
+        ? projectsSection.sectionOrder + 1
+        : testimonialsSection
+          ? testimonialsSection.sectionOrder
+          : footerSection
+            ? footerSection.sectionOrder
+            : sections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0) + 1
+
+      for (const sec of sections) {
+        if (sec.sectionOrder >= insertOrder) {
+          await prisma.pageSection.update({
+            where: { id: sec.id },
+            data: { sectionOrder: sec.sectionOrder + 1 },
+          })
+          sec.sectionOrder = sec.sectionOrder + 1
+        }
+      }
+
+      const created = await prisma.pageSection.create({
+        data: {
+          pageId,
+          sectionType: 'clients',
+          sectionOrder: insertOrder,
+          content: {
+            title: { en: 'Clients', ar: 'العملاء' },
+            description: { en: '', ar: '' },
+            showTitleUnderline: true,
+            logoShape: 'circle',
+            logoSize: 'md',
+            grayscale: false,
+            items: [],
+          } as Prisma.InputJsonValue,
+          settings: { isVisible: false } as Prisma.InputJsonValue,
+        },
+      })
+      sections.push(created)
+      migrated = true
+    }
+
     // Single re-fetch so the returned profile reflects the migration
     // (skipped entirely when nothing changed).
     if (migrated) {
@@ -428,6 +482,25 @@ export async function updatePortfolio(data: {
               const secSettings = (sec.settings as any) || {}
               if (sec.visible !== undefined) {
                 secSettings.isVisible = sec.visible
+              }
+
+              if (sec.sectionType === 'clients' && sec.content && typeof sec.content === 'object') {
+                const c = sec.content as any
+                const rawItems = Array.isArray(c.items) ? c.items : []
+                sec.content = {
+                  ...c,
+                  items: rawItems.map((item: any) => {
+                    const cleanUrl = item?.url ? sanitizeUrl(item.url) : ''
+                    const httpUrl = /^https?:\/\//i.test(cleanUrl) ? cleanUrl : ''
+                    const cleanLogo = item?.logoUrl ? sanitizeUrl(item.logoUrl) : ''
+                    const httpLogo = /^https?:\/\//i.test(cleanLogo) ? cleanLogo : ''
+                    return {
+                      ...item,
+                      url: httpUrl,
+                      logoUrl: httpLogo,
+                    }
+                  }),
+                }
               }
 
               if (typeof sec.id === 'string' && sec.id.startsWith('new-')) {

@@ -199,6 +199,16 @@ const galleryItem = z
   })
   .strict();
 
+const clientItem = z
+  .object({
+    id: z.string().max(120).optional(),
+    name: lstringOrText(120).optional(),
+    logoUrl: urlOrEmpty.optional(),
+    url: urlOrEmpty.optional(),
+  })
+  .strict();
+
+
 const fileItem = z
   .object({
     id: z.string().max(120).optional(),
@@ -360,6 +370,19 @@ const projectsContent = z
   })
   .strict();
 
+const clientsContent = z
+  .object({
+    title: lstring(120).optional(),
+    icon: plainText(40).nullable().optional(),
+    description: ldesc(300).optional(),
+    showTitleUnderline: z.boolean().optional(),
+    logoShape: z.enum(['circle', 'rounded', 'square']).optional(),
+    logoSize: z.enum(['sm', 'md', 'lg']).optional(),
+    grayscale: z.boolean().optional(),
+    items: z.array(clientItem).max(50).optional(),
+  })
+  .strict();
+
 const galleryContent = z
   .object({
     title: lstring(120).optional(),
@@ -430,6 +453,7 @@ const contentByType = {
   education: educationContent,
   services: servicesContent,
   projects: projectsContent,
+  clients: clientsContent,
   gallery: galleryContent,
   files: filesContent,
   testimonials: testimonialsContent,
@@ -456,6 +480,7 @@ const sectionSchema = z
       'education',
       'services',
       'projects',
+      'clients',
       'gallery',
       'files',
       'testimonials',
