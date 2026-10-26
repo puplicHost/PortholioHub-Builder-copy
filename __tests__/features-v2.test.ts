@@ -9,6 +9,8 @@ import {
   formatExperienceRange,
   formatExperienceDate,
   presentLabel,
+  formatDuration,
+  calcExperienceDuration,
 } from '@/lib/experience-dates'
 
 describe('Feature 1: Experience Dates & Range', () => {
@@ -31,6 +33,30 @@ describe('Feature 1: Experience Dates & Range', () => {
   it('provides correct present label', () => {
     expect(presentLabel('en')).toBe('Present')
     expect(presentLabel('ar')).toBe('حتى الآن')
+  })
+
+  it('formats duration with proper pluralization in Arabic and English', () => {
+    expect(formatDuration(0, 'ar')).toBe('أقل من شهر')
+    expect(formatDuration(0, 'en')).toBe('Less than a month')
+
+    expect(formatDuration(1, 'ar')).toBe('شهر')
+    expect(formatDuration(2, 'ar')).toBe('شهران')
+    expect(formatDuration(3, 'ar')).toBe('3 أشهر')
+    expect(formatDuration(11, 'ar')).toBe('11 شهراً')
+    expect(formatDuration(12, 'ar')).toBe('سنة')
+    expect(formatDuration(24, 'ar')).toBe('سنتان')
+    expect(formatDuration(36, 'ar')).toBe('3 سنوات')
+    expect(formatDuration(132, 'ar')).toBe('11 سنة')
+    expect(formatDuration(14, 'ar')).toBe('سنة وشهران')
+    expect(formatDuration(26, 'ar')).toBe('سنتان وشهران')
+    expect(formatDuration(27, 'ar')).toBe('سنتان و3 أشهر')
+
+    expect(formatDuration(1, 'en')).toBe('1 mo')
+    expect(formatDuration(5, 'en')).toBe('5 mos')
+    expect(formatDuration(12, 'en')).toBe('1 yr')
+    expect(formatDuration(24, 'en')).toBe('2 yrs')
+    expect(formatDuration(25, 'en')).toBe('2 yrs 1 mo')
+    expect(formatDuration(28, 'en')).toBe('2 yrs 4 mos')
   })
 })
 
@@ -263,9 +289,9 @@ describe('Feature 7: Project Groups & Card Reordering', () => {
       expect(templateContent).not.toContain('#FAF8F5')
       expect(templateContent).not.toContain("aboutBg = theme === 'dark' ? 'var(--color-card)' : '#FAF7F2'")
 
-      // About section renders with sectionBg
+      // About section renders with sectionBg and standardized vertical padding
       expect(templateContent).toContain(
-        '<section id="about" key={section.id} className="py-8 cq-sm:py-16" style={{ backgroundColor: sectionBg }}>'
+        '<section id="about" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>'
       )
 
       // Stat cards use statCardBg contrasting tone
@@ -291,6 +317,90 @@ describe('Feature 7: Project Groups & Card Reordering', () => {
       expect(sliderContent).not.toContain('dark:bg-slate-950')
       expect(sliderContent).toContain('bg-[var(--color-card)]')
       expect(sliderContent).toContain('border-[var(--color-border)]')
+    })
+
+    it('verifies template enhancements: wordSafeTruncate, hasContactCol, extraSections, clean hero button, and single copyright', async () => {
+      const fs = await import('fs')
+      const path = await import('path')
+      const templateContent = fs.readFileSync(
+        path.resolve(__dirname, '../src/components/portfolio/templates/ClassicTemplate.tsx'),
+        'utf-8'
+      )
+
+      // wordSafeTruncate exists and is used
+      expect(templateContent).toContain('function wordSafeTruncate(')
+      expect(templateContent).toContain('wordSafeTruncate(aboutBioRaw.replace(/\\s+/g, \' \').trim(), 140)')
+
+      // hasContactCol guards the 3rd footer column
+      expect(templateContent).toContain('const hasContactCol = Boolean(emailHref || waHref || locVal)')
+      expect(templateContent).toContain('{hasContactCol && (')
+
+      // extraSections passed to PortfolioBottomNav
+      expect(templateContent).toContain('extraSections={extraSections}')
+
+      // Clean hero secondary button (no persistent opaque border)
+      expect(templateContent).toContain('border border-white/40 bg-white/10 text-white font-bold text-sm hover:bg-white/20')
+
+      // No duplicate copyright in Developed with PortfolioHub
+      expect(templateContent).not.toContain('© {year} · {lang === \'ar\' ? \'بُني بواسطة\' : \'Developed with\'}')
+      expect(templateContent).not.toContain('© {new Date().getFullYear()} · {lang === \'ar\' ? \'بُني بواسطة\' : \'Developed with\'}')
+    })
+
+    it('verifies skill group optional icon: schema validation, builder picker, and template tile resolution', async () => {
+      const fs = await import('fs')
+      const path = await import('path')
+      const { validateSections } = await import('@/lib/portfolio-schema')
+      const { getPortfolioIcon, PORTFOLIO_ICON_MAP } = await import('@/lib/portfolio-icons')
+
+      // 1. Schema: group with icon, without icon, and with icon: null
+      const validWithIcon = validateSections([
+        {
+          id: 'skills-1',
+          sectionType: 'skills',
+          sectionOrder: 1,
+          content: {
+            groups: [
+              { name: 'Backend', icon: 'server', skills: [{ name: 'Node.js', percentage: 90 }] },
+              { name: 'Frontend', skills: [{ name: 'React', percentage: 85 }] },
+              { name: 'DevOps', icon: null, skills: [{ name: 'Docker', percentage: 80 }] },
+            ],
+          },
+        },
+      ])
+      expect(validWithIcon).toEqual({ ok: true })
+
+      // 2. Icon resolution: group with known icon resolves, unknown/null returns null
+      expect(getPortfolioIcon('server')).not.toBeNull()
+      expect(getPortfolioIcon('code')).not.toBeNull()
+      expect(getPortfolioIcon(null)).toBeNull()
+      expect(getPortfolioIcon(undefined)).toBeNull()
+      expect(getPortfolioIcon('unknown_non_existent_icon_123')).toBeNull()
+
+      // 3. ClassicTemplate: inspects groupIcon logic
+      const templateContent = fs.readFileSync(
+        path.resolve(__dirname, '../src/components/portfolio/templates/ClassicTemplate.tsx'),
+        'utf-8'
+      )
+
+      // Verifies groupIcon resolution
+      expect(templateContent).toContain('cat.icon ? getIcon(cat.icon, \'w-4 h-4 cq-sm:w-5 cq-sm:h-5\') : null')
+      // Verifies conditional tile rendering: group with icon renders tile with on-primary color
+      expect(templateContent).toContain('{groupIcon ? (')
+      expect(templateContent).toContain('backgroundColor: \'var(--color-primary)\'')
+      expect(templateContent).toContain('color: \'var(--color-on-primary, #ffffff)\'')
+      // Verifies no tile is rendered when groupIcon is null/unknown (groupIcon ? ... : null)
+      expect(templateContent).toContain(') : null}')
+      // Verifies title + count take full width
+      expect(templateContent).toContain('className="min-w-0 flex-1 text-start"')
+
+      // 4. BuilderClient: contains field.groupIcon and IconPicker for group.icon
+      const builderContent = fs.readFileSync(
+        path.resolve(__dirname, '../src/app/profile/builder/BuilderClient.tsx'),
+        'utf-8'
+      )
+      expect(builderContent).toContain("{t('field.groupIcon')}")
+      expect(builderContent).toContain('value={group.icon}')
+      expect(builderContent).toContain('newGroups[gIdx] = { ...group, icon: val || null }')
     })
   })
 })

@@ -2798,6 +2798,36 @@ case 'skills':
                     className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
                   />
                 </div>
+                <div>
+                  <label id={`skills-display-mode-label-${selectedSection.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
+                    {t('skills.displayMode')}
+                  </label>
+                  <div
+                    role="group"
+                    aria-labelledby={`skills-display-mode-label-${selectedSection.id}`}
+                    className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5"
+                  >
+                    {[
+                      { id: 'chips', label: t('skills.modeChips') },
+                      { id: 'bars', label: t('skills.modeBars') },
+                      { id: 'both', label: t('skills.modeBoth') },
+                    ].map((mode) => (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        aria-pressed={(c.displayMode || 'chips') === mode.id}
+                        onClick={() => updateSectionContentRaw(selectedSection.id, 'displayMode', mode.id)}
+                        className={`flex-1 cursor-pointer rounded-md py-2 text-xs font-semibold transition-colors ${
+                          (c.displayMode || 'chips') === mode.id
+                            ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
+                            : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
+                        }`}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </FormCard>
 
@@ -2808,19 +2838,34 @@ case 'skills':
                     key={gIdx}
                     onRemove={() => removeSectionArrayItem(selectedSection.id, 'groups', skillGroups, gIdx)}
                   >
-                    <div>
-                      <label htmlFor={`skill-group-${selectedSection.id}-${gIdx}-name`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.groupName')}</label>
-                      <Input
-                        id={`skill-group-${selectedSection.id}-${gIdx}-name`}
-                        value={group.name}
-                        onChange={(e) => {
-                          const newGroups = [...skillGroups]
-                          newGroups[gIdx] = { ...group, name: e.target.value }
-                          updateSectionContentRaw(selectedSection.id, 'groups', newGroups)
-                        }}
-                        className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px] font-semibold"
-                        placeholder={t('placeholder.skills')}
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label htmlFor={`skill-group-${selectedSection.id}-${gIdx}-name`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.groupName')}</label>
+                        <Input
+                          id={`skill-group-${selectedSection.id}-${gIdx}-name`}
+                          value={group.name}
+                          onChange={(e) => {
+                            const newGroups = [...skillGroups]
+                            newGroups[gIdx] = { ...group, name: e.target.value }
+                            updateSectionContentRaw(selectedSection.id, 'groups', newGroups)
+                          }}
+                          className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px] font-semibold"
+                          placeholder={t('placeholder.skills')}
+                        />
+                      </div>
+                      <div role="group" aria-labelledby={`skill-group-${selectedSection.id}-${gIdx}-icon-label`}>
+                        <label id={`skill-group-${selectedSection.id}-${gIdx}-icon-label`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">
+                          {t('field.groupIcon')}
+                        </label>
+                        <IconPicker
+                          value={group.icon}
+                          onChange={(val: string | undefined) => {
+                            const newGroups = [...skillGroups]
+                            newGroups[gIdx] = { ...group, icon: val || null }
+                            updateSectionContentRaw(selectedSection.id, 'groups', newGroups)
+                          }}
+                        />
+                      </div>
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-2 mt-4">
@@ -2897,7 +2942,7 @@ case 'skills':
                 
                 <AddActionCard 
                   onClick={() => {
-                    const newGroups = [...skillGroups, { name: 'New Group', skills: [] }]
+                    const newGroups = [...skillGroups, { name: 'New Group', icon: null, skills: [] }]
                     updateSectionContentRaw(selectedSection.id, 'groups', newGroups)
                   }}
                   label={t('actions.addSkillGroup')}

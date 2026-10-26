@@ -291,6 +291,7 @@ const skillsContent = z
     icon: plainText(40).nullable().optional(),
     heading: lstring(120).optional(),
     description: ldesc(300).optional(),
+    displayMode: z.enum(['chips', 'bars', 'both']).optional().default('chips'),
     skills: z.array(plainText(60)).max(50).optional(),
     groups: z
       .array(
@@ -298,6 +299,7 @@ const skillsContent = z
           .object({
             name: plainText(60).optional(),
             title: plainText(60).optional(),
+            icon: z.string().optional().nullable(),
             skills: z.array(skillItem).max(50),
           })
           .strict(),

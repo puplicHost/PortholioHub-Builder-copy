@@ -12,9 +12,10 @@ import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
 import {
   formatExperienceRange,
   isStoredMonth,
+  calcExperienceDuration,
 } from '@/lib/experience-dates'
 import { TestimonialsSlider } from '@/components/portfolio/TestimonialsSlider'
-import { PortfolioBottomNav, type PortfolioNavTab } from '@/components/portfolio/PortfolioBottomNav'
+import { PortfolioBottomNav, type PortfolioNavTab, type ExtraNavSection } from '@/components/portfolio/PortfolioBottomNav'
 import { Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin, FileText, Table2, FolderOpen, Image as ImageIcon, File, X, Menu } from 'lucide-react'
 
 // Helper to lighten/darken a hex color
@@ -40,6 +41,63 @@ function getIcon(name?: string | null, className?: string) {
   const clean = key.replace(/[^a-z0-9]/g, '')
   const Icon = PORTFOLIO_ICON_MAP[clean] || PORTFOLIO_ICON_MAP[key] || ICON_MAP[key]
   return Icon ? <Icon className={className} aria-hidden="true" /> : null
+}
+
+// Word-safe string truncation that avoids cutting words in half
+function wordSafeTruncate(text: string, maxLen: number): string {
+  if (!text || text.length <= maxLen) return text || ''
+  const trimmed = text.slice(0, maxLen)
+  const lastSpace = trimmed.lastIndexOf(' ')
+  return lastSpace > 0 ? trimmed.slice(0, lastSpace) + '…' : trimmed + '…'
+}
+
+// Document-specific color tones for file icon cards
+function getFileTypeStyle(fileType: string): { bg: string; text: string } {
+  switch (fileType) {
+    case 'pdf':
+      return { bg: 'color-mix(in srgb, #ef4444 12%, transparent)', text: '#ef4444' }
+    case 'sheet':
+      return { bg: 'color-mix(in srgb, #10b981 12%, transparent)', text: '#10b981' }
+    case 'doc':
+      return { bg: 'color-mix(in srgb, #3b82f6 12%, transparent)', text: '#3b82f6' }
+    case 'folder':
+      return { bg: 'color-mix(in srgb, #f59e0b 12%, transparent)', text: '#f59e0b' }
+    case 'photo':
+      return { bg: 'color-mix(in srgb, #8b5cf6 12%, transparent)', text: '#8b5cf6' }
+    default:
+      return { bg: 'color-mix(in srgb, var(--color-primary) 12%, transparent)', text: 'var(--color-primary)' }
+  }
+}
+
+// Responsive dynamic grid column classes based on card count
+function getDynamicGridCols(count: number): string {
+  if (count <= 1) return 'max-w-xl mx-auto grid-cols-1'
+  if (count === 2) return 'max-w-4xl mx-auto grid-cols-1 cq-sm:grid-cols-2'
+  return 'grid-cols-1 cq-sm:grid-cols-2 cq-lg:grid-cols-3'
+}
+
+// Project card image fit setting
+function projectImageFit(page: any): 'cover' | 'contain' {
+  return page?.content?.imageFit === 'contain' ? 'contain' : 'cover'
+}
+
+// Helper to determine if a color hex is light or dark
+function isLightColor(colorStr?: string): boolean {
+  if (!colorStr) return false
+  const hex = colorStr.replace('#', '')
+  if (hex.length === 3) {
+    const r = parseInt(hex[0] + hex[0], 16)
+    const g = parseInt(hex[1] + hex[1], 16)
+    const b = parseInt(hex[2] + hex[2], 16)
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6
+  }
+  if (hex.length === 6) {
+    const r = parseInt(hex.substring(0, 2), 16)
+    const g = parseInt(hex.substring(2, 4), 16)
+    const b = parseInt(hex.substring(4, 6), 16)
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6
+  }
+  return false
 }
 
 // Focal point stored by the builder as percentages. Unknown/legacy values fall
@@ -260,9 +318,12 @@ export function ClassicTemplate({
       : 'Inter'
   const fontLink = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontFam).replace(/%20/g, '+')}:wght@400;500;600;700&display=swap`
 
+  const onPrimary = isLightColor(primary) ? '#0f172a' : '#ffffff'
+
   const style = {
     '--color-primary': primary,
     '--color-primary-light': primaryLight,
+    '--color-on-primary': onPrimary,
     '--color-bg': currentBg,
     '--color-bg-alt': currentCard,
     '--color-text': currentText,
@@ -286,6 +347,57 @@ export function ClassicTemplate({
     return items.some((item: any) => t(item?.title))
   }
   const visibleSections = sections.filter(isSectionVisible).filter(hasRenderableEducation)
+
+  const isSectionRenderable = (section: any) => {
+    if (!section || !isSectionVisible(section)) return false
+    if (section.sectionType === 'hero') return false
+    const c = section.content || {}
+    switch (section.sectionType) {
+      case 'about':
+      case 'projects':
+      case 'experience':
+      case 'services':
+      case 'testimonials':
+        return true
+      case 'education': {
+        const items = Array.isArray(c.items) ? c.items : []
+        return items.some((item: any) => Boolean(t(item?.title)))
+      }
+      case 'skills': {
+        const groups = Array.isArray(c.groups) ? c.groups : []
+        if (groups.length > 0) {
+          return groups.some((g: any) => Array.isArray(g.skills) && g.skills.some((s: any) => s && s.name && s.name.trim()))
+        }
+        const fallback = Array.isArray(c.skills) ? c.skills : []
+        return fallback.some((s: any) => typeof s === 'string' && s.trim() !== '')
+      }
+      case 'gallery': {
+        const items = Array.isArray(c.items) ? c.items : []
+        return items.length > 0
+      }
+      case 'files': {
+        const items = Array.isArray(c.items) ? c.items : []
+        return items.some((f: any) => f && (f.url || f.externalUrl))
+      }
+      case 'contact': {
+        const links = Array.isArray(c.links) ? c.links : []
+        return links.length > 0 || Boolean(t(c.title)) || Boolean(t(c.headline)) || Boolean(t(c.description))
+      }
+      case 'custom': {
+        const paras = Array.isArray(c.paragraphs) ? c.paragraphs.filter((p: any) => typeof p === 'string' && p.trim() !== '') : []
+        const cards = (Array.isArray(c.cards) ? c.cards : []).filter((card: any) => {
+          if (!card || typeof card !== 'object') return false
+          return Boolean(t(card.title) || t(card.description) || sanitizeUrl(card.image) || card.icon || sanitizeUrl(card.linkUrl))
+        })
+        return Boolean(t(c.title)) || paras.length > 0 || Boolean(t(c.description)) || cards.length > 0
+      }
+      case 'footer':
+        return true
+      default:
+        return false
+    }
+  }
+  const renderedSections = visibleSections.filter(isSectionRenderable)
 
   // Reveal animations are re-scanned whenever the rendered structure changes.
   // A one-shot observer (mount only) left re-shown sections, display-mode
@@ -334,7 +446,7 @@ export function ClassicTemplate({
   }, [revealKey])
 
   // Scroll-spy: highlight the nav link for the section currently in view.
-  const navSectionIds = visibleSections.map((s: any) =>
+  const navSectionIds = ['hero', ...renderedSections.map((s: any) =>
     s.sectionType === 'footer'
       ? 'contact'
       : s.sectionType === 'contact'
@@ -342,7 +454,7 @@ export function ClassicTemplate({
         : s.sectionType === 'custom'
           ? `custom-${s.id}`
           : s.sectionType
-  )
+  )]
   const navSectionIdsKey = navSectionIds.join(',')
   useEffect(() => {
     const root = rootRef.current
@@ -394,49 +506,42 @@ export function ClassicTemplate({
     }
   }, [isNavMenuOpen])
 
-  const navLinks = visibleSections
-    .filter((s: any) => {
-      if (s.sectionType === 'hero') return false
-      if (s.sectionType === 'skills') {
-        const groups = s.content?.groups || []
-        const fallback = s.content?.skills || []
-        const hasAnySkills =
-          groups.some((g: any) => (g.skills || []).some((sk: any) => sk.name && sk.name.trim())) ||
-          fallback.some((f: any) => typeof f === 'string' && f.trim())
-        if (!hasAnySkills) return false
-      }
-      return true
-    })
-    .map((s: any) => {
-      const label =
-        s.sectionType === 'custom'
-          ? (t(s.content?.title) || SECTION_NAV_LABELS.custom[lang])
-          : SECTION_NAV_LABELS[s.sectionType]?.[lang] ||
-            t(s.content?.title) ||
-            s.sectionType
-      const targetId =
-        s.sectionType === 'footer'
-          ? 'contact'
-          : s.sectionType === 'contact'
-            ? 'contact-info'
-            : s.sectionType === 'custom'
-              ? `custom-${s.id}`
-              : s.sectionType
-      return { id: s.id, targetId, label }
-    })
+  const navLinks = renderedSections.map((s: any) => {
+    const label =
+      s.sectionType === 'custom'
+        ? (t(s.content?.title) || SECTION_NAV_LABELS.custom[lang])
+        : SECTION_NAV_LABELS[s.sectionType]?.[lang] ||
+          t(s.content?.title) ||
+          s.sectionType
+    const targetId =
+      s.sectionType === 'footer'
+        ? 'contact'
+        : s.sectionType === 'contact'
+          ? 'contact-info'
+          : s.sectionType === 'custom'
+            ? `custom-${s.id}`
+            : s.sectionType
+    return { id: s.id, targetId, label }
+  })
 
   // Mobile bottom navigation: always Home + Contact (the footer always
   // renders), plus About / Projects only when those sections are published.
   const navTabs: PortfolioNavTab[] = [
     { id: 'hero', label: lang === 'ar' ? 'الرئيسية' : 'Home', icon: 'home' },
-    ...(visibleSections.some((s: any) => s.sectionType === 'about')
+    ...(renderedSections.some((s: any) => s.sectionType === 'about')
       ? [{ id: 'about', label: lang === 'ar' ? 'عني' : 'About', icon: 'about' as const }]
       : []),
-    ...(visibleSections.some((s: any) => s.sectionType === 'projects')
+    ...(renderedSections.some((s: any) => s.sectionType === 'projects')
       ? [{ id: 'projects', label: lang === 'ar' ? 'أعمالي' : 'Projects', icon: 'projects' as const }]
       : []),
     { id: 'contact', label: lang === 'ar' ? 'تواصل' : 'Contact', icon: 'contact' },
   ]
+
+  const primaryTabTargetIds = new Set(navTabs.map((t) => t.id))
+  // Rendered sections that are not one of the 4 primary tabs go into the "More" drawer
+  const extraSections: ExtraNavSection[] = navLinks
+    .filter((l) => !primaryTabTargetIds.has(l.targetId))
+    .map((l) => ({ id: l.targetId, label: l.label }))
 
   const getContactIcon = (label: string) => {
     const l = label.toLowerCase()
@@ -491,7 +596,7 @@ export function ClassicTemplate({
 
   const renderSection = (section: any, index: number) => {
     const c = section.content || {}
-    const sectionBg = index % 2 === 1 ? 'var(--color-bg)' : 'var(--color-card)'
+    const sectionBg = index % 2 === 0 ? 'var(--color-bg)' : 'var(--color-card)'
     const sectionIcon = c.icon
 
     switch (section.sectionType) {
@@ -501,12 +606,23 @@ export function ClassicTemplate({
         const biography = bioVal || (lang === 'ar' ? 'لا يوجد نص' : 'No about text provided.')
         const statCardBg = sectionBg === 'var(--color-bg)' ? 'var(--color-card)' : 'var(--color-bg)'
         return (
-          <section id="about" key={section.id} className="py-8 cq-sm:py-16" style={{ backgroundColor: sectionBg }}>
+          <section id="about" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-4 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               
               {/* MOBILE VIEW (< md): text only. The profile image now lives in
                   the hero so it is not repeated here. */}
               <div className="cq-md:hidden mb-12">
+                <div className="mb-6">
+                  <h2 className="text-2xl break-words font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
+                    {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
+                    <span>{t(c.title) || (lang === 'ar' ? 'نبذة عني' : 'About Me')}</span>
+                  </h2>
+                  <span
+                    className="mt-2.5 block h-1 w-12 rounded-full"
+                    style={{ backgroundColor: 'var(--color-primary)' }}
+                    aria-hidden="true"
+                  />
+                </div>
                 <div className="flex flex-col justify-start text-start">
                   {biography.split(/\n+/).map((para: string, i: number) => (
                     <p key={i} className="text-[var(--color-text)]/80 leading-[1.9] text-sm font-normal whitespace-pre-wrap text-pretty">
@@ -518,14 +634,21 @@ export function ClassicTemplate({
 
               {/* DESKTOP VIEW (>= md): heading + text left, stat cards right */}
               <div className="hidden cq-md:block">
-                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                  {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
-                  {t(c.title) || (lang === 'ar' ? 'نبذة عني' : 'About Me')}
-                </h2>
+                <div className="mb-8 cq-md:mb-12">
+                  <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
+                    {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
+                    <span>{t(c.title) || (lang === 'ar' ? 'نبذة عني' : 'About Me')}</span>
+                  </h2>
+                  <span
+                    className="mt-2.5 block h-1 w-12 rounded-full"
+                    style={{ backgroundColor: 'var(--color-primary)' }}
+                    aria-hidden="true"
+                  />
+                </div>
                 {renderSectionDescription(c)}
                 {aboutStats.length > 0 ? (
-                  <div className="grid grid-cols-5 gap-8 items-start" dir="ltr">
-                    <div className="col-span-3 text-[var(--color-text-muted)] leading-[1.75] whitespace-pre-wrap text-lg break-words text-left">
+                  <div className="grid grid-cols-5 gap-8 items-start">
+                    <div className="col-span-3 text-[var(--color-text-muted)] leading-[1.75] whitespace-pre-wrap text-lg break-words text-start">
                       {biography}
                     </div>
                     <div className="col-span-2 grid grid-cols-1 cq-lg:grid-cols-2 gap-4">
@@ -543,7 +666,7 @@ export function ClassicTemplate({
                     </div>
                   </div>
                 ) : (
-                  <div className="text-[var(--color-text-muted)] leading-[1.75] whitespace-pre-wrap text-lg break-words">
+                  <div className="text-[var(--color-text-muted)] leading-[1.75] whitespace-pre-wrap text-lg break-words text-start">
                     {biography}
                   </div>
                 )}
@@ -570,12 +693,13 @@ export function ClassicTemplate({
       case 'skills':
         const skillGroups = c.groups || []
         const fallbackSkills = c.skills || []
-        let categories: { title: string; icon: React.ReactNode; items: { name: string; percentage: number }[] }[] = []
+        const skillsDisplayMode = c.displayMode || 'chips'
+        let categories: { title: string; icon?: string | null; items: { name: string; percentage: number }[] }[] = []
 
         if (skillGroups.length > 0) {
           categories = skillGroups.map((g: any) => ({
             title: g.name || 'Skills',
-            icon: <Code className="text-[var(--color-primary)]" />,
+            icon: g.icon || null,
             items: (g.skills || [])
               .filter((s: any) => s && s.name && s.name.trim() !== '')
               .map((s: any) => ({ name: s.name, percentage: s.percentage || 75 }))
@@ -584,8 +708,8 @@ export function ClassicTemplate({
           const valid = fallbackSkills.filter((s: string) => s && typeof s === 'string' && s.trim() !== '')
           if (valid.length > 0) {
             categories = [
-              { title: lang === 'ar' ? 'مهارات تقنية' : 'Technical Skills', icon: <Code className="text-[var(--color-primary)]" />, items: valid.slice(0, Math.ceil(valid.length/2)).map((s: string) => ({ name: s, percentage: 75 })) },
-              { title: lang === 'ar' ? 'مهارات أخرى' : 'Other Skills', icon: <PenTool className="text-[var(--color-primary)]" />, items: valid.slice(Math.ceil(valid.length/2)).map((s: string) => ({ name: s, percentage: 75 })) }
+              { title: lang === 'ar' ? 'مهارات تقنية' : 'Technical Skills', icon: 'code', items: valid.slice(0, Math.ceil(valid.length/2)).map((s: string) => ({ name: s, percentage: 75 })) },
+              { title: lang === 'ar' ? 'مهارات أخرى' : 'Other Skills', icon: 'pentool', items: valid.slice(Math.ceil(valid.length/2)).map((s: string) => ({ name: s, percentage: 75 })) }
             ].filter((cat: any) => cat.items.length > 0)
           }
         }
@@ -598,41 +722,135 @@ export function ClassicTemplate({
         return (
           <section id="skills" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
-                {t(c.heading) || t(c.title) || (lang === 'ar' ? 'المهارات' : 'Skills & Expertise')}
-              </h2>
+              <div className="mb-8 cq-md:mb-12">
+                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
+                  {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
+                  <span>{t(c.heading) || t(c.title) || (lang === 'ar' ? 'المهارات' : 'Skills & Expertise')}</span>
+                </h2>
+                <span
+                  className="mt-2.5 block h-1 w-12 rounded-full"
+                  style={{ backgroundColor: 'var(--color-primary)' }}
+                  aria-hidden="true"
+                />
+              </div>
               {renderSectionDescription(c)}
-              <div className="grid grid-cols-1 cq-md:grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8">
-                {categories.map((cat, i) => (
-                  <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group relative overflow-hidden rounded-[15px] border border-[var(--color-border)] p-4 cq-sm:p-[30px] bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-                    <span className="absolute top-0 left-0 right-0 h-1" style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))' }} />
-                    <div className="flex items-center gap-2.5 cq-sm:gap-3 mb-4 cq-sm:mb-6">
-                      <span className="w-9 h-9 cq-sm:w-11 cq-sm:h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm [&>*]:!text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
-                        {cat.icon}
-                      </span>
-                      <div className="min-w-0">
-                        <h3 className="text-base cq-sm:text-xl break-words font-bold tracking-tight text-[var(--color-text)] leading-tight">
-                          {cat.title}
-                        </h3>
-                        <p className="text-[11px] cq-sm:text-xs font-semibold text-[var(--color-text-muted)]">
-                          {cat.items.length} {cat.items.length === 1 ? (lang === 'ar' ? 'مهارة' : 'skill') : (lang === 'ar' ? 'مهارات' : 'skills')}
-                        </p>
+              <div className={`grid gap-4 cq-sm:gap-8 ${getDynamicGridCols(categories.length)}`}>
+                {categories.map((cat, i) => {
+                  const groupIcon = cat.icon ? getIcon(cat.icon, 'w-4 h-4 cq-sm:w-5 cq-sm:h-5') : null
+                  return (
+                    <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group relative overflow-hidden rounded-[15px] border border-[var(--color-border)] p-5 cq-sm:p-[30px] bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                      <span className="absolute top-0 inset-x-6 h-1 rounded-full" style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))' }} />
+                      <div className="flex items-center gap-2.5 cq-sm:gap-3 mb-5 cq-sm:mb-6">
+                        {groupIcon ? (
+                          <span
+                            className="w-9 h-9 cq-sm:w-11 cq-sm:h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
+                            style={{
+                              backgroundColor: 'var(--color-primary)',
+                              color: 'var(--color-on-primary, #ffffff)',
+                            }}
+                          >
+                            {groupIcon}
+                          </span>
+                        ) : null}
+                        <div className="min-w-0 flex-1 text-start">
+                          <h3 className="text-base cq-sm:text-xl break-words font-bold tracking-tight text-[var(--color-text)] leading-tight">
+                            {cat.title}
+                          </h3>
+                          <p className="text-[11px] cq-sm:text-xs font-semibold text-[var(--color-text-muted)] mt-1">
+                            {cat.items.length} {cat.items.length === 1 ? (lang === 'ar' ? 'مهارة' : 'skill') : (lang === 'ar' ? 'مهارات' : 'skills')}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5 cq-sm:gap-2">
-                      {cat.items.map((skill: { name: string; percentage: number }, j: number) => (
-                        <span
-                          key={j}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-xs cq-sm:text-sm font-medium text-[var(--color-text)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] hover:-translate-y-0.5 transition-all"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primary)' }} />
-                          {skill.name}
-                        </span>
-                      ))}
-                    </div>
+
+                    {skillsDisplayMode === 'bars' ? (
+                      <div className="space-y-4">
+                        {cat.items.map((skill: { name: string; percentage: number }, j: number) => {
+                          const pct = Math.min(100, Math.max(0, skill.percentage || 75))
+                          return (
+                            <div key={j} className="space-y-1.5">
+                              <div className="flex items-center justify-between text-xs cq-sm:text-sm font-semibold">
+                                <span className="text-[var(--color-text)] truncate">{skill.name}</span>
+                                <span className="text-[var(--color-text-muted)] font-mono shrink-0 ms-2">{pct}%</span>
+                              </div>
+                              <div
+                                role="progressbar"
+                                aria-valuenow={pct}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-label={skill.name}
+                                className="h-2 w-full rounded-full bg-[var(--color-border)]/40 overflow-hidden"
+                              >
+                                <div
+                                  className="h-full rounded-full transition-all duration-1000 ease-out"
+                                  style={{
+                                    width: `${pct}%`,
+                                    background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))',
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : skillsDisplayMode === 'both' ? (
+                      <div className="space-y-5">
+                        <div className="space-y-3.5">
+                          {cat.items.map((skill: { name: string; percentage: number }, j: number) => {
+                            const pct = Math.min(100, Math.max(0, skill.percentage || 75))
+                            return (
+                              <div key={j} className="space-y-1.5">
+                                <div className="flex items-center justify-between text-xs cq-sm:text-sm font-semibold">
+                                  <span className="text-[var(--color-text)] truncate">{skill.name}</span>
+                                  <span className="text-[var(--color-text-muted)] font-mono shrink-0 ms-2">{pct}%</span>
+                                </div>
+                                <div
+                                  role="progressbar"
+                                  aria-valuenow={pct}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-label={skill.name}
+                                  className="h-2 w-full rounded-full bg-[var(--color-border)]/40 overflow-hidden"
+                                >
+                                  <div
+                                    className="h-full rounded-full transition-all duration-1000 ease-out"
+                                    style={{
+                                      width: `${pct}%`,
+                                      background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))',
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-2 border-t border-[var(--color-border)]/40">
+                          {cat.items.map((skill: { name: string; percentage: number }, j: number) => (
+                            <span
+                              key={j}
+                              className="inline-flex min-h-[32px] items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition-all"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primary)' }} />
+                              {skill.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2 cq-sm:gap-2.5">
+                        {cat.items.map((skill: { name: string; percentage: number }, j: number) => (
+                          <span
+                            key={j}
+                            className="inline-flex min-h-[32px] items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs cq-sm:text-sm font-medium text-[var(--color-text)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] hover:-translate-y-0.5 transition-all"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primary)' }} />
+                            {skill.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))}
+                )
+              })}
               </div>
             </div>
           </section>
@@ -640,29 +858,16 @@ export function ClassicTemplate({
       case 'experience':
         const expItems = c.items || []
         const expDisplayMode = c.displayMode || 'timeline'
-        const calcDuration = (start: unknown, end: unknown, isCurrent: boolean) => {
-          if (!isStoredMonth(start)) return ''
-          const startDate = new Date(start + '-01')
-          const endDate = isCurrent ? new Date() : isStoredMonth(end) ? new Date(end + '-01') : null
-          if (!endDate) return ''
-          const months = (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth())
-          if (months < 1) return lang === 'ar' ? 'أقل من شهر' : 'Less than a month'
-          const yrs = Math.floor(months / 12)
-          const mos = months % 12
-          if (yrs === 0) return `${mos} ${lang === 'ar' ? 'أشهر' : 'mos'}`
-          if (mos === 0) return `${yrs} ${lang === 'ar' ? 'سنوات' : 'yrs'}`
-          return `${yrs} ${lang === 'ar' ? 'سنوات' : 'yrs'} ${lang === 'ar' ? 'و' : ''} ${mos} ${lang === 'ar' ? 'أشهر' : 'mos'}`
-        }
         const renderExpItem = (item: any) => {
           const dateLabel = formatExperienceRange(item.startDate, item.endDate, Boolean(item.isCurrent), lang)
-          const duration = item.startDate ? calcDuration(item.startDate, item.endDate, item.isCurrent) : ''
+          const duration = item.startDate ? calcExperienceDuration(item.startDate, item.endDate, Boolean(item.isCurrent), lang) : ''
           const bullets = (t(item.description) || '').split('\n').filter((l: string) => l.trim())
           const itemIcon = getIcon(item.icon, 'w-5 h-5 text-white')
           return (
             <div key={item.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm">
               <div className="flex items-start gap-4 mb-3">
                 {item.companyLogo ? (
-                  <img src={portfolioImageUrl(sanitizeUrl(item.companyLogo), 96)} alt={t(item.companyName)} loading="lazy" decoding="async" width={40} height={40} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                  <img src={portfolioImageUrl(sanitizeUrl(item.companyLogo), 96)} alt={t(item.companyName)} loading="lazy" decoding="async" width={40} height={40} className="w-10 h-10 rounded-lg object-contain p-0.5 bg-[var(--color-bg)] border border-[var(--color-border)]/50 shrink-0" />
                 ) : itemIcon ? (
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--color-primary)' }}>
                     {itemIcon}
@@ -672,7 +877,7 @@ export function ClassicTemplate({
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-lg break-words font-bold text-[var(--color-text)]">{t(item.jobTitle) || (lang === 'ar' ? 'المسمى الوظيفي' : 'Job Title')}</h3>
                     {item.employmentType && (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full truncate max-w-full" style={{ backgroundColor: 'var(--color-primary)', color: '#fff' }}>
+                      <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full truncate max-w-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20">
                         {item.employmentType}
                       </span>
                     )}
@@ -685,19 +890,21 @@ export function ClassicTemplate({
               {(dateLabel || duration || t(item.location) || item.workMode) && (
                 <div className="flex items-center gap-3 text-[13px] text-[var(--color-text-muted)] font-medium mb-3 flex-wrap">
                   {(dateLabel || duration) && (
-                    <span className="flex items-start gap-1 max-w-full font-medium" style={{ color: 'var(--color-primary)' }}>
-                      <Clock className="w-3.5 h-3.5 shrink-0 mt-[2px]" />
-                      <span className="break-words min-w-0 flex-1">{dateLabel}{duration && ` · ${duration}`}</span>
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 max-w-full font-medium" style={{ color: 'var(--color-primary)' }}>
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{dateLabel}{duration && ` · ${duration}`}</span>
                     </span>
                   )}
                   {t(item.location) && (
-                    <span className="flex items-start gap-1 max-w-full">
-                      <MapPin className="w-3.5 h-3.5 shrink-0 mt-[2px]" />
-                      <span className="break-words min-w-0 flex-1">{t(item.location)}</span>
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 max-w-full">
+                      <MapPin className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{t(item.location)}</span>
                     </span>
                   )}
                   {item.workMode && (
-                    <span className="break-words max-w-full">{item.workMode}</span>
+                    <span className="inline-flex items-center whitespace-nowrap shrink-0 text-xs px-2 py-0.5 rounded bg-[var(--color-border)]/30 text-[var(--color-text-muted)]">
+                      {item.workMode}
+                    </span>
                   )}
                 </div>
               )}
@@ -717,13 +924,20 @@ export function ClassicTemplate({
         return (
           <section id="experience" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
-                {t(c.heading) || (lang === 'ar' ? 'الخبرات العملية' : 'Work Experience')}
-              </h2>
-              {t(c.description) && (
-                <p className="text-[var(--color-text-muted)] leading-relaxed break-words mb-12 max-w-2xl text-lg">{t(c.description)}</p>
-              )}
+              <div className="mb-8 cq-md:mb-12">
+                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
+                  {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
+                  <span>{t(c.heading) || (lang === 'ar' ? 'الخبرات العملية' : 'Work Experience')}</span>
+                </h2>
+                <span
+                  className="mt-2.5 block h-1 w-12 rounded-full"
+                  style={{ backgroundColor: 'var(--color-primary)' }}
+                  aria-hidden="true"
+                />
+                {t(c.description) && (
+                  <p className="text-[var(--color-text-muted)] leading-relaxed break-words mt-4 max-w-2xl text-base cq-sm:text-lg">{t(c.description)}</p>
+                )}
+              </div>
               {expItems.length > 0 ? (
                 expDisplayMode === 'timeline' ? (
                   <div className="relative ps-8 cq-md:ps-12">
@@ -731,7 +945,7 @@ export function ClassicTemplate({
                     <div className="space-y-10">
                       {expItems.map((item: any, ei: number) => {
                         const dateLabel = formatExperienceRange(item.startDate, item.endDate, Boolean(item.isCurrent), lang)
-                        const duration = item.startDate ? calcDuration(item.startDate, item.endDate, item.isCurrent) : ''
+                        const duration = item.startDate ? calcExperienceDuration(item.startDate, item.endDate, Boolean(item.isCurrent), lang) : ''
                         const bullets = (t(item.description) || '').split('\n').filter((l: string) => l.trim())
                         const itemIcon = getIcon(item.icon, 'w-5 h-5 text-white')
                         return (
@@ -751,7 +965,7 @@ export function ClassicTemplate({
                             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm">
                               <div className="flex items-start gap-4 mb-3">
                                 {item.companyLogo ? (
-                                  <img src={portfolioImageUrl(sanitizeUrl(item.companyLogo), 96)} alt={t(item.companyName)} loading="lazy" decoding="async" width={40} height={40} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                                  <img src={portfolioImageUrl(sanitizeUrl(item.companyLogo), 96)} alt={t(item.companyName)} loading="lazy" decoding="async" width={40} height={40} className="w-10 h-10 rounded-lg object-contain p-0.5 bg-[var(--color-bg)] border border-[var(--color-border)]/50 shrink-0" />
                                 ) : itemIcon ? (
                                   <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--color-primary)' }}>
                                     {itemIcon}
@@ -761,7 +975,7 @@ export function ClassicTemplate({
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <h3 className="text-lg break-words font-bold text-[var(--color-text)]">{t(item.jobTitle) || (lang === 'ar' ? 'المسمى الوظيفي' : 'Job Title')}</h3>
                                     {item.employmentType && (
-                                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full truncate max-w-full" style={{ backgroundColor: 'var(--color-primary)', color: '#fff' }}>
+                                      <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full truncate max-w-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20">
                                         {item.employmentType}
                                       </span>
                                     )}
@@ -771,22 +985,24 @@ export function ClassicTemplate({
                                   </p>
                                 </div>
                               </div>
-                              {(dateLabel || t(item.location) || item.workMode) && (
+                              {(dateLabel || duration || t(item.location) || item.workMode) && (
                                 <div className="flex items-center gap-3 text-[13px] text-[var(--color-text-muted)] font-medium mb-3 flex-wrap">
-                                  {dateLabel && (
-                                    <span className="flex items-start gap-1 max-w-full">
-                                      <Clock className="w-3.5 h-3.5 shrink-0 mt-[2px]" />
-                                      <span className="break-words min-w-0 flex-1">{dateLabel}{duration && ` · ${duration}`}</span>
+                                  {(dateLabel || duration) && (
+                                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 max-w-full font-medium" style={{ color: 'var(--color-primary)' }}>
+                                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                                      <span className="truncate">{dateLabel}{duration && ` · ${duration}`}</span>
                                     </span>
                                   )}
                                   {t(item.location) && (
-                                    <span className="flex items-start gap-1 max-w-full">
-                                      <MapPin className="w-3.5 h-3.5 shrink-0 mt-[2px]" />
-                                      <span className="break-words min-w-0 flex-1">{t(item.location)}</span>
+                                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 max-w-full">
+                                      <MapPin className="w-3.5 h-3.5 shrink-0" />
+                                      <span className="truncate">{t(item.location)}</span>
                                     </span>
                                   )}
                                   {item.workMode && (
-                                    <span className="break-words max-w-full">{item.workMode}</span>
+                                    <span className="inline-flex items-center whitespace-nowrap shrink-0 text-xs px-2 py-0.5 rounded bg-[var(--color-border)]/30 text-[var(--color-text-muted)]">
+                                      {item.workMode}
+                                    </span>
                                   )}
                                 </div>
                               )}
@@ -834,13 +1050,20 @@ export function ClassicTemplate({
         return (
           <section id="education" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
-                {t(c.title) || (lang === 'ar' ? 'التعليم' : 'Education')}
-              </h2>
+              <div className="mb-8 cq-md:mb-12">
+                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
+                  {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
+                  <span>{t(c.title) || (lang === 'ar' ? 'التعليم' : 'Education')}</span>
+                </h2>
+                <span
+                  className="mt-2.5 block h-1 w-12 rounded-full"
+                  style={{ backgroundColor: 'var(--color-primary)' }}
+                  aria-hidden="true"
+                />
+              </div>
               {renderSectionDescription(c)}
               {educationItems.length > 0 ? (
-                <div className="mt-8 grid grid-cols-1 cq-sm:grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8">
+                <div className={`mt-8 grid gap-4 cq-sm:gap-8 ${getDynamicGridCols(educationItems.length)}`}>
                   {educationItems.map((item: any, index: number) => {
                     const image = sanitizeUrl(item.image)
                     const position = normalizeImagePosition(item.imagePosition)
@@ -943,24 +1166,29 @@ export function ClassicTemplate({
         return (
           <section id="services" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <div className="mb-16">
-                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
+              <div className="mb-8 cq-md:mb-12">
+                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
-                  {t(c.heading) || t(c.title) || (lang === 'ar' ? 'الخدمات' : 'Services')}
+                  <span>{t(c.heading) || t(c.title) || (lang === 'ar' ? 'الخدمات' : 'Services')}</span>
                 </h2>
+                <span
+                  className="mt-2.5 block h-1 w-12 rounded-full"
+                  style={{ backgroundColor: 'var(--color-primary)' }}
+                  aria-hidden="true"
+                />
                 {(t(c.description)) && (
-                  <p className="text-[var(--color-text-muted)] leading-relaxed break-words text-lg max-w-2xl">
+                  <p className="text-[var(--color-text-muted)] leading-relaxed break-words text-base cq-sm:text-lg max-w-2xl mt-4">
                     {t(c.description)}
                   </p>
                 )}
               </div>
               {serviceItems.length > 0 ? (
-                <div className="grid grid-cols-1 cq-md:grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8">
+                <div className={`grid gap-4 cq-sm:gap-8 ${getDynamicGridCols(serviceItems.length)}`}>
                   {serviceItems.map((service: any, i: number) => (
                     <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group relative overflow-hidden rounded-xl border border-[var(--color-border)] p-4 cq-sm:p-7 bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-                      <span className="absolute top-0 left-0 right-0 h-1" style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))' }} />
+                      <span className="absolute top-0 inset-x-6 h-1 rounded-full" style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))' }} />
                       {getIcon(service.icon, 'w-5 h-5 text-white') && (
-                        <div className="w-10 h-10 cq-sm:w-12 cq-sm:h-12 rounded-xl flex items-center justify-center mb-4 cq-sm:mb-5 shadow-sm [&>*]:!text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
+                        <div className="w-10 h-10 cq-sm:w-12 cq-sm:h-12 rounded-xl flex items-center justify-center mb-4 cq-sm:mb-5 shadow-sm text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
                           {getIcon(service.icon, 'w-5 h-5 text-white')}
                         </div>
                       )}
@@ -998,12 +1226,17 @@ export function ClassicTemplate({
           <section id="testimonials" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               <div className="mb-12 text-center">
-                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center justify-center gap-3">
+                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight text-[var(--color-text)] flex items-center justify-center gap-3">
                   {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
-                  {t(c.title) || (lang === 'ar' ? 'آراء العملاء' : 'Testimonials')}
+                  <span>{t(c.title) || (lang === 'ar' ? 'آراء العملاء' : 'Testimonials')}</span>
                 </h2>
+                <span
+                  className="mt-2.5 mx-auto block h-1 w-12 rounded-full"
+                  style={{ backgroundColor: 'var(--color-primary)' }}
+                  aria-hidden="true"
+                />
                 {(t(c.subtitle) || t(c.description)) && (
-                  <p className="text-[var(--color-text-muted)] leading-relaxed break-words text-lg max-w-2xl mx-auto">
+                  <p className="text-[var(--color-text-muted)] leading-relaxed break-words text-base cq-sm:text-lg max-w-2xl mx-auto mt-4">
                     {t(c.subtitle) || t(c.description)}
                   </p>
                 )}
@@ -1118,6 +1351,25 @@ export function ClassicTemplate({
           )
         }
 
+        const hasProjectLinks = (project: any) => {
+          const linkType = project.linkType || (project.content as any)?.linkType || 'none'
+          const linkedSlug = project.linkedPageSlug || (project.content as any)?.linkedPageSlug
+          const isTempSlug = !linkedSlug || String(linkedSlug).startsWith('new-') || String(linkedSlug).startsWith('project-new-')
+          if (linkType === 'page' && !isTempSlug && !isFree) return true
+          if (linkType === 'external' && Boolean(project.externalLink)) return true
+          if (Array.isArray(project.items)) {
+            return project.items.some((item: any) => {
+              const itemLinkType = item.linkType || (item.type === 'page_link' ? 'page' : 'none')
+              const itemSlug = item.linkedPageSlug || (item.type === 'page_link' ? item.externalUrl : null)
+              const isItemTempSlug = !itemSlug || String(itemSlug).startsWith('new-') || String(itemSlug).startsWith('project-new-')
+              if (itemLinkType === 'page' && !isItemTempSlug && !isFree) return true
+              if (itemLinkType === 'external' && Boolean(item.externalUrl)) return true
+              return false
+            })
+          }
+          return false
+        }
+
         const renderProjectMedia = (project: any, variant: 'list' | 'grid') => {
           const visual = projectCardVisual(project)
           if (visual === 'none') return null
@@ -1125,21 +1377,27 @@ export function ClassicTemplate({
             ? 'w-full cq-sm:w-[300px] h-[200px] cq-sm:h-auto shrink-0 overflow-hidden bg-[var(--color-bg)] border-b cq-sm:border-b-0 cq-sm:border-e border-[var(--color-border)]'
             : 'h-[120px] cq-sm:h-[200px] w-full shrink-0 overflow-hidden bg-[var(--color-bg)] border-b border-[var(--color-border)]'
           if (visual === 'file-icon') {
+            const fType = projectFileType(project)
+            const style = getFileTypeStyle(fType)
+            const iconWrapperClass = variant === 'list'
+              ? 'w-full cq-sm:w-28 h-24 cq-sm:h-auto shrink-0 flex items-center justify-center bg-[var(--color-bg)] border-b cq-sm:border-b-0 cq-sm:border-e border-[var(--color-border)]'
+              : 'h-20 cq-sm:h-24 w-full shrink-0 flex items-center justify-center bg-[var(--color-bg)] border-b border-[var(--color-border)]'
             return (
-              <div className={`${wrapperClass} flex items-center justify-center`}>
+              <div className={iconWrapperClass}>
                 <span
-                  className="flex h-16 w-16 cq-sm:h-20 cq-sm:w-20 items-center justify-center rounded-2xl"
+                  className="flex h-11 w-11 cq-sm:h-12 cq-sm:w-12 items-center justify-center rounded-xl shadow-xs"
                   style={{
-                    backgroundColor: 'color-mix(in srgb, var(--color-primary) 12%, transparent)',
-                    color: 'var(--color-primary)',
+                    backgroundColor: style.bg,
+                    color: style.text,
                   }}
                 >
-                  {projectFileIcon(projectFileType(project), 'h-8 w-8 cq-sm:h-10 cq-sm:w-10')}
+                  {projectFileIcon(fType, 'h-6 w-6')}
                 </span>
               </div>
             )
           }
           if (project.coverImage) {
+            const fit = projectImageFit(project)
             return (
               <div className={wrapperClass}>
                 <img
@@ -1147,7 +1405,11 @@ export function ClassicTemplate({
                   alt={project.title}
                   loading="lazy"
                   decoding="async"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  className={
+                    fit === 'contain'
+                      ? 'w-full h-full object-contain p-2 bg-[color-mix(in_srgb,var(--color-card)_90%,var(--color-border))] hover:scale-105 transition-transform duration-500'
+                      : 'w-full h-full object-cover group-hover:scale-105 transition-transform duration-500'
+                  }
                 />
               </div>
             )
@@ -1184,9 +1446,11 @@ export function ClassicTemplate({
                 ))}
               </div>
             ) : null}
-            <div className="mt-auto flex flex-wrap items-center gap-3 pt-4 border-t border-[var(--color-border)]">
-              {renderProjectLinks(project)}
-            </div>
+            {hasProjectLinks(project) && (
+              <div className="mt-auto flex flex-wrap items-center gap-3 pt-4 border-t border-[var(--color-border)]">
+                {renderProjectLinks(project)}
+              </div>
+            )}
           </div>
         )
 
@@ -1211,10 +1475,17 @@ export function ClassicTemplate({
         return (
           <section id="projects" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
-                {t(c.title) || (lang === 'ar' ? 'المشاريع' : 'Featured Projects')}
-              </h2>
+              <div className="mb-8 cq-md:mb-12">
+                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
+                  {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
+                  <span>{t(c.title) || (lang === 'ar' ? 'المشاريع' : 'Featured Projects')}</span>
+                </h2>
+                <span
+                  className="mt-2.5 block h-1 w-12 rounded-full"
+                  style={{ backgroundColor: 'var(--color-primary)' }}
+                  aria-hidden="true"
+                />
+              </div>
               {renderSectionDescription(c)}
 
               {groups.length > 0 ? (
@@ -1222,15 +1493,25 @@ export function ClassicTemplate({
                   {groups.map((group: any) => {
                     const groupCards = projectsByGroup(group.id)
                     if (groupCards.length === 0) return null
+                    const titleText = t(group.title)?.trim()
                     return (
                       <div key={group.id}>
-                        <h3
-                          className="mb-5 text-xl break-words font-bold tracking-tight"
-                          style={{ color: 'var(--color-primary)' }}
-                        >
-                          {t(group.title) || (lang === 'ar' ? 'مجموعة' : 'Group')}
-                        </h3>
-                        <div className={displayMode === 'list' ? "flex flex-col gap-6" : "grid grid-cols-1 cq-sm:grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8"}>
+                        {titleText ? (
+                          <div className="mb-5">
+                            <h3
+                              className="text-xl break-words font-bold tracking-tight"
+                              style={{ color: 'var(--color-primary)' }}
+                            >
+                              {titleText}
+                            </h3>
+                            <span
+                              className="mt-1.5 block h-0.5 w-10 rounded-full"
+                              style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 40%, transparent)' }}
+                              aria-hidden="true"
+                            />
+                          </div>
+                        ) : null}
+                        <div className={displayMode === 'list' ? "flex flex-col gap-6" : `grid gap-4 cq-sm:gap-8 ${getDynamicGridCols(groupCards.length)}`}>
                           {groupCards.map((project: any, index: number) =>
                             displayMode === 'list' ? renderListCard(project) : renderGridCard(project, index)
                           )}
@@ -1245,7 +1526,7 @@ export function ClassicTemplate({
                           {lang === 'ar' ? 'غير مصنّفة' : 'Ungrouped'}
                         </h3>
                       ) : null}
-                      <div className={displayMode === 'list' ? "flex flex-col gap-6" : "grid grid-cols-1 cq-sm:grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8"}>
+                      <div className={displayMode === 'list' ? "flex flex-col gap-6" : `grid gap-4 cq-sm:gap-8 ${getDynamicGridCols(ungroupedProjects.length)}`}>
                         {ungroupedProjects.map((project: any, index: number) =>
                           displayMode === 'list' ? renderListCard(project) : renderGridCard(project, index)
                         )}
@@ -1261,7 +1542,7 @@ export function ClassicTemplate({
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8">
+                <div className={`grid gap-4 cq-sm:gap-8 ${getDynamicGridCols(projects.length)}`}>
                   {projects.map((project: any, index: number) => renderGridCard(project, index))}
                   {projects.length === 0 && (
                     <p className="text-[var(--color-text-muted)] col-span-full font-medium">{lang === 'ar' ? 'لا توجد مشاريع مضافة' : 'No projects added yet.'}</p>
@@ -1278,10 +1559,17 @@ export function ClassicTemplate({
         return (
           <section id="gallery" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
-                {t(c.title) || (lang === 'ar' ? 'معرض الأعمال' : 'Gallery')}
-              </h2>
+              <div className="mb-8 cq-md:mb-12">
+                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
+                  {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
+                  <span>{t(c.title) || (lang === 'ar' ? 'معرض الأعمال' : 'Gallery')}</span>
+                </h2>
+                <span
+                  className="mt-2.5 block h-1 w-12 rounded-full"
+                  style={{ backgroundColor: 'var(--color-primary)' }}
+                  aria-hidden="true"
+                />
+              </div>
               {renderSectionDescription(c)}
               <div className="grid grid-cols-2 cq-md:grid-cols-3 gap-4">
                 {galleryItems.map((item: any, i: number) => {
@@ -1307,10 +1595,17 @@ export function ClassicTemplate({
         return (
           <section id="files" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
-                {t(c.title) || (lang === 'ar' ? 'ملفات للتحميل' : 'Downloads')}
-              </h2>
+              <div className="mb-8 cq-md:mb-12">
+                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
+                  {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
+                  <span>{t(c.title) || (lang === 'ar' ? 'ملفات للتحميل' : 'Downloads')}</span>
+                </h2>
+                <span
+                  className="mt-2.5 block h-1 w-12 rounded-full"
+                  style={{ backgroundColor: 'var(--color-primary)' }}
+                  aria-hidden="true"
+                />
+              </div>
               {renderSectionDescription(c)}
               <div className="flex flex-col gap-3 max-w-[800px]">
                 {fileItems.map((file: any, i: number) => {
@@ -1346,10 +1641,17 @@ export function ClassicTemplate({
         return (
           <section id="contact-info" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
-              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
-                {t(c.title) || t(c.headline) || (lang === 'ar' ? 'تواصل معي' : 'Contact')}
-              </h2>
+              <div className="mb-8 cq-md:mb-12">
+                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
+                  {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
+                  <span>{t(c.title) || t(c.headline) || (lang === 'ar' ? 'تواصل معي' : 'Contact')}</span>
+                </h2>
+                <span
+                  className="mt-2.5 block h-1 w-12 rounded-full"
+                  style={{ backgroundColor: 'var(--color-primary)' }}
+                  aria-hidden="true"
+                />
+              </div>
               {renderSectionDescription(c)}
               <div className="flex flex-col gap-3 max-w-[800px]">
                 {contactLinks.map((link: any, i: number) => {
@@ -1414,7 +1716,7 @@ export function ClassicTemplate({
               {renderSectionDescription(c)}
 
               {customCards.length > 0 ? (
-                <div className="mt-6 grid grid-cols-1 cq-sm:grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8">
+                <div className={`mt-6 grid gap-4 cq-sm:gap-8 ${getDynamicGridCols(customCards.length)}`}>
                   {customCards.map((card: any, index: number) => {
                     const image = sanitizeUrl(card.image)
                     const href = sanitizeUrl(card.linkUrl)
@@ -1512,10 +1814,11 @@ export function ClassicTemplate({
         const aboutC = aboutSection?.content || {}
         const aboutBioRaw = t(aboutC.biography) || t(aboutC.text)
         const bioShort = typeof aboutBioRaw === 'string'
-          ? aboutBioRaw.replace(/\s+/g, ' ').trim().slice(0, 120)
+          ? wordSafeTruncate(aboutBioRaw.replace(/\s+/g, ' ').trim(), 140)
           : ''
         const role = title || heroSubtitle
-        const shortBio = bioShort || bio || (typeof profile.bio === 'string' ? profile.bio : '')
+        const rawBio = typeof bio === 'string' ? bio : (typeof profile.bio === 'string' ? profile.bio : '')
+        const shortBio = bioShort || (rawBio ? wordSafeTruncate(rawBio.replace(/\s+/g, ' ').trim(), 140) : '')
 
         // ── Column 2 · Quick Links — only sections that exist on the page ──
         const quickLinks: { label: string; href: string }[] = visibleSections
@@ -1557,6 +1860,7 @@ export function ClassicTemplate({
           ? (waVal.startsWith('http') ? waVal : `https://wa.me/${normalizeWhatsappNumber(waVal)}`)
           : ''
         const locVal = t(localized.location) || profile.location || ''
+        const hasContactCol = Boolean(emailHref || waHref || locVal)
 
         // Saved footer headline/subheading — the exact fields the builder edits.
         const heading = t(c.headline)
@@ -1593,8 +1897,8 @@ export function ClassicTemplate({
               }}
             >
               <div className="mx-auto max-w-[1200px] px-6 cq-sm:px-12">
-                {/* ── Three columns ──────────────────────────────────────── */}
-                <div className="grid grid-cols-1 gap-10 text-center cq-md:grid-cols-[1.5fr_1fr_1.3fr] cq-md:gap-12 cq-md:text-start">
+                {/* ── Columns (2 or 3 depending on whether contact info exists) ── */}
+                <div className={`grid grid-cols-1 gap-10 text-center ${hasContactCol ? 'cq-md:grid-cols-[1.5fr_1fr_1.3fr]' : 'cq-md:grid-cols-[1.5fr_1fr]'} cq-md:gap-12 cq-md:text-start`}>
 
                   {/* Column 1 · Identity */}
                   <div>
@@ -1678,61 +1982,63 @@ export function ClassicTemplate({
                     </nav>
                   )}
 
-                  {/* Column 3 · Contact — driven by saved footer headline/subheading */}
-                  <div>
-                    <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: footerText }}>
-                      {heading || (lang === 'ar' ? 'تواصل معي' : 'Get In Touch')}
-                    </h3>
-                    {subheading && (
-                      <p className="mt-3 text-sm leading-relaxed break-words" style={{ color: footerMuted }}>
-                        {subheading}
-                      </p>
-                    )}
-                    <ul className="mt-4 space-y-3 flex flex-col items-center cq-md:items-start">
-                      {emailHref && (
-                        <li>
-                          <a
-                            href={emailHref}
-                            className="inline-flex items-center gap-2.5 text-sm transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
-                            style={{ color: footerMuted }}
-                          >
-                            <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
-                            <span className="break-all">{emailVal.replace(/^mailto:/, '')}</span>
-                          </a>
-                        </li>
+                  {/* Column 3 · Contact — only rendered if email, wa/phone or location is present */}
+                  {hasContactCol && (
+                    <div>
+                      <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: footerText }}>
+                        {heading || (lang === 'ar' ? 'تواصل معي' : 'Get In Touch')}
+                      </h3>
+                      {subheading && (
+                        <p className="mt-3 text-sm leading-relaxed break-words" style={{ color: footerMuted }}>
+                          {subheading}
+                        </p>
                       )}
-                      {waHref && (
-                        <li>
-                          <a
-                            href={waHref}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2.5 text-sm transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
-                            style={{ color: footerMuted }}
-                          >
-                            <MessageCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                            <span>{lang === 'ar' ? 'واتساب' : 'WhatsApp'}</span>
-                          </a>
-                        </li>
+                      <ul className="mt-4 space-y-3 flex flex-col items-center cq-md:items-start">
+                        {emailHref && (
+                          <li>
+                            <a
+                              href={emailHref}
+                              className="inline-flex items-center gap-2.5 text-sm transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
+                              style={{ color: footerMuted }}
+                            >
+                              <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
+                              <span className="break-all">{emailVal.replace(/^mailto:/, '')}</span>
+                            </a>
+                          </li>
+                        )}
+                        {waHref && (
+                          <li>
+                            <a
+                              href={waHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2.5 text-sm transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
+                              style={{ color: footerMuted }}
+                            >
+                              <MessageCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                              <span>{lang === 'ar' ? 'واتساب' : 'WhatsApp'}</span>
+                            </a>
+                          </li>
+                        )}
+                        {locVal && (
+                          <li className="inline-flex items-center gap-2.5 text-sm" style={{ color: footerMuted }}>
+                            <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            <span className="break-words">{locVal}</span>
+                          </li>
+                        )}
+                      </ul>
+                      {(emailHref || waHref) && (
+                        <a
+                          href={ctaHref}
+                          className="mt-6 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold shadow-sm transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
+                          style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}
+                        >
+                          {lang === 'ar' ? 'تواصل معي' : 'Get in touch'}
+                          <ArrowRight className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
+                        </a>
                       )}
-                      {locVal && (
-                        <li className="inline-flex items-center gap-2.5 text-sm" style={{ color: footerMuted }}>
-                          <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
-                          <span className="break-words">{locVal}</span>
-                        </li>
-                      )}
-                    </ul>
-                    {(emailHref || waHref) && (
-                      <a
-                        href={ctaHref}
-                        className="mt-6 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold shadow-sm transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
-                        style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}
-                      >
-                        {lang === 'ar' ? 'تواصل معي' : 'Get in touch'}
-                        <ArrowRight className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
-                      </a>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* ── Bottom bar — always credits the owner + PortfolioHub ── */}
@@ -1743,7 +2049,7 @@ export function ClassicTemplate({
                     </p>
                     <div className="flex flex-col items-center gap-2 cq-sm:flex-row cq-sm:gap-5">
                       <p className="text-xs" style={{ color: footerMuted }}>
-                        © {year} · {lang === 'ar' ? 'بُني بواسطة' : 'Developed with'}{' '}
+                        {lang === 'ar' ? 'بُني بواسطة' : 'Developed with'}{' '}
                         <a
                           href="https://portfolio-hub.online"
                           target="_blank"
@@ -2044,7 +2350,7 @@ export function ClassicTemplate({
                         </a>
                         <a 
                           href="#contact" 
-                          className="w-full cq-md:w-auto px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl border-2 border-white text-white font-bold text-sm hover:bg-white/10 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[48px] cq-md:min-h-[44px] inline-flex items-center justify-center"
+                          className="w-full cq-md:w-auto px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl border border-white/40 bg-white/10 text-white font-bold text-sm hover:bg-white/20 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[48px] cq-md:min-h-[44px] inline-flex items-center justify-center"
                         >
                           <span>{lang === 'ar' ? 'تواصل معي' : 'Contact Me'}</span>
                         </a>
@@ -2077,9 +2383,8 @@ export function ClassicTemplate({
             })()}
 
             {/* OTHER SECTIONS */}
-            {visibleSections.map((s: any, i: number) => {
-              if (s.sectionType === 'hero') return null
-              return renderSection(s, i)
+            {renderedSections.map((s: any, renderIndex: number) => {
+              return renderSection(s, renderIndex)
             })}
           </main>
 
@@ -2103,7 +2408,7 @@ export function ClassicTemplate({
                   © {new Date().getFullYear()} · {displayName}
                 </p>
                 <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--color-bg) 78%, transparent)' }}>
-                  © {new Date().getFullYear()} · {lang === 'ar' ? 'بُني بواسطة' : 'Developed with'}{' '}
+                  {lang === 'ar' ? 'بُني بواسطة' : 'Developed with'}{' '}
                   <a
                     href="https://portfolio-hub.online"
                     target="_blank"
@@ -2119,7 +2424,7 @@ export function ClassicTemplate({
           )}
 
           {/* Mobile-only bottom navigation bar */}
-          <PortfolioBottomNav tabs={navTabs} />
+          <PortfolioBottomNav tabs={navTabs} extraSections={extraSections} lang={lang} />
           {/* Spacer: keeps content clear of the fixed bar on mobile */}
           <div
             className="cq-md:hidden"

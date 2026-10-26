@@ -153,6 +153,56 @@ export function monthOptions(lang: ExperienceLang): { value: string; label: stri
   }))
 }
 
+/** Formats a duration in months into localized human-readable text. */
+export function formatDuration(months: number, lang: ExperienceLang): string {
+  if (months <= 0) {
+    return lang === 'ar' ? 'أقل من شهر' : 'Less than a month'
+  }
+
+  const yrs = Math.floor(months / 12)
+  const mos = months % 12
+
+  if (lang === 'ar') {
+    let yearText = ''
+    if (yrs === 1) yearText = 'سنة'
+    else if (yrs === 2) yearText = 'سنتان'
+    else if (yrs >= 3 && yrs <= 10) yearText = `${yrs} سنوات`
+    else if (yrs >= 11) yearText = `${yrs} سنة`
+
+    let monthText = ''
+    if (mos === 1) monthText = 'شهر'
+    else if (mos === 2) monthText = 'شهران'
+    else if (mos >= 3 && mos <= 10) monthText = `${mos} أشهر`
+    else if (mos >= 11) monthText = `${mos} شهراً`
+
+    if (yearText && monthText) return `${yearText} و${monthText}`
+    if (yearText) return yearText
+    return monthText || 'أقل من شهر'
+  }
+
+  const yearText = yrs > 0 ? (yrs === 1 ? '1 yr' : `${yrs} yrs`) : ''
+  const monthText = mos > 0 ? (mos === 1 ? '1 mo' : `${mos} mos`) : ''
+
+  if (yearText && monthText) return `${yearText} ${monthText}`
+  if (yearText) return yearText
+  return monthText || 'Less than a month'
+}
+
+/** Calculates and formats experience duration from start/end stored months. */
+export function calcExperienceDuration(
+  start: unknown,
+  end: unknown,
+  isCurrent: boolean,
+  lang: ExperienceLang,
+): string {
+  if (!isStoredMonth(start)) return ''
+  const startDate = new Date(start + '-01')
+  const endDate = isCurrent ? new Date() : isStoredMonth(end) ? new Date(end + '-01') : null
+  if (!endDate) return ''
+  const months = (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth())
+  return formatDuration(months, lang)
+}
+
 /** Current year down to 1980, newest first. */
 export function experienceYearOptions(currentYear = new Date().getFullYear()): string[] {
   const years: string[] = []

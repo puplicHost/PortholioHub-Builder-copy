@@ -519,6 +519,15 @@ export function ProjectManager({
     updateEditingCard('content', { ...projectContent(editingItem), fileType: value })
   }
 
+  const cardImageFit = (page: any): 'cover' | 'contain' => {
+    const value = projectContent(page).imageFit
+    return value === 'contain' ? 'contain' : 'cover'
+  }
+
+  const setCardImageFit = (value: 'cover' | 'contain') => {
+    updateEditingCard('content', { ...projectContent(editingItem), imageFit: value })
+  }
+
   // ─── Card Mode (home page): manages project pages ─────────────────
   const handleAddCard = (groupId?: string) => {
     const newProject = {
@@ -758,7 +767,35 @@ export function ProjectManager({
             )}
           </div>
           {editingItem.coverImage && (
-            <img src={editingItem.coverImage} alt={t('misc.coverPreview')} className="mt-2 h-32 w-full rounded-md border border-[var(--color-border)] object-cover" />
+            <div className="mt-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[var(--color-text-secondary)]">{t('project.imageFit')}</span>
+                <div role="group" aria-label={t('project.imageFit')} className="inline-flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
+                  {(['cover', 'contain'] as const).map((fit) => (
+                    <button
+                      key={fit}
+                      type="button"
+                      aria-pressed={cardImageFit(editingItem) === fit}
+                      onClick={() => setCardImageFit(fit)}
+                      className={`cursor-pointer rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                        cardImageFit(editingItem) === fit
+                          ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
+                          : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
+                      }`}
+                    >
+                      {fit === 'cover' ? t('project.fitCover') : t('project.fitContain')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <img
+                src={editingItem.coverImage}
+                alt={t('misc.coverPreview')}
+                className={`h-32 w-full rounded-md border border-[var(--color-border)] ${
+                  cardImageFit(editingItem) === 'contain' ? 'object-contain p-2 bg-[var(--color-surface-secondary)]' : 'object-cover'
+                }`}
+              />
+            </div>
           )}
         </div>
 
