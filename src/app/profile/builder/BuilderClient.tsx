@@ -9,7 +9,8 @@ import {
   Palette, Layout, FileText, Menu, X, Sliders, Plus, Trash2,
   Trophy, Star, Users, Briefcase, Heart, Zap, Target, Award,
   Clock, TrendingUp, Code, Layers, Rocket, PenTool, Sun, Moon,
-  ArrowUp, BarChart3, LogOut, Languages, User, AlertTriangle, Lock, Save
+  ArrowUp, BarChart3, LogOut, Languages, User, AlertTriangle, Lock, Save,
+  Copy
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -42,8 +43,17 @@ import { isSectionVisible, withSectionVisibility } from '@/lib/section-visibilit
 import { getWhatsAppLink, digitsOnly } from '@/lib/whatsapp'
 import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
 import { useRouter } from 'next/navigation'
-import { updatePortfolio, createProjectPage, deleteProjectPage, publishProfile, unpublishProfile, getOrCreateProfile } from '@/lib/actions/portfolio'
+import { updatePortfolio, createProjectPage, deleteProjectPage, deleteSection as deletePortfolioSection, publishProfile, unpublishProfile, getOrCreateProfile } from '@/lib/actions/portfolio'
 import { uploadToCloudinary } from '@/lib/cloudinary'
+import {
+  experienceDateError,
+  experienceYearOptions,
+  isLegacyExperienceDate,
+  isStoredMonth,
+  monthOptions,
+  parseLegacyExperienceDate,
+  presentLabel,
+} from '@/lib/experience-dates'
 import { LivePreview } from './LivePreview'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { ThemeSettings } from './ThemeSettings'
@@ -53,67 +63,9 @@ import { GalleryEditor } from './GalleryEditor'
 import { FilesEditor } from './FilesEditor'
 import { ContactEditor } from './ContactEditor'
 import { CustomEditor } from './CustomEditor'
-
-const ICON_OPTIONS = [
-  { key: 'trophy', icon: Trophy },
-  { key: 'star', icon: Star },
-  { key: 'users', icon: Users },
-  { key: 'briefcase', icon: Briefcase },
-  { key: 'heart', icon: Heart },
-  { key: 'zap', icon: Zap },
-  { key: 'target', icon: Target },
-  { key: 'award', icon: Award },
-  { key: 'clock', icon: Clock },
-  { key: 'trendingup', icon: TrendingUp },
-  { key: 'globe', icon: Globe },
-  { key: 'code', icon: Code },
-  { key: 'layers', icon: Layers },
-  { key: 'checkcircle', icon: CheckCircle },
-  { key: 'rocket', icon: Rocket },
-  { key: 'layout', icon: Layout },
-  { key: 'palette', icon: Palette },
-  { key: 'pen', icon: PenTool },
-] as const
-
-function IconPicker({ value, onChange }: { value?: string | null; onChange: (key: string | undefined) => void }) {
-  const { t, locale } = useBuilderI18n()
-  const noIconLabel = locale === 'ar' ? 'بدون أيقونة' : 'No icon'
-  return (
-    <div className="grid grid-cols-6 gap-1.5">
-      <button
-        type="button"
-        onClick={() => onChange(undefined)}
-        aria-label={noIconLabel}
-        aria-pressed={!value}
-        className={`p-1.5 rounded-md border transition-colors cursor-pointer flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
-          !value
-            ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
-            : 'border-[var(--color-border)] bg-transparent text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text-primary)]'
-        }`}
-        title={noIconLabel}
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
-      {ICON_OPTIONS.map(({ key, icon: Icon }) => (
-        <button
-          key={key}
-          type="button"
-          onClick={() => onChange(value === key ? undefined : key)}
-          aria-label={t('misc.useIcon', { key })}
-          aria-pressed={value === key}
-          className={`p-1.5 rounded-md border transition-colors cursor-pointer flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
-            value === key
-              ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
-              : 'border-[var(--color-border)] bg-transparent text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text-primary)]'
-          }`}
-          title={key}
-        >
-          <Icon className="h-3.5 w-3.5" />
-        </button>
-      ))}
-    </div>
-  )
-}
+import { EducationEditor } from './EducationEditor'
+import { IconPicker } from './ui/IconPicker'
+import { ImageDeleteButton } from './ui/ImageDeleteButton'
 
 function UploadOverlay({ active, label, progress }: { active: boolean; label: string; progress?: number }) {
   if (!active) return null
@@ -301,9 +253,11 @@ function ProjectPagePreview({ profile, projectPage }: { profile: any; projectPag
   const bgLight = appearance.bgColorLight || '#f9fafb'
   const bgDark = appearance.bgColorDark || '#111827'
   const currentBg = theme === 'dark' ? bgDark : bgLight
-  const currentText = theme === 'dark' ? '#f3f4f6' : '#1f2937'
+  const currentText = theme === 'dark' 
+    ? (appearance.textColorDark || '#f3f4f6') 
+    : (appearance.textColorLight || '#1f2937')
   const currentCard = theme === 'dark' ? adjustColor(bgDark, 15) : adjustColor(bgLight, -5)
-  const currentBorder = theme === 'dark' ? '#374151' : '#e5e7eb'
+  const currentBorder = appearance.borderColor || (theme === 'dark' ? '#374151' : '#e5e7eb')
   const fontFam = appearance.font || 'Inter'
   const localized = profile.localized || {}
   const displayName = localized.displayName?.[lang] || profile.displayName || profile.username
@@ -315,7 +269,9 @@ function ProjectPagePreview({ profile, projectPage }: { profile: any; projectPag
     '--color-primary': primary,
     '--color-primary-light': primaryLight,
     '--color-bg': currentBg,
+    '--color-bg-alt': currentCard,
     '--color-text': currentText,
+    '--color-text-muted': `color-mix(in srgb, ${currentText} 70%, ${currentBg})`,
     '--color-card': currentCard,
     '--color-border': currentBorder,
     fontFamily: `"${fontFam}", system-ui, sans-serif`,
@@ -607,6 +563,8 @@ function SortableSectionItem({
   locked,
   onSelect,
   onToggleVisibility,
+  onDuplicate,
+  onDelete,
 }: {
   sec: any
   isSelected: boolean
@@ -614,6 +572,8 @@ function SortableSectionItem({
   locked?: boolean
   onSelect: () => void
   onToggleVisibility: (e: React.MouseEvent) => void
+  onDuplicate?: () => void
+  onDelete?: () => void
 }) {
   const {
     attributes,
@@ -693,6 +653,28 @@ function SortableSectionItem({
               {isVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
             </button>
 
+            {onDuplicate && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDuplicate() }}
+                aria-label={t('sections.duplicateAria', { name: t(`section.${sec.sectionType}`) })}
+                title={t('sections.duplicate')}
+                className="p-1 rounded text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-primary)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+            )}
+
+            {onDelete && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete() }}
+                aria-label={t('sections.deleteAria', { name: t(`section.${sec.sectionType}`) })}
+                title={t('sections.delete')}
+                className="p-1 rounded text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-danger)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+
             {/* Chevron */}
             <ChevronRight
               className={`h-3.5 w-3.5 text-[var(--color-text-muted)] transition-transform ${
@@ -740,6 +722,40 @@ function ensureValidProjectItemTypes(projectPages: any[]) {
       type: item.type && VALID_PROJECT_ITEM_TYPES.includes(item.type) ? item.type : 'external_link',
     })),
   }))
+}
+
+function localBuilderId(prefix: string): string {
+  const random =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+      : Math.random().toString(36).slice(2, 14)
+  return `${prefix}_${random}`
+}
+
+function randomBuilderId(prefix: string): string {
+  // Server-side creation is triggered by the `new-` prefix. The readable
+  // `custom_…`/`education_…` part keeps the id unique per instance.
+  return `new-${localBuilderId(prefix)}`
+}
+
+function copyTitle(title: any, lang: 'en' | 'ar' = 'en'): any {
+  if (title && typeof title === 'object' && !Array.isArray(title)) {
+    return {
+      ...title,
+      en: `${title.en || ''} (copy)`.trim(),
+      ar: `${title.ar || ''} (نسخة)`.trim(),
+    }
+  }
+  if (typeof title === 'string' && title.trim()) {
+    return `${title} ${lang === 'ar' ? '(نسخة)' : '(copy)'}`
+  }
+  return title
+}
+
+// Duplicated sections must not share nested objects with the original.
+function deepClone<T>(value: T): T {
+  if (typeof structuredClone === 'function') return structuredClone(value)
+  return JSON.parse(JSON.stringify(value)) as T
 }
 
 /** Minimal shape shared by cards and content pages in `profile.projectPages`. */
@@ -1203,6 +1219,30 @@ export function BuilderClient({
 
   const handleSaveChanges = async (forceVersion?: number): Promise<boolean> => {
     if (saveStatus === 'saving') return false
+
+    // Inline editor validation: a save is blocked (with the same message the
+    // item shows inline) while any experience range is inverted or an
+    // education card has no title.
+    for (const section of profile.pages?.[0]?.sections || []) {
+      if (section.sectionType === 'experience') {
+        for (const item of section.content?.items || []) {
+          const problem = experienceDateError(item, locale)
+          if (problem) {
+            toast('error', problem)
+            return false
+          }
+        }
+      }
+      if (section.sectionType === 'education') {
+        for (const item of section.content?.items || []) {
+          if (!pickLang(item.title, 'en') && !pickLang(item.title, 'ar')) {
+            toast('error', t('validation.educationTitleRequired'))
+            return false
+          }
+        }
+      }
+    }
+
     setSaveStatus('saving')
     try {
       const res = await updatePortfolio({
@@ -1281,6 +1321,11 @@ export function BuilderClient({
               i === 0 ? { ...pg, sections: remap(pg.sections) } : pg,
             ),
           }
+          // Keep the editor open on a section that was just created server-side
+          // (its temp `new-…` id was replaced with the real row id).
+          setSelectedSectionId((curr) =>
+            curr && byTemp.has(curr) ? (byTemp.get(curr) as string) : curr,
+          )
           setProfile(nextProfile)
         }
         setSavedSnapshot(getProfileSnapshot(nextProfile))
@@ -1491,7 +1536,9 @@ export function BuilderClient({
         ? 'contact'
         : section.sectionType === 'contact'
           ? 'contact-info'
-          : section.sectionType
+          : section.sectionType === 'custom'
+            ? `custom-${section.id}`
+            : section.sectionType
     const el = document.getElementById(targetId)
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -1562,6 +1609,117 @@ export function BuilderClient({
       }
       return { ...p, pages: newPages }
     })
+  }
+
+  // "+ Add Section" creates a Custom Section only. Base sections such as
+  // Education are seeded automatically and cannot be added here.
+  const addCustomSection = () => {
+    const newId = randomBuilderId('custom')
+    const insertOrder = (() => {
+      const footer = sections.find((s: any) => s.sectionType === 'footer')
+      if (footer) return footer.sectionOrder || 0
+      return sections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0) + 1
+    })()
+    const content = {
+      title: { en: 'Custom Section', ar: 'قسم حر' },
+      description: { en: '', ar: '' },
+      showTitleUnderline: true,
+      cards: [],
+    }
+
+    updateProfile((p: any) => {
+      const pages = [...(p.pages || [])]
+      const page = pages[0]
+      if (!page) return p
+      const current = page.sections || []
+      const shifted = current.map((s: any) =>
+        (s.sectionOrder || 0) >= insertOrder ? { ...s, sectionOrder: (s.sectionOrder || 0) + 1 } : s,
+      )
+      pages[0] = {
+        ...page,
+        sections: [
+          ...shifted,
+          {
+            id: newId,
+            sectionType: 'custom',
+            sectionOrder: insertOrder,
+            content,
+            settings: { isVisible: true },
+          },
+        ],
+      }
+      return { ...p, pages }
+    })
+    setSelectedSectionId(newId)
+    setSelectedSectionType('custom')
+  }
+
+  // Deep-copy a custom section (cards get fresh ids) and insert it directly
+  // after the original.
+  const duplicateCustomSection = (section: any) => {
+    const content = section.content || {}
+    const cards = Array.isArray(content.cards)
+      ? content.cards.map((card: any) => ({ ...deepClone(card), id: localBuilderId('card') }))
+      : undefined
+    const duplicate = {
+      ...deepClone(section),
+      id: randomBuilderId('custom'),
+      sectionOrder: (section.sectionOrder || 0) + 1,
+      content: {
+        ...deepClone(content),
+        title: copyTitle(content.title, locale),
+        ...(cards ? { cards } : {}),
+      },
+      settings: { ...deepClone(section.settings || {}), isVisible: true },
+    }
+    updateProfile((p: any) => {
+      const pages = [...(p.pages || [])]
+      const page = pages[0]
+      if (!page) return p
+      const current = page.sections || []
+      const shifted = current.map((s: any) =>
+        (s.sectionOrder || 0) >= duplicate.sectionOrder
+          ? { ...s, sectionOrder: (s.sectionOrder || 0) + 1 }
+          : s,
+      )
+      pages[0] = { ...page, sections: [...shifted, duplicate] }
+      return { ...p, pages }
+    })
+    setSelectedSectionId(duplicate.id)
+    setSelectedSectionType('custom')
+  }
+
+  const deleteManagedSection = async (section: any) => {
+    const ok = await confirm({
+      title: t('confirm.deleteSectionTitle'),
+      message: t('confirm.deleteSectionMessage'),
+      confirmLabel: t('confirm.confirm'),
+      cancelLabel: t('confirm.cancel'),
+      destructive: true,
+    })
+    if (!ok) return
+    const sectionId = section.id
+    if (typeof sectionId === 'string' && !sectionId.startsWith('new-')) {
+      const result = await deletePortfolioSection(sectionId)
+      if (!result.success) {
+        toast('error', getFriendlyErrorMessage((result as any)?.error ?? 'SAVE_FAILED', locale))
+        return
+      }
+    }
+    updateProfile((p: any) => {
+      const pages = [...(p.pages || [])]
+      const page = pages[0]
+      if (!page) return p
+      const remaining = (page.sections || []).filter((s: any) => s.id !== sectionId)
+        .map((s: any, index: number) => ({ ...s, sectionOrder: index + 1 }))
+      pages[0] = { ...page, sections: remaining }
+      return { ...p, pages }
+    })
+    if (selectedSectionId === sectionId) {
+      setSelectedSectionId(null)
+      setSelectedSectionType(null)
+    }
+    toast('info', t('toasts.sectionDeleted'))
   }
 
   // Section content updater
@@ -1857,11 +2015,22 @@ export function BuilderClient({
     })
     if (!ok) return
     try {
+      const pageToDelete = (profile.projectPages || []).find((pp: any) => pp.id === pageId)
+      const pageSlug = pageToDelete?.slug
       const res = await deleteProjectPage(pageId)
       if (res.success) {
         updateProfile((p: any) => ({
           ...p,
-          projectPages: p.projectPages.filter((pp: any) => pp.id !== pageId)
+          projectPages: (p.projectPages || [])
+            .filter((pp: any) => pp.id !== pageId)
+            .map((proj: any) => {
+              const cardLink = (proj as any).linkedPageSlug || (proj as any).content?.linkedPageSlug
+              if (pageSlug && (cardLink === pageSlug || cardLink === pageId)) {
+                const nextContent = { ...((proj as any).content || {}), linkType: 'none', linkedPageSlug: '' }
+                return { ...proj, linkType: 'none', linkedPageSlug: '', content: nextContent }
+              }
+              return proj
+            })
         }))
         if (activePage === pageId) {
           setActivePage('home')
@@ -2004,6 +2173,12 @@ export function BuilderClient({
                     {isUploading(`project-cover-${pp.id}`) && <Loader2 className="h-4 w-4 animate-spin" />}
                     {isUploading(`project-cover-${pp.id}`) ? `${t('common.uploading')} ${uploadPercent(`project-cover-${pp.id}`)}%` : t('common.upload')}
                   </FileButton>
+                  {pp.coverImage && (
+                    <ImageDeleteButton
+                      onDelete={() => updateProjectPageField(pp.id, 'coverImage', '')}
+                      className="h-[44px] min-h-[44px]"
+                    />
+                  )}
                 </div>
                 {(pp.coverImage || isUploading(`project-cover-${pp.id}`)) && (
                   <div className="relative mt-2 h-28 w-full overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
@@ -2168,6 +2343,16 @@ export function BuilderClient({
                             {isUploading(`project-item-${pp.id}-${item.id}`) && <Loader2 className="h-4 w-4 animate-spin" />}
                             {isUploading(`project-item-${pp.id}-${item.id}`) ? `${t('common.uploading')} ${uploadPercent(`project-item-${pp.id}-${item.id}`)}%` : t('common.upload')}
                           </FileButton>
+                          {item.imageUrl && (
+                            <ImageDeleteButton
+                              onDelete={() => {
+                                const newItems = [...(pp.items || [])]
+                                newItems[idx].imageUrl = ''
+                                updateProjectPageField(pp.id, 'items', newItems)
+                              }}
+                              className="h-[44px] min-h-[44px]"
+                            />
+                          )}
                         </div>
                         {(item.imageUrl || isUploading(`project-item-${pp.id}-${item.id}`)) && (
                           <div className="relative mt-2 h-24 w-full overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
@@ -2261,14 +2446,16 @@ export function BuilderClient({
                   {isUploading('avatar') ? `${t('common.uploading')} ${uploadPercent('avatar')}%` : t('common.upload')}
                 </FileButton>
                 {profile.avatarUrl && (
-                  <button
-                    type="button"
-                    onClick={() => updateProfile((p: any) => ({ ...p, avatarUrl: '' }))}
-                    className="h-[44px] min-h-[44px] px-3 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-red-500 hover:border-red-300 dark:hover:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-900/10 text-xs font-medium transition-colors cursor-pointer shrink-0 flex items-center gap-1"
-                    title={t('misc.removeProfileImage')}
-                  >
-                    <span>✕ {t('common.remove')}</span>
-                  </button>
+                  <ImageDeleteButton
+                    onDelete={() =>
+                      updateProfile((p: any) => ({
+                        ...p,
+                        avatarUrl: '',
+                        appearance: { ...(p.appearance || {}), avatarPosition: { x: 50, y: 50 } },
+                      }))
+                    }
+                    className="h-[44px] min-h-[44px]"
+                  />
                 )}
               </div>
               {(profile.avatarUrl || isUploading('avatar')) && (
@@ -2327,14 +2514,13 @@ export function BuilderClient({
                       {isUploading(`hero-background-${selectedSection.id}`) ? `${t('common.uploading')} ${uploadPercent(`hero-background-${selectedSection.id}`)}%` : t('common.upload')}
                     </FileButton>
                     {c.backgroundImage && (
-                      <button
-                        type="button"
-                        onClick={() => updateSectionContentRaw(selectedSection.id, 'backgroundImage', '')}
-                        className="h-[44px] min-h-[44px] px-3 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-red-500 hover:border-red-300 dark:hover:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-900/10 text-xs font-medium transition-colors cursor-pointer shrink-0 flex items-center gap-1"
-                        title={t('misc.removeBackground')}
-                      >
-                        <span>✕ {t('common.remove')}</span>
-                      </button>
+                      <ImageDeleteButton
+                        onDelete={() => {
+                          updateSectionContentRaw(selectedSection.id, 'backgroundImage', '')
+                          updateSectionContentRaw(selectedSection.id, 'backgroundPosition', { x: 50, y: 50 })
+                        }}
+                        className="h-[44px] min-h-[44px]"
+                      />
                     )}
                   </div>
                   {c.backgroundImage ? (
@@ -2733,6 +2919,28 @@ case 'skills':
           newItems[i] = { ...newItems[i], [field]: { ...obj, [l]: val } }
           updateSectionContentRaw(selectedSection.id, 'items', newItems)
         }
+        const expMonths = monthOptions(locale)
+        const expYears = experienceYearOptions().map((year) => ({ value: year, label: year }))
+        const monthPart = (value: unknown) => (isStoredMonth(value) ? value.slice(5, 7) : '')
+        const yearPart = (value: unknown) => (isStoredMonth(value) ? value.slice(0, 4) : '')
+        const setExpDatePart = (i: number, field: 'startDate' | 'endDate', part: 'month' | 'year', value: string) => {
+          const newItems = [...experienceItems]
+          const current = isStoredMonth(newItems[i][field]) ? newItems[i][field] : ''
+          const [currentYear, currentMonth] = current.split('-')
+          if (!value) {
+            newItems[i][field] = ''
+          } else {
+            const nextYear = part === 'year' ? value : currentYear || String(new Date().getFullYear())
+            const nextMonth = part === 'month' ? value : currentMonth || '01'
+            newItems[i][field] = `${nextYear}-${nextMonth}`
+          }
+          updateSectionContentRaw(selectedSection.id, 'items', newItems)
+        }
+        const editLegacyDate = (i: number, field: 'startDate' | 'endDate') => {
+          const newItems = [...experienceItems]
+          newItems[i][field] = parseLegacyExperienceDate(newItems[i][field])
+          updateSectionContentRaw(selectedSection.id, 'items', newItems)
+        }
         return (
           <div className="space-y-6">
             <FormCard title={t('form.sectionSettings')} subtitle={t('form.subtitleSectionSettings')}>
@@ -2858,37 +3066,92 @@ case 'skills':
                             {isUploading(`experience-logo-${item.id}`) && <Loader2 className="h-4 w-4 animate-spin" />}
                             {isUploading(`experience-logo-${item.id}`) ? `${t('common.uploading')} ${uploadPercent(`experience-logo-${item.id}`)}%` : t('common.upload')}
                           </FileButton>
+                          {item.companyLogo && (
+                            <ImageDeleteButton
+                              onDelete={() => {
+                                const newItems = [...experienceItems]
+                                newItems[idx].companyLogo = ''
+                                updateSectionContentRaw(selectedSection.id, 'items', newItems)
+                              }}
+                              className="h-[44px] min-h-[44px]"
+                            />
+                          )}
                         </div>
                       </div>
                       
                       <div>
                         <label htmlFor={`exp-${item.id}-start`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.startDate')}</label>
-                        <input
-                          id={`exp-${item.id}-start`}
-                          type="month"
-                          value={item.startDate || ''}
-                          onChange={(e) => {
-                            const newItems = [...experienceItems]
-                            newItems[idx].startDate = e.target.value
-                            updateSectionContentRaw(selectedSection.id, 'items', newItems)
-                          }}
-                          className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px] rounded-lg border border-[var(--color-border)] bg-transparent text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
-                        />
+                        {isLegacyExperienceDate(item.startDate) ? (
+                          <div className="flex min-h-[44px] items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-2">
+                            <span className="min-w-0 flex-1 truncate text-[14px] text-[var(--color-text-primary)]" title={item.startDate}>
+                              {item.startDate}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => editLegacyDate(idx, 'startDate')}
+                              className="shrink-0 cursor-pointer rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] font-semibold text-[var(--color-primary)] hover:border-[var(--color-primary)]"
+                            >
+                              {t('misc.editDate')}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            <Select
+                              id={`exp-${item.id}-start-month`}
+                              value={monthPart(item.startDate)}
+                              onChange={(value) => setExpDatePart(idx, 'startDate', 'month', value)}
+                              placeholder={t('field.month')}
+                              options={expMonths}
+                            />
+                            <Select
+                              id={`exp-${item.id}-start-year`}
+                              value={yearPart(item.startDate)}
+                              onChange={(value) => setExpDatePart(idx, 'startDate', 'year', value)}
+                              placeholder={t('field.year')}
+                              options={expYears}
+                            />
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label htmlFor={`exp-${item.id}-end`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.endDate')}</label>
-                        <input
-                          id={`exp-${item.id}-end`}
-                          type="month"
-                          value={item.endDate || ''}
-                          onChange={(e) => {
-                            const newItems = [...experienceItems]
-                            newItems[idx].endDate = e.target.value
-                            updateSectionContentRaw(selectedSection.id, 'items', newItems)
-                          }}
-                          className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px] rounded-lg border border-[var(--color-border)] bg-transparent text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] disabled:opacity-50"
-                          disabled={item.isCurrent}
-                        />
+                        {item.isCurrent ? (
+                          <div className="flex min-h-[44px] items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-2 text-[14px] font-semibold text-[var(--color-primary)]">
+                            {presentLabel(locale)}
+                          </div>
+                        ) : isLegacyExperienceDate(item.endDate) ? (
+                          <div className="flex min-h-[44px] items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-2">
+                            <span className="min-w-0 flex-1 truncate text-[14px] text-[var(--color-text-primary)]" title={item.endDate}>
+                              {item.endDate}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => editLegacyDate(idx, 'endDate')}
+                              className="shrink-0 cursor-pointer rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] font-semibold text-[var(--color-primary)] hover:border-[var(--color-primary)]"
+                            >
+                              {t('misc.editDate')}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            <Select
+                              id={`exp-${item.id}-end-month`}
+                              value={monthPart(item.endDate)}
+                              onChange={(value) => setExpDatePart(idx, 'endDate', 'month', value)}
+                              placeholder={t('field.month')}
+                              options={expMonths}
+                              disabled={item.isCurrent}
+                            />
+                            <Select
+                              id={`exp-${item.id}-end-year`}
+                              value={yearPart(item.endDate)}
+                              onChange={(value) => setExpDatePart(idx, 'endDate', 'year', value)}
+                              placeholder={t('field.year')}
+                              options={expYears}
+                              disabled={item.isCurrent}
+                            />
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 mt-2">
                           <input
                             type="checkbox"
@@ -2906,6 +3169,11 @@ case 'skills':
                             {t('misc.currentlyWorking')}
                           </label>
                         </div>
+                        {experienceDateError(item, locale) && (
+                          <p role="alert" className="mt-2 text-xs font-semibold text-[var(--color-danger)]">
+                            {experienceDateError(item, locale)}
+                          </p>
+                        )}
                       </div>
 
                       <BiField
@@ -3210,7 +3478,17 @@ case 'skills':
             </FormCard>
 
             <FormCard title={t('form.projectCards')} subtitle={t('form.subtitleProjectCards')}>
-              <ProjectManager profile={profile} updateProfile={updateProfile} isCardMode={true} allProjectPages={projectPages} isFree={isFreePlan} />
+              <ProjectManager
+                profile={profile}
+                updateProfile={updateProfile}
+                isCardMode={true}
+                allProjectPages={projectPages}
+                isFree={isFreePlan}
+                groups={Array.isArray(c.groups) ? c.groups : []}
+                onGroupsChange={(next) => updateSectionContentRaw(selectedSection.id, 'groups', next)}
+                showEn={showEn}
+                showAr={showAr}
+              />
             </FormCard>
           </div>
         )
@@ -3378,6 +3656,26 @@ case 'skills':
           />
         )
 
+      case 'education':
+        return (
+          <EducationEditor
+            sectionId={selectedSection.id}
+            content={c}
+            updateSectionContent={updateSectionContent}
+            updateSectionContentRaw={updateSectionContentRaw}
+            FormCard={FormCard}
+            ItemCard={ItemCard}
+            AddActionCard={AddActionCard}
+            IconPicker={IconPicker}
+            ImagePositionControl={ImagePositionControl}
+            uploadImage={uploadImage}
+            isUploading={isUploading}
+            uploadPercent={uploadPercent}
+            showEn={showEn}
+            showAr={showAr}
+          />
+        )
+
       case 'custom':
         return (
           <CustomEditor
@@ -3389,6 +3687,12 @@ case 'skills':
             ItemCard={ItemCard}
             AddActionCard={AddActionCard}
             IconPicker={IconPicker}
+            ImagePositionControl={ImagePositionControl}
+            uploadImage={uploadImage}
+            isUploading={isUploading}
+            uploadPercent={uploadPercent}
+            showEn={showEn}
+            showAr={showAr}
           />
         )
 
@@ -3923,12 +4227,29 @@ case 'skills':
                             handleSelectSection(sec)
                           }}
                           onToggleVisibility={(e) => toggleSectionVisibility(sec.id, e)}
+                          onDuplicate={sec.sectionType === 'custom' ? () => duplicateCustomSection(sec) : undefined}
+                          onDelete={
+                            sec.sectionType === 'custom'
+                              ? () => void deleteManagedSection(sec)
+                              : undefined
+                          }
                         />
                       )
                     })}
                   </div>
                 </SortableContext>
               </DndContext>
+
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={addCustomSection}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2.5 text-xs font-semibold text-[var(--color-primary)] transition-colors hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-primary)]/5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {t('actions.addSection')}
+                </button>
+              </div>
             </>
           ) : (
             <div className="space-y-3 pt-1">
@@ -3967,8 +4288,8 @@ case 'skills':
                 </div>
               </div>
 
-              {/* Project Pages — locked behind subscription for FREE users */}
-              {projectPages.map((pp: any) => {
+              {/* Standalone Project Pages — locked behind subscription for FREE users */}
+              {projectPages.filter((pp: any) => pp.showInProjects === false).map((pp: any) => {
                 const isSelected = activePage === pp.id
                 return (
                   <div
@@ -3994,24 +4315,14 @@ case 'skills':
                     <div className="flex items-center gap-2 truncate">
                       {isFreePlan ? (
                         <Lock className="h-3.5 w-3.5 text-[var(--color-text-muted)] shrink-0" aria-hidden="true" />
-                      ) : pp.showInProjects !== false ? (
-                        <LayoutGrid className="h-3.5 w-3.5 text-[var(--color-text-muted)] opacity-60 group-hover:opacity-100 shrink-0" aria-hidden="true" />
                       ) : (
                         <FileText className="h-3.5 w-3.5 text-[var(--color-text-muted)] opacity-60 group-hover:opacity-100 shrink-0" aria-hidden="true" />
                       )}
                       <div className="min-w-0">
                         <div className="flex min-w-0 items-center gap-1.5">
                           <span className="text-xs truncate">{pp.title || t('common.untitled')}</span>
-                          <span
-                            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
-                              pp.showInProjects !== false
-                                ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
-                                : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-muted)]'
-                            }`}
-                          >
-                            {pp.showInProjects !== false
-                              ? t('projectManager.cardBadge')
-                              : t('projectManager.pageBadge')}
+                          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold bg-[var(--color-surface-secondary)] text-[var(--color-text-muted)]">
+                            {t('projectManager.pageBadge')}
                           </span>
                         </div>
                         <span className="text-[10px] text-[var(--color-text-muted)] font-mono">/projects/{pp.slug}</span>
@@ -4046,6 +4357,12 @@ case 'skills':
                   </div>
                 )
               })}
+
+              {projectPages.filter((pp: any) => pp.showInProjects === false).length === 0 && (
+                <p className="rounded-lg border border-dashed border-[var(--color-border)] p-4 text-center text-xs text-[var(--color-text-muted)]">
+                  {locale === 'ar' ? 'لا توجد صفحات مضافة بعد. أنشئ صفحة جديدة أدناه.' : 'No pages added yet. Create a new page below.'}
+                </p>
+              )}
 
               {/* New Project Page Button — locked for FREE users */}
               <button

@@ -10,6 +10,7 @@ import { getPortfolioLang } from '@/lib/portfolio-language'
 import { useBuilderI18n } from './i18n/BuilderI18nContext'
 import { Select } from './ui/Select'
 import { FileButton } from './ui/FileButton'
+import { ImageDeleteButton } from './ui/ImageDeleteButton'
 
 function ColorField({
   label,
@@ -314,6 +315,12 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
                 {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 {uploadingLogo ? t('common.uploading') : t('common.upload')}
               </FileButton>
+              {appearance.logoUrl && (
+                <ImageDeleteButton
+                  onDelete={() => handleAppearanceChange('logoUrl', '')}
+                  className="h-10 min-h-[40px]"
+                />
+              )}
             </div>
             {appearance.logoUrl && (
               <img src={appearance.logoUrl} alt={t('misc.logoPreview')} className="mt-2 h-9 w-auto rounded border border-[var(--color-border)] object-contain" />

@@ -2,7 +2,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2, Edit, Link as LinkIcon, Loader2, Upload } from 'lucide-react'
+import { Plus, Trash2, Edit, Link as LinkIcon, Loader2, Upload, ChevronUp, ChevronDown, FolderOpen, FileText, Table2, Image as ImageIcon, File as FileIcon, GripVertical } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { MediaPicker } from './MediaPicker'
@@ -11,12 +11,319 @@ import { useBuilderI18n } from './i18n/BuilderI18nContext'
 import { useConfirm } from './ui/ConfirmModal'
 import { Select } from './ui/Select'
 import { FileButton } from './ui/FileButton'
+import { ImageDeleteButton } from './ui/ImageDeleteButton'
 import type { Prisma } from '@prisma/client'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 type ProjectPageWithItems = Prisma.ProjectPageGetPayload<{ include: { items: true } }>
 
-export function ProjectManager({ profile, updateProfile, isCardMode = false, allProjectPages = [], isFree = false }: { profile: any, updateProfile: any, isCardMode?: boolean, allProjectPages?: ProjectPageWithItems[], isFree?: boolean }) {
+type ProjectGroup = { id: string; title?: any }
+
+function projectContent(page: any): Record<string, any> {
+  return page?.content && typeof page.content === 'object' && !Array.isArray(page.content)
+    ? page.content
+    : {}
+}
+
+function cardVisual(page: any): 'image' | 'file-icon' | 'none' {
+  const value = projectContent(page).cardVisual
+  return value === 'file-icon' || value === 'none' ? value : 'image'
+}
+
+function cardFileType(page: any): string {
+  const value = projectContent(page).fileType
+  return ['pdf', 'sheet', 'doc', 'folder', 'photo', 'generic'].includes(value) ? value : 'generic'
+}
+
+function groupTitle(group: ProjectGroup, locale: 'en' | 'ar'): string {
+  const title = group?.title
+  if (title && typeof title === 'object') return title[locale] || title.en || title.ar || ''
+  return typeof title === 'string' ? title : ''
+}
+
+function localId(prefix: string): string {
+  const random =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID().replace(/-/g, '').slice(0, 10)
+      : Math.random().toString(36).slice(2, 12)
+  return `${prefix}_${random}`
+}
+
+function SortableGroupRow({
+  group,
+  index,
+  total,
+  showEn,
+  showAr,
+  onTitleChange,
+  onMoveUp,
+  onMoveDown,
+  onDelete,
+  onAddCard,
+}: {
+  group: ProjectGroup
+  index: number
+  total: number
+  showEn?: boolean
+  showAr?: boolean
+  onTitleChange: (groupId: string, lang: 'en' | 'ar', value: string) => void
+  onMoveUp: () => void
+  onMoveDown: () => void
+  onDelete: () => void
+  onAddCard: () => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: group.id })
+  const { t, locale } = useBuilderI18n()
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  const titleName = groupTitle(group, locale) || t('project.untitledGroup')
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2 transition-all ${
+        isDragging ? 'z-50 opacity-60 shadow-lg ring-2 ring-[var(--color-primary)]' : ''
+      }`}
+    >
+      <div className="flex items-start gap-1.5">
+        <div
+          {...attributes}
+          {...listeners}
+          aria-label={t('project.dragReorderGroup')}
+          className="cursor-grab active:cursor-grabbing p-1.5 mt-1 rounded hover:bg-black/5 dark:hover:bg-white/10 touch-none flex items-center justify-center shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+        >
+          <GripVertical className="h-4 w-4" aria-hidden="true" />
+        </div>
+
+        <div className="grid flex-1 gap-1">
+          {showEn && (
+            <Input
+              aria-label={t('project.groupTitleEn')}
+              value={groupTitle(group, 'en')}
+              onChange={(e) => onTitleChange(group.id, 'en', e.target.value)}
+              placeholder={t('project.groupTitleEn')}
+              className="h-8 text-xs"
+            />
+          )}
+          {showAr && (
+            <Input
+              aria-label={t('project.groupTitleAr')}
+              dir="rtl"
+              value={groupTitle(group, 'ar')}
+              onChange={(e) => onTitleChange(group.id, 'ar', e.target.value)}
+              placeholder={t('project.groupTitleAr')}
+              className="h-8 text-xs text-right"
+            />
+          )}
+        </div>
+
+        <div className="flex shrink-0 flex-col gap-0.5">
+          <button
+            type="button"
+            aria-label={t('project.moveGroupUp', { name: titleName })}
+            disabled={index === 0}
+            onClick={onMoveUp}
+            className="rounded p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+          >
+            <ChevronUp className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label={t('project.moveGroupDown', { name: titleName })}
+            disabled={index === total - 1}
+            onClick={onMoveDown}
+            className="rounded p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <button
+          type="button"
+          aria-label={t('project.deleteGroupAria', { name: titleName })}
+          onClick={onDelete}
+          className="shrink-0 rounded p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-danger)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={onAddCard}
+        className="inline-flex items-center gap-1 rounded-md border border-dashed border-[var(--color-border)] px-2 py-1 text-[10px] font-semibold text-[var(--color-primary)] hover:border-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+      >
+        <Plus className="h-3 w-3" /> {t('project.addCardToGroup')}
+      </button>
+    </div>
+  )
+}
+
+function SortableProjectRow({
+  proj,
+  index,
+  total,
+  onMoveUp,
+  onMoveDown,
+  onEdit,
+  onDelete,
+}: {
+  proj: any
+  index: number
+  total: number
+  onMoveUp: () => void
+  onMoveDown: () => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: proj.id })
   const { t } = useBuilderI18n()
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-all ${
+        isDragging ? 'z-50 opacity-60 shadow-lg ring-2 ring-[var(--color-primary)]' : ''
+      }`}
+    >
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <div
+          {...attributes}
+          {...listeners}
+          aria-label={t('project.dragReorderCard')}
+          className="cursor-grab active:cursor-grabbing p-1 -ms-1 rounded hover:bg-black/5 dark:hover:bg-white/10 touch-none flex items-center justify-center shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+        >
+          <GripVertical className="h-4 w-4" aria-hidden="true" />
+        </div>
+
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-secondary)] text-[var(--color-text-muted)]" aria-hidden="true">
+          {cardVisual(proj) === 'file-icon' ? (
+            cardFileType(proj) === 'pdf' ? <FileText className="h-4 w-4" /> :
+            cardFileType(proj) === 'sheet' ? <Table2 className="h-4 w-4" /> :
+            cardFileType(proj) === 'folder' ? <FolderOpen className="h-4 w-4" /> :
+            cardFileType(proj) === 'photo' ? <ImageIcon className="h-4 w-4" /> :
+            cardFileType(proj) === 'doc' ? <FileText className="h-4 w-4" /> :
+            <FileIcon className="h-4 w-4" />
+          ) : proj.coverImage ? (
+            <img src={proj.coverImage} alt="" className="h-9 w-9 rounded-md object-cover" />
+          ) : (
+            <FileText className="h-4 w-4" />
+          )}
+        </span>
+
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-[var(--color-text-primary)]">{proj.title || t('common.untitled')}</p>
+          <p className="text-[10px] text-[var(--color-text-muted)]">{t('project.itemsLinked', { count: proj.items?.length || 0 })}</p>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 flex-col gap-0.5">
+          <button
+            type="button"
+            aria-label={t('project.moveCardUp')}
+            disabled={index === 0}
+            onClick={onMoveUp}
+            className="rounded p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+          >
+            <ChevronUp className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label={t('project.moveCardDown')}
+            disabled={index === total - 1}
+            onClick={onMoveDown}
+            className="rounded p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <button
+          type="button"
+          aria-label={t('project.editProjectAria')}
+          onClick={onEdit}
+          className="rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+        >
+          <Edit className="h-4 w-4" />
+        </button>
+
+        <button
+          type="button"
+          aria-label={t('project.deleteProjectAria')}
+          onClick={onDelete}
+          className="rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-danger)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export function ProjectManager({
+  profile,
+  updateProfile,
+  isCardMode = false,
+  allProjectPages = [],
+  isFree = false,
+  groups = [],
+  onGroupsChange,
+  showEn = true,
+  showAr = true,
+}: {
+  profile: any
+  updateProfile: any
+  isCardMode?: boolean
+  allProjectPages?: ProjectPageWithItems[]
+  isFree?: boolean
+  groups?: ProjectGroup[]
+  onGroupsChange?: (groups: ProjectGroup[]) => void
+  showEn?: boolean
+  showAr?: boolean
+}) {
+  const { t, locale } = useBuilderI18n()
   const confirm = useConfirm()
   // Project pages come from the parent (`projectPages`, sorted by sortOrder).
   // A local `profile.projectPages` copy used to shadow this prop; it could
@@ -33,14 +340,189 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+
+  const groupIds = new Set(groups.map((group) => group.id))
+  const groupedCards = groups.map((group) => ({
+    group,
+    cards: projects.filter((project: any) => projectContent(project).groupId === group.id),
+  }))
+  const ungroupedCards = projects.filter((project: any) => {
+    const groupId = projectContent(project).groupId
+    return !groupId || !groupIds.has(groupId)
+  })
 
   const linkTypeLabel = (type: string) =>
     type === 'none' ? t('project.noLink') : type === 'external' ? t('project.externalUrl') : t('project.projectPage')
 
+  // ─── Project groups (stored on the Projects section content) ──────
+  const setGroups = (next: ProjectGroup[]) => onGroupsChange?.(next)
+
+  const handleAddGroup = () => {
+    if (!onGroupsChange) return
+    setGroups([...groups, { id: localId('group'), title: { en: 'New Group', ar: 'مجموعة جديدة' } }])
+  }
+
+  const updateGroupTitle = (groupId: string, lang: 'en' | 'ar', value: string) => {
+    setGroups(
+      groups.map((group) => {
+        if (group.id !== groupId) return group
+        const current = group.title && typeof group.title === 'object' ? group.title : {}
+        return { ...group, title: { ...current, [lang]: value } }
+      }),
+    )
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  const moveGroup = (index: number, direction: -1 | 1) => {
+    const target = index + direction
+    if (target < 0 || target >= groups.length) return
+    const next = arrayMove(groups, index, target)
+    setGroups(next)
+  }
+
+  const handleGroupDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = groups.findIndex((g) => g.id === active.id)
+    const newIndex = groups.findIndex((g) => g.id === over.id)
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
+    const next = arrayMove(groups, oldIndex, newIndex)
+    setGroups(next)
+  }
+
+  const reorderCardsInGroup = (groupId: string | null, newCards: any[]) => {
+    updateProfile((p: any) => {
+      const pages = p.projectPages || []
+      const indices: number[] = []
+      pages.forEach((page: any, idx: number) => {
+        if (page.showInProjects === false) return
+        const gId = projectContent(page).groupId
+        if (groupId === null) {
+          if (!gId || !groupIds.has(gId)) {
+            indices.push(idx)
+          }
+        } else {
+          if (gId === groupId) {
+            indices.push(idx)
+          }
+        }
+      })
+
+      if (indices.length !== newCards.length) return p
+
+      const nextPages = [...pages]
+      indices.forEach((pageIdx, k) => {
+        nextPages[pageIdx] = newCards[k]
+      })
+
+      let cardOrder = 0
+      nextPages.forEach((page: any) => {
+        if (page.showInProjects !== false) {
+          page.sortOrder = cardOrder++
+        }
+      })
+
+      return { ...p, projectPages: nextPages }
+    })
+  }
+
+  const moveCardInGroup = (groupId: string | null, cardsList: any[], index: number, direction: -1 | 1) => {
+    const target = index + direction
+    if (target < 0 || target >= cardsList.length) return
+    const nextCards = arrayMove(cardsList, index, target)
+    reorderCardsInGroup(groupId, nextCards)
+  }
+
+  const handleCardDragEnd = (groupId: string | null, groupCards: any[], event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = groupCards.findIndex((c: any) => c.id === active.id)
+    const newIndex = groupCards.findIndex((c: any) => c.id === over.id)
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
+    const nextCards = arrayMove(groupCards, oldIndex, newIndex)
+    reorderCardsInGroup(groupId, nextCards)
+  }
+
+  const handleDeleteGroup = async (groupId: string) => {
+    const groupCards = projects.filter((project: any) => projectContent(project).groupId === groupId)
+    const count = groupCards.length
+    const group = groups.find((g) => g.id === groupId)
+    const gName = group ? groupTitle(group, locale) : ''
+
+    const message = locale === 'ar'
+      ? `هل أنت متأكد من حذف هذه المجموعة${gName ? ` (${gName})` : ''}؟ سيتم حذف المجموعة وجميع كروت المشاريع التابعة لها (${count} مشروع) نهائياً.`
+      : `Are you sure you want to delete this group${gName ? ` (${gName})` : ''}? This group and all ${count} project card${count === 1 ? '' : 's'} inside it will be permanently deleted.`
+
+    const ok = await confirm({
+      title: locale === 'ar' ? 'حذف المجموعة ومشاريعها' : 'Delete Group & Projects',
+      message,
+      confirmLabel: t('confirm.confirm'),
+      cancelLabel: t('confirm.cancel'),
+      destructive: true,
+    })
+    if (!ok) return
+
+    setGroups(groups.filter((group) => group.id !== groupId))
+
+    // Delete the group and all project cards belonging to it
+    updateProfile((p: any) => ({
+      ...p,
+      projectPages: (p.projectPages || []).filter((project: any) => {
+        const content = projectContent(project)
+        return content.groupId !== groupId
+      }),
+    }))
+
+    if (editingItem && projectContent(editingItem).groupId === groupId) {
+      setEditingItem(null)
+      setEditingIndex(null)
+    }
+  }
+
+  const assignCardGroup = (groupId: string) => {
+    const content = projectContent(editingItem)
+    if (groupId) updateEditingCard('content', { ...content, groupId })
+    else {
+      const nextContent = { ...content }
+      delete nextContent.groupId
+      updateEditingCard('content', nextContent)
+    }
+  }
+
+  // ─── Card visuals (stored on ProjectPage.content) ─────────────────
+  const cardVisual = (page: any): 'image' | 'file-icon' | 'none' => {
+    const value = projectContent(page).cardVisual
+    return value === 'file-icon' || value === 'none' ? value : 'image'
+  }
+
+  const cardFileType = (page: any): string => {
+    const value = projectContent(page).fileType
+    return ['pdf', 'sheet', 'doc', 'folder', 'photo', 'generic'].includes(value) ? value : 'generic'
+  }
+
+  const setCardVisual = (value: 'image' | 'file-icon' | 'none') => {
+    updateEditingCard('content', { ...projectContent(editingItem), cardVisual: value })
+  }
+
+  const setCardFileType = (value: string) => {
+    updateEditingCard('content', { ...projectContent(editingItem), fileType: value })
+  }
+
   // ─── Card Mode (home page): manages project pages ─────────────────
-  const handleAddCard = () => {
+  const handleAddCard = (groupId?: string) => {
     const newProject = {
-      id: `new-${Date.now()}`,
+      id: `new-${localId('project')}`,
       title: 'New Project',
       description: '',
       coverImage: '',
@@ -52,6 +534,7 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
       externalLink: '',
       linkLabel: 'View Project',
       linkedPageSlug: '',
+      content: groupId ? { groupId } : {},
     }
     updateProfile((p: any) => ({
       ...p,
@@ -93,13 +576,15 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
   const handleCardCoverUpload = async (file: File | undefined) => {
     if (!file) return
     setUploading(true)
+    setUploadProgress(0)
     try {
-      const result = await uploadToCloudinary(file)
+      const result = await uploadToCloudinary(file, setUploadProgress)
       updateEditingCard('coverImage', result.url)
     } catch (err) {
       console.error(err)
     } finally {
       setUploading(false)
+      setUploadProgress(0)
     }
   }
 
@@ -181,13 +666,15 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
   const handleItemCoverUpload = async (file: File | undefined, index: number) => {
     if (!file) return
     setUploading(true)
+    setUploadProgress(0)
     try {
-      const result = await uploadToCloudinary(file)
+      const result = await uploadToCloudinary(file, setUploadProgress)
       updateItemField(index, 'imageUrl', result.url)
     } catch (err) {
       console.error(err)
     } finally {
       setUploading(false)
+      setUploadProgress(0)
     }
   }
 
@@ -261,13 +748,81 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
               className="h-10 shrink-0 px-3 text-xs"
             >
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {uploading ? t('common.uploading') : t('common.upload')}
+              {uploading ? `${t('common.uploading')} ${uploadProgress}%` : t('common.upload')}
             </FileButton>
+            {editingItem.coverImage && (
+              <ImageDeleteButton
+                onDelete={() => updateEditingCard('coverImage', '')}
+                className="h-10 min-h-[40px]"
+              />
+            )}
           </div>
           {editingItem.coverImage && (
             <img src={editingItem.coverImage} alt={t('misc.coverPreview')} className="mt-2 h-32 w-full rounded-md border border-[var(--color-border)] object-cover" />
           )}
         </div>
+
+        <div className="space-y-2">
+          <label id="pmc-visual" className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
+            {t('project.cardVisual')}
+          </label>
+          <div role="group" aria-labelledby="pmc-visual" className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
+            {(['image', 'file-icon', 'none'] as const).map((visual) => (
+              <button
+                key={visual}
+                type="button"
+                aria-pressed={cardVisual(editingItem) === visual}
+                onClick={() => setCardVisual(visual)}
+                className={`flex-1 cursor-pointer rounded-md py-1.5 text-[11px] font-semibold transition-colors ${
+                  cardVisual(editingItem) === visual
+                    ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
+                }`}
+              >
+                {visual === 'image'
+                  ? t('project.visualImage')
+                  : visual === 'file-icon'
+                    ? t('project.visualFileIcon')
+                    : t('project.visualNone')}
+              </button>
+            ))}
+          </div>
+          {cardVisual(editingItem) === 'file-icon' && (
+            <Select
+              id="pmc-file-type"
+              value={cardFileType(editingItem)}
+              onChange={setCardFileType}
+              options={[
+                { value: 'pdf', label: t('fileIcon.pdf') },
+                { value: 'sheet', label: t('fileIcon.sheet') },
+                { value: 'doc', label: t('fileIcon.doc') },
+                { value: 'folder', label: t('fileIcon.folder') },
+                { value: 'photo', label: t('fileIcon.photo') },
+                { value: 'generic', label: t('fileIcon.generic') },
+              ]}
+            />
+          )}
+        </div>
+
+        {groups.length > 0 && (
+          <div>
+            <label htmlFor="pmc-group" className="text-xs text-[var(--color-text-secondary)]">{t('project.cardGroup')}</label>
+            <Select
+              id="pmc-group"
+              className="mt-1"
+              value={projectContent(editingItem).groupId || ''}
+              onChange={assignCardGroup}
+              placeholder={t('project.ungrouped')}
+              options={[
+                { value: '', label: t('project.ungrouped') },
+                ...groups.map((group) => ({
+                  value: group.id,
+                  label: groupTitle(group, locale) || t('project.untitledGroup'),
+                })),
+              ]}
+            />
+          </div>
+        )}
 
         <div>
           <label htmlFor="pmc-desc" className="mb-2 block text-xs font-semibold text-[var(--color-text-secondary)]">{t('field.description')}</label>
@@ -347,34 +902,52 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
             </>
           )}
 
-          {(editingItem.linkType || 'none') === 'page' && (
-            <>
-              <div>
-                <label htmlFor="pmc-page" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkToPage')}</label>
-                <Select
-                  id="pmc-page"
-                  className="mt-1"
-                  value={editingItem.linkedPageSlug || ''}
-                  onChange={(value) => updateEditingCard('linkedPageSlug', value)}
-                  placeholder={t('project.selectPage')}
-                  options={allProjectPages.map((pp: any) => ({
-                    value: pp.slug,
-                    label: pp.title || pp.slug,
-                  }))}
-                />
-              </div>
-              <div>
-                <label htmlFor="pmc-linklabel-page" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkLabel')}</label>
-                <Input
-                  id="pmc-linklabel-page"
-                  value={editingItem.linkLabel || ''}
-                  onChange={e => updateEditingCard('linkLabel', e.target.value)}
-                  className="mt-1"
-                  placeholder="View Project"
-                />
-              </div>
-            </>
-          )}
+          {(editingItem.linkType || 'none') === 'page' && (() => {
+            const contentPages = allProjectPages.filter(
+              (pp: any) => pp.showInProjects === false && pp.id !== editingItem?.id
+            )
+            const selectablePages = contentPages.length > 0
+              ? contentPages
+              : allProjectPages.filter((pp: any) => pp.id !== editingItem?.id)
+            return (
+              <>
+                <div>
+                  <label htmlFor="pmc-page" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkToPage')}</label>
+                  <Select
+                    id="pmc-page"
+                    className="mt-1"
+                    value={editingItem.linkedPageSlug || ''}
+                    onChange={(value) => updateEditingCard('linkedPageSlug', value)}
+                    placeholder={t('project.selectPage')}
+                    options={[
+                      { value: '', label: t('project.selectPage') },
+                      ...selectablePages.map((pp: any) => ({
+                        value: pp.slug,
+                        label: `${pp.title || t('common.untitled')} (/projects/${pp.slug})`,
+                      })),
+                    ]}
+                  />
+                  {selectablePages.length === 0 && (
+                    <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">
+                      {locale === 'ar'
+                        ? 'لا توجد صفحات منشأة بعد. يمكنك إنشاء صفحات وإدارتها من تبويب "الصفحات" في الشريط الجانبي.'
+                        : 'No pages created yet. You can create and manage pages from the "Pages" tab in the left sidebar.'}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label htmlFor="pmc-linklabel-page" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkLabel')}</label>
+                  <Input
+                    id="pmc-linklabel-page"
+                    value={editingItem.linkLabel || ''}
+                    onChange={e => updateEditingCard('linkLabel', e.target.value)}
+                    className="mt-1"
+                    placeholder="View Project"
+                  />
+                </div>
+              </>
+            )
+          })()}
         </div>
 
         {cardLinkedSlug ? (
@@ -494,8 +1067,14 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
               className="h-10 shrink-0 px-3 text-xs"
             >
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {uploading ? t('common.uploading') : t('common.upload')}
+              {uploading ? `${t('common.uploading')} ${uploadProgress}%` : t('common.upload')}
             </FileButton>
+            {editingItem.imageUrl && (
+              <ImageDeleteButton
+                onDelete={() => updateItemField(editingIndex, 'imageUrl', '')}
+                className="h-10 min-h-[40px]"
+              />
+            )}
           </div>
           {editingItem.imageUrl && (
             <img src={editingItem.imageUrl} alt={t('misc.coverPreview')} className="mt-2 h-32 w-full rounded-md border border-[var(--color-border)] object-cover" />
@@ -558,34 +1137,46 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
             </>
           )}
 
-          {(editingItem.linkType || 'none') === 'page' && (
-            <>
-              <div>
-                <label htmlFor="pmi-page" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkToPage')}</label>
-                <Select
-                  id="pmi-page"
-                  className="mt-1"
-                  value={editingItem.linkedPageSlug || ''}
-                  onChange={(value) => updateItemField(editingIndex, 'linkedPageSlug', value)}
-                  placeholder={t('project.selectPage')}
-                  options={allProjectPages.map((pp: any) => ({
-                    value: pp.slug,
-                    label: pp.title || pp.slug,
-                  }))}
-                />
-              </div>
-              <div>
-                <label htmlFor="pmi-linklabel-page" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkLabel')}</label>
-                <Input
-                  id="pmi-linklabel-page"
-                  value={editingItem.linkLabel || ''}
-                  onChange={e => updateItemField(editingIndex, 'linkLabel', e.target.value)}
-                  className="mt-1"
-                  placeholder="View Project"
-                />
-              </div>
-            </>
-          )}
+          {(editingItem.linkType || 'none') === 'page' && (() => {
+            const selectablePages = allProjectPages.filter(
+              (pp: any) => pp.showInProjects === false && pp.id !== editingItem?.id
+            )
+            return (
+              <>
+                <div>
+                  <label htmlFor="pmi-page" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkToPage')}</label>
+                  <Select
+                    id="pmi-page"
+                    className="mt-1"
+                    value={editingItem.linkedPageSlug || ''}
+                    onChange={(value) => updateItemField(editingIndex, 'linkedPageSlug', value)}
+                    placeholder={t('project.selectPage')}
+                    options={selectablePages.map((pp: any) => ({
+                      value: pp.slug,
+                      label: pp.title || pp.slug,
+                    }))}
+                  />
+                  {selectablePages.length === 0 && (
+                    <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+                      {locale === 'ar'
+                        ? 'لا توجد صفحات مخصصة بعد. أنشئ صفحة جديدة من تبويب الصفحات في القائمة الجانبية.'
+                        : 'No standalone pages yet. Create one from the Pages tab in the left sidebar.'}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label htmlFor="pmi-linklabel-page" className="text-xs text-[var(--color-text-secondary)]">{t('project.linkLabel')}</label>
+                  <Input
+                    id="pmi-linklabel-page"
+                    value={editingItem.linkLabel || ''}
+                    onChange={e => updateItemField(editingIndex, 'linkLabel', e.target.value)}
+                    className="mt-1"
+                    placeholder="View Project"
+                  />
+                </div>
+              </>
+            )
+          })()}
         </div>
 
         <div className="space-y-3 border-t border-[var(--color-border)] pt-4" role="group" aria-labelledby="pmi-linked-content">
@@ -633,7 +1224,6 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
     )
   }
 
-  // ─── Default List View ────────────────────────────────────────────
   return (
     <div className="space-y-6">
       {isCardMode ? (
@@ -641,7 +1231,7 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
         <>
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">{t('project.projectsTitle')}</h3>
-            <Button size="sm" variant="primary" onClick={handleAddCard} className="h-8">
+            <Button size="sm" variant="primary" onClick={() => handleAddCard()} className="h-8">
               <Plus className="me-1 h-4 w-4" /> {t('actions.newProject')}
             </Button>
           </div>
@@ -652,29 +1242,186 @@ export function ProjectManager({ profile, updateProfile, isCardMode = false, all
             </p>
           )}
 
-          <div className="space-y-3">
-            {projects.map((proj: any) => (
-              <div key={proj.id} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+          {onGroupsChange && (
+            <div className="space-y-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-3">
+              <div className="flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-sm font-medium text-[var(--color-text-primary)]">{proj.title || t('common.untitled')}</p>
-                  <p className="text-[10px] text-[var(--color-text-muted)]">{t('project.itemsLinked', { count: proj.items?.length || 0 })}</p>
+                  <p className="text-xs font-semibold text-[var(--color-text-primary)]">{t('project.groups')}</p>
+                  <p className="text-[10px] text-[var(--color-text-muted)]">{t('project.groupsHint')}</p>
                 </div>
-                <div className="flex gap-1">
-                  <button aria-label={t('project.editProjectAria')} onClick={() => { setEditingItem(proj); setEditingIndex(null) }} className="rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
-                    <Edit className="h-4 w-4" />
-                  </button>
-                  <button aria-label={t('project.deleteProjectAria')} onClick={() => void handleDeleteCard(proj.id)} className="rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-danger)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+                <Button size="sm" variant="secondary" onClick={handleAddGroup} className="h-7 shrink-0 px-2 text-xs">
+                  <Plus className="me-1 h-3 w-3" /> {t('project.addGroup')}
+                </Button>
               </div>
-            ))}
-            {projects.length === 0 && (
-              <p className="py-8 text-center text-xs text-[var(--color-text-muted)]">
-                {t('empty.projects')}
-              </p>
-            )}
-          </div>
+
+              {groups.length > 0 && (
+                <DndContext
+                  id="dnd-groups-manager"
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleGroupDragEnd}
+                >
+                  <SortableContext
+                    items={groups.map((g) => g.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-2">
+                      {groups.map((group, index) => (
+                        <SortableGroupRow
+                          key={group.id}
+                          group={group}
+                          index={index}
+                          total={groups.length}
+                          showEn={showEn}
+                          showAr={showAr}
+                          onTitleChange={updateGroupTitle}
+                          onMoveUp={() => moveGroup(index, -1)}
+                          onMoveDown={() => moveGroup(index, 1)}
+                          onDelete={() => void handleDeleteGroup(group.id)}
+                          onAddCard={() => handleAddCard(group.id)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              )}
+            </div>
+          )}
+
+          {groups.length > 0 ? (
+            <div className="space-y-5">
+              {groupedCards.map(({ group, cards }, groupIdx) => (
+                <div key={group.id} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-primary)]">
+                      {groupTitle(group, locale) || t('project.untitledGroup')}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label={t('project.moveGroupUp', { name: groupTitle(group, locale) || t('project.untitledGroup') })}
+                        disabled={groupIdx === 0}
+                        onClick={() => moveGroup(groupIdx, -1)}
+                        className="rounded p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t('project.moveGroupDown', { name: groupTitle(group, locale) || t('project.untitledGroup') })}
+                        disabled={groupIdx === groups.length - 1}
+                        onClick={() => moveGroup(groupIdx, 1)}
+                        className="rounded p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <DndContext
+                    id={`dnd-cards-${group.id}`}
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(e) => handleCardDragEnd(group.id, cards, e)}
+                  >
+                    <SortableContext
+                      items={cards.map((c: any) => c.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="space-y-3">
+                        {cards.map((proj: any, idx: number) => (
+                          <SortableProjectRow
+                            key={proj.id}
+                            proj={proj}
+                            index={idx}
+                            total={cards.length}
+                            onMoveUp={() => moveCardInGroup(group.id, cards, idx, -1)}
+                            onMoveDown={() => moveCardInGroup(group.id, cards, idx, 1)}
+                            onEdit={() => { setEditingItem(proj); setEditingIndex(null) }}
+                            onDelete={() => void handleDeleteCard(proj.id)}
+                          />
+                        ))}
+                        {cards.length === 0 && (
+                          <p className="rounded-lg border border-dashed border-[var(--color-border)] py-3 text-center text-[10px] text-[var(--color-text-muted)]">
+                            {t('project.emptyGroup')}
+                          </p>
+                        )}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                </div>
+              ))}
+
+              <div className="space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+                  {t('project.ungrouped')}
+                </p>
+                <DndContext
+                  id="dnd-cards-ungrouped"
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(e) => handleCardDragEnd(null, ungroupedCards, e)}
+                >
+                  <SortableContext
+                    items={ungroupedCards.map((c: any) => c.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-3">
+                      {ungroupedCards.map((proj: any, idx: number) => (
+                        <SortableProjectRow
+                          key={proj.id}
+                          proj={proj}
+                          index={idx}
+                          total={ungroupedCards.length}
+                          onMoveUp={() => moveCardInGroup(null, ungroupedCards, idx, -1)}
+                          onMoveDown={() => moveCardInGroup(null, ungroupedCards, idx, 1)}
+                          onEdit={() => { setEditingItem(proj); setEditingIndex(null) }}
+                          onDelete={() => void handleDeleteCard(proj.id)}
+                        />
+                      ))}
+                      {ungroupedCards.length === 0 && (
+                        <p className="rounded-lg border border-dashed border-[var(--color-border)] py-3 text-center text-[10px] text-[var(--color-text-muted)]">
+                          {t('empty.projects')}
+                        </p>
+                      )}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </div>
+            </div>
+          ) : (
+            <DndContext
+              id="dnd-cards-flat"
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={(e) => handleCardDragEnd(null, projects, e)}
+            >
+              <SortableContext
+                items={projects.map((c: any) => c.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-3">
+                  {projects.map((proj: any, idx: number) => (
+                    <SortableProjectRow
+                      key={proj.id}
+                      proj={proj}
+                      index={idx}
+                      total={projects.length}
+                      onMoveUp={() => moveCardInGroup(null, projects, idx, -1)}
+                      onMoveDown={() => moveCardInGroup(null, projects, idx, 1)}
+                      onEdit={() => { setEditingItem(proj); setEditingIndex(null) }}
+                      onDelete={() => void handleDeleteCard(proj.id)}
+                    />
+                  ))}
+                  {projects.length === 0 && (
+                    <p className="py-8 text-center text-xs text-[var(--color-text-muted)]">
+                      {t('empty.projects')}
+                    </p>
+                  )}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
         </>
       ) : (
         // ─── Item Mode: list of items within the current page ────────

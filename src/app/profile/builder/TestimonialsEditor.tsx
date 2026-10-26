@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input'
 import { uploadToCloudinary } from '@/lib/cloudinary'
 import { useBuilderI18n } from './i18n/BuilderI18nContext'
 import { FileButton } from './ui/FileButton'
+import { ImageDeleteButton } from './ui/ImageDeleteButton'
 
 interface TestimonialsEditorProps {
   sectionId: string
@@ -189,6 +190,12 @@ export function TestimonialsEditor({
                       )}
                       {uploadingIdx === idx ? t('common.uploading') : t('common.upload')}
                     </FileButton>
+                    {item.photoUrl && (
+                      <ImageDeleteButton
+                        onDelete={() => updateItem(idx, { photoUrl: '' })}
+                        className="h-[44px] min-h-[44px]"
+                      />
+                    )}
                   </div>
                 </div>
 

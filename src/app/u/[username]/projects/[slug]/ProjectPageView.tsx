@@ -16,6 +16,8 @@ export type ProjectPageProfile = {
     primaryColor?: string | null
     bgColorLight?: string | null
     bgColorDark?: string | null
+    textColorLight?: string | null
+    textColorDark?: string | null
     borderColor?: string | null
     outlineColor?: string | null
     font?: string | null
@@ -81,7 +83,9 @@ export function ProjectPageView({ profile, projectPage }: { profile: ProjectPage
   const bgLight = appearance.bgColorLight || '#f9fafb'
   const bgDark = appearance.bgColorDark || '#111827'
   const currentBg = theme === 'dark' ? bgDark : bgLight
-  const currentText = theme === 'dark' ? '#f3f4f6' : '#1f2937'
+  const currentText = theme === 'dark' 
+    ? (appearance.textColorDark || '#f3f4f6') 
+    : (appearance.textColorLight || '#1f2937')
   const currentCard = theme === 'dark' ? adjustColor(bgDark, 15) : adjustColor(bgLight, -5)
   const currentBorder = appearance.borderColor || (theme === 'dark' ? '#374151' : '#e5e7eb')
   const currentOutline = appearance.outlineColor || primary
@@ -95,6 +99,7 @@ export function ProjectPageView({ profile, projectPage }: { profile: ProjectPage
     '--color-primary': primary,
     '--color-primary-light': primaryLight,
     '--color-bg': currentBg,
+    '--color-bg-alt': currentCard,
     '--color-text': currentText,
     '--color-text-muted': `color-mix(in srgb, ${currentText} 70%, ${currentBg})`,
     '--color-card': currentCard,

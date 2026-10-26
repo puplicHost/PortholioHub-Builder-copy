@@ -94,6 +94,23 @@ const experienceItem = z
   // field keeps its constraints.
   .passthrough();
 
+const educationItem = z
+  .object({
+    id: z.string().max(120).optional(),
+    title: lstringOrText(120).optional(),
+    institution: lstringOrText(120).optional(),
+    subtitle: lstringOrText(120).optional(),
+    date: lstringOrText(60).optional(),
+    description: lstringOrText(1000).optional(),
+    icon: plainText(40).nullable().optional(),
+    image: urlOrEmpty.optional(),
+    imagePosition: z
+      .object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) })
+      .optional()
+      .catch(undefined),
+  })
+  .strict();
+
 const serviceItem = z
   .object({
     title: lstringOrText(120),
@@ -204,6 +221,23 @@ const builderServiceItem = z
   })
   .strict();
 
+const customCard = z
+  .object({
+    id: z.string().max(120).optional(),
+    title: lstringOrText(120).optional(),
+    description: lstringOrText(1000).optional(),
+    icon: plainText(40).nullable().optional(),
+    image: urlOrEmpty.optional(),
+    imagePosition: z
+      .object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) })
+      .optional()
+      .catch(undefined),
+    linkUrl: urlOrEmpty.optional(),
+    linkLabel: lstringOrText(80).optional(),
+    linkIcon: z.enum(['pdf', 'sheet', 'doc', 'folder', 'generic']).optional(),
+  })
+  .strict();
+
 // ---------- per-type content (all fields optional: partial saves) ----------
 
 const heroContent = z
@@ -294,6 +328,15 @@ const servicesContent = z
   })
   .strict();
 
+const educationContent = z
+  .object({
+    title: lstring(120).optional(),
+    description: lstring(500).optional(),
+    icon: plainText(40).nullable().optional(),
+    items: z.array(educationItem).max(30).optional(),
+  })
+  .strict();
+
 const projectsContent = z
   .object({
     title: lstring(120).optional(),
@@ -301,6 +344,17 @@ const projectsContent = z
     displayMode: z.enum(['grid', 'list']).optional(),
     subtitle: lstring(500).optional(),
     description: lstring(500).optional(),
+    groups: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(120),
+            title: lstringOrText(120).optional(),
+          })
+          .strict(),
+      )
+      .max(20)
+      .optional(),
   })
   .strict();
 
@@ -358,7 +412,11 @@ const customContent = z
     title: lstring(120).optional(),
     icon: plainText(40).nullable().optional(),
     description: ldesc(300).optional(),
+    // Legacy paragraph list kept for rows created before the flexible card
+    // editor. New custom sections use `cards` and may still keep paragraphs.
     paragraphs: z.array(plainText(2000)).max(20).optional(),
+    showTitleUnderline: z.boolean().optional(),
+    cards: z.array(customCard).max(30).optional(),
   })
   .strict();
 
@@ -367,6 +425,7 @@ const contentByType = {
   about: aboutContent,
   skills: skillsContent,
   experience: experienceContent,
+  education: educationContent,
   services: servicesContent,
   projects: projectsContent,
   gallery: galleryContent,
@@ -392,6 +451,7 @@ const sectionSchema = z
       'about',
       'skills',
       'experience',
+      'education',
       'services',
       'projects',
       'gallery',

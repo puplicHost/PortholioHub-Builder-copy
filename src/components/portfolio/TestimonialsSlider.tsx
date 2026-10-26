@@ -85,7 +85,7 @@ export function TestimonialsSlider({
               >
                 <div
                   onClick={() => setLightboxIndex(i)}
-                  className={`group cursor-pointer overflow-hidden rounded-2xl bg-slate-900 p-2.5 shadow-md transition-all duration-300 hover:scale-[1.02] hover:shadow-xl dark:bg-slate-950 ${
+                  className={`group cursor-pointer overflow-hidden rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] p-2.5 shadow-md transition-all duration-300 hover:scale-[1.02] hover:shadow-xl ${
                     isCenterCard
                       ? 'ring-1 ring-[var(--color-primary)]/40 brightness-105'
                       : 'opacity-90 hover:opacity-100'

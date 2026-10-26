@@ -9,14 +9,20 @@ import { sanitizeUrl } from '@/lib/urls'
 import { portfolioImageUrl } from '@/lib/cloudinary'
 import { isSectionVisible } from '@/lib/section-visibility'
 import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
+import {
+  formatExperienceRange,
+  isStoredMonth,
+} from '@/lib/experience-dates'
 import { TestimonialsSlider } from '@/components/portfolio/TestimonialsSlider'
 import { PortfolioBottomNav, type PortfolioNavTab } from '@/components/portfolio/PortfolioBottomNav'
-import { Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin } from 'lucide-react'
+import { Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin, FileText, Table2, FolderOpen, Image as ImageIcon, File, X, Menu } from 'lucide-react'
 
 // Helper to lighten/darken a hex color
 function adjustColor(color: string, amount: number) {
   return '#' + color.replace(/^#/, '').replace(/../g, color => ('0'+Math.min(255, Math.max(0, parseInt(color, 16) + amount)).toString(16)).substr(-2));
 }
+
+import { PORTFOLIO_ICON_MAP } from '@/lib/portfolio-icons'
 
 const ICON_MAP: Record<string, React.ComponentType<any>> = {
   trophy: Trophy, star: Star, users: Users, briefcase: Briefcase,
@@ -30,7 +36,9 @@ const ICON_MAP: Record<string, React.ComponentType<any>> = {
 
 function getIcon(name?: string | null, className?: string) {
   if (!name) return null
-  const Icon = ICON_MAP[name.toLowerCase()]
+  const key = name.toLowerCase().trim()
+  const clean = key.replace(/[^a-z0-9]/g, '')
+  const Icon = PORTFOLIO_ICON_MAP[clean] || PORTFOLIO_ICON_MAP[key] || ICON_MAP[key]
   return Icon ? <Icon className={className} aria-hidden="true" /> : null
 }
 
@@ -70,6 +78,7 @@ const SECTION_NAV_LABELS: Record<string, { en: string; ar: string }> = {
   about: { en: 'About', ar: 'نبذة عني' },
   skills: { en: 'Skills', ar: 'المهارات' },
   experience: { en: 'Experience', ar: 'الخبرة' },
+  education: { en: 'Education', ar: 'التعليم' },
   services: { en: 'Services', ar: 'الخدمات' },
   projects: { en: 'Projects', ar: 'المشاريع' },
   gallery: { en: 'Gallery', ar: 'معرض الأعمال' },
@@ -78,6 +87,39 @@ const SECTION_NAV_LABELS: Record<string, { en: string; ar: string }> = {
   contact: { en: 'Contact', ar: 'تواصل معي' },
   footer: { en: 'Contact', ar: 'تواصل معي' },
   custom: { en: 'More', ar: 'المزيد' },
+}
+
+// Project cards may opt into a file-style tile instead of a cover image.
+// Older rows have no metadata and keep the original image/placeholder look.
+function projectCardVisual(page: any): 'image' | 'file-icon' | 'none' {
+  const value = page?.content?.cardVisual
+  return value === 'file-icon' || value === 'none' ? value : 'image'
+}
+
+function projectFileType(page: any): string {
+  const value = page?.content?.fileType
+  return ['pdf', 'sheet', 'doc', 'folder', 'photo', 'generic'].includes(value) ? value : 'generic'
+}
+
+function projectFileIcon(fileType: string, className: string) {
+  if (fileType === 'pdf') return <FileText className={className} aria-hidden="true" />
+  if (fileType === 'sheet') return <Table2 className={className} aria-hidden="true" />
+  if (fileType === 'doc') return <FileText className={className} aria-hidden="true" />
+  if (fileType === 'folder') return <FolderOpen className={className} aria-hidden="true" />
+  if (fileType === 'photo') return <ImageIcon className={className} aria-hidden="true" />
+  return <File className={className} aria-hidden="true" />
+}
+
+function projectFileAction(fileType: string, lang: 'en' | 'ar'): string {
+  const labels: Record<string, { en: string; ar: string }> = {
+    pdf: { en: 'Download PDF', ar: 'تحميل PDF' },
+    sheet: { en: 'Open Sheet', ar: 'فتح الجدول' },
+    doc: { en: 'Open Doc', ar: 'فتح المستند' },
+    folder: { en: 'Open Folder', ar: 'فتح المجلد' },
+    photo: { en: 'View Image', ar: 'عرض الصورة' },
+    generic: { en: 'Open File', ar: 'فتح الملف' },
+  }
+  return labels[fileType]?.[lang] || labels.generic[lang]
 }
 
 export function ClassicTemplate({
@@ -118,7 +160,23 @@ export function ClassicTemplate({
 
   const [isScrolled, setIsScrolled] = useState(false)
   const [activeId, setActiveId] = useState('hero')
+  const [educationLightbox, setEducationLightbox] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
+
+  // Certificate lightbox: Escape closes, body scroll is locked while open.
+  useEffect(() => {
+    if (!educationLightbox) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setEducationLightbox(null)
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [educationLightbox])
 
   useEffect(() => {
     const target = getScrollParent(rootRef.current)
@@ -206,6 +264,7 @@ export function ClassicTemplate({
     '--color-primary': primary,
     '--color-primary-light': primaryLight,
     '--color-bg': currentBg,
+    '--color-bg-alt': currentCard,
     '--color-text': currentText,
     '--color-text-muted': `color-mix(in srgb, ${currentText} 70%, ${currentBg})`,
     '--color-card': currentCard,
@@ -218,7 +277,15 @@ export function ClassicTemplate({
 
   // Visibility comes from the shared helper so the page, the builder list and
   // the publish check can never disagree on which sections are shown.
-  const visibleSections = sections.filter(isSectionVisible)
+  // Empty base Education sections are skipped too: existing profiles gain the
+  // section through the builder migration, but their published page must stay
+  // unchanged until an actual education item exists.
+  const hasRenderableEducation = (section: any) => {
+    if (section?.sectionType !== 'education') return true
+    const items = Array.isArray(section.content?.items) ? section.content.items : []
+    return items.some((item: any) => t(item?.title))
+  }
+  const visibleSections = sections.filter(isSectionVisible).filter(hasRenderableEducation)
 
   // Reveal animations are re-scanned whenever the rendered structure changes.
   // A one-shot observer (mount only) left re-shown sections, display-mode
@@ -236,6 +303,7 @@ export function ClassicTemplate({
         count(c.paragraphs),
         count(c.links),
         count(c.images),
+        count(c.cards),
       ].join(':')
     })
     .join('|') + `#${(profile.projectPages || []).map((p: any) => `${p.id}:${p.title || ''}:${p.coverImage ? 1 : 0}`).join(',')}`
@@ -267,7 +335,13 @@ export function ClassicTemplate({
 
   // Scroll-spy: highlight the nav link for the section currently in view.
   const navSectionIds = visibleSections.map((s: any) =>
-    s.sectionType === 'footer' ? 'contact' : s.sectionType === 'contact' ? 'contact-info' : s.sectionType
+    s.sectionType === 'footer'
+      ? 'contact'
+      : s.sectionType === 'contact'
+        ? 'contact-info'
+        : s.sectionType === 'custom'
+          ? `custom-${s.id}`
+          : s.sectionType
   )
   const navSectionIdsKey = navSectionIds.join(',')
   useEffect(() => {
@@ -295,6 +369,61 @@ export function ClassicTemplate({
       window.removeEventListener('resize', update)
     }
   }, [navSectionIdsKey])
+
+  // Desktop navbar links & hamburger menu state
+  const [isNavMenuOpen, setIsNavMenuOpen] = useState(false)
+  const navMenuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!isNavMenuOpen) return
+    const handleClickOutside = (event: MouseEvent) => {
+      if (navMenuRef.current && !navMenuRef.current.contains(event.target as Node)) {
+        setIsNavMenuOpen(false)
+      }
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsNavMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isNavMenuOpen])
+
+  const navLinks = visibleSections
+    .filter((s: any) => {
+      if (s.sectionType === 'hero') return false
+      if (s.sectionType === 'skills') {
+        const groups = s.content?.groups || []
+        const fallback = s.content?.skills || []
+        const hasAnySkills =
+          groups.some((g: any) => (g.skills || []).some((sk: any) => sk.name && sk.name.trim())) ||
+          fallback.some((f: any) => typeof f === 'string' && f.trim())
+        if (!hasAnySkills) return false
+      }
+      return true
+    })
+    .map((s: any) => {
+      const label =
+        s.sectionType === 'custom'
+          ? (t(s.content?.title) || SECTION_NAV_LABELS.custom[lang])
+          : SECTION_NAV_LABELS[s.sectionType]?.[lang] ||
+            t(s.content?.title) ||
+            s.sectionType
+      const targetId =
+        s.sectionType === 'footer'
+          ? 'contact'
+          : s.sectionType === 'contact'
+            ? 'contact-info'
+            : s.sectionType === 'custom'
+              ? `custom-${s.id}`
+              : s.sectionType
+      return { id: s.id, targetId, label }
+    })
 
   // Mobile bottom navigation: always Home + Contact (the footer always
   // renders), plus About / Projects only when those sections are published.
@@ -370,13 +499,13 @@ export function ClassicTemplate({
         const aboutStats = c.stats || []
         const bioVal = t(c.biography) || t(c.text)
         const biography = bioVal || (lang === 'ar' ? 'لا يوجد نص' : 'No about text provided.')
-        const aboutBg = theme === 'dark' ? 'var(--color-card)' : '#FAF7F2'
+        const statCardBg = sectionBg === 'var(--color-bg)' ? 'var(--color-card)' : 'var(--color-bg)'
         return (
-          <section id="about" key={section.id} className="py-8 cq-sm:py-16" style={{ backgroundColor: aboutBg }}>
+          <section id="about" key={section.id} className="py-8 cq-sm:py-16" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-4 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               
               {/* MOBILE VIEW (< md): text only. The profile image now lives in
-                  the hero (square, left) so it is not repeated here. */}
+                  the hero so it is not repeated here. */}
               <div className="cq-md:hidden mb-12">
                 <div className="flex flex-col justify-start text-start">
                   {biography.split(/\n+/).map((para: string, i: number) => (
@@ -401,7 +530,7 @@ export function ClassicTemplate({
                     </div>
                     <div className="col-span-2 grid grid-cols-1 cq-lg:grid-cols-2 gap-4">
                       {aboutStats.map((stat: any, i: number) => (
-                        <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-all duration-500 shadow-sm">
+                        <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms`, backgroundColor: statCardBg }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-all duration-500 shadow-sm">
                           {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]') && (
                             <div className="flex justify-center mb-3">
                               {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]')}
@@ -423,7 +552,7 @@ export function ClassicTemplate({
               {aboutStats.length > 0 && (
                 <div className="grid grid-cols-2 gap-4 mt-8 cq-sm:mt-10 cq-md:hidden">
                   {aboutStats.map((stat: any, i: number) => (
-                    <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 bg-[var(--color-bg)] rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-all duration-500 shadow-sm">
+                    <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms`, backgroundColor: statCardBg }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 rounded-[10px] p-6 text-center border border-[var(--color-border)] hover:-translate-y-1 transition-all duration-500 shadow-sm">
                       {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]') && (
                         <div className="flex justify-center mb-3">
                           {getIcon(stat.icon, 'w-7 h-7 text-[var(--color-primary)]')}
@@ -511,16 +640,10 @@ export function ClassicTemplate({
       case 'experience':
         const expItems = c.items || []
         const expDisplayMode = c.displayMode || 'timeline'
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        const formatExpDate = (dateStr: string) => {
-          if (!dateStr) return ''
-          const [year, month] = dateStr.split('-')
-          return `${monthNames[parseInt(month, 10) - 1]} ${year}`
-        }
-        const calcDuration = (start: string, end: string, isCurrent: boolean) => {
-          if (!start) return ''
+        const calcDuration = (start: unknown, end: unknown, isCurrent: boolean) => {
+          if (!isStoredMonth(start)) return ''
           const startDate = new Date(start + '-01')
-          const endDate = isCurrent ? new Date() : end ? new Date(end + '-01') : null
+          const endDate = isCurrent ? new Date() : isStoredMonth(end) ? new Date(end + '-01') : null
           if (!endDate) return ''
           const months = (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth())
           if (months < 1) return lang === 'ar' ? 'أقل من شهر' : 'Less than a month'
@@ -531,6 +654,8 @@ export function ClassicTemplate({
           return `${yrs} ${lang === 'ar' ? 'سنوات' : 'yrs'} ${lang === 'ar' ? 'و' : ''} ${mos} ${lang === 'ar' ? 'أشهر' : 'mos'}`
         }
         const renderExpItem = (item: any) => {
+          const dateLabel = formatExperienceRange(item.startDate, item.endDate, Boolean(item.isCurrent), lang)
+          const duration = item.startDate ? calcDuration(item.startDate, item.endDate, item.isCurrent) : ''
           const bullets = (t(item.description) || '').split('\n').filter((l: string) => l.trim())
           const itemIcon = getIcon(item.icon, 'w-5 h-5 text-white')
           return (
@@ -557,9 +682,15 @@ export function ClassicTemplate({
                   </p>
                 </div>
               </div>
-                              {(t(item.location) || item.workMode) && (
-                                <div className="flex items-center gap-3 text-[13px] text-[var(--color-text-muted)] font-medium mb-3 flex-wrap">
-                                  {t(item.location) && (
+              {(dateLabel || duration || t(item.location) || item.workMode) && (
+                <div className="flex items-center gap-3 text-[13px] text-[var(--color-text-muted)] font-medium mb-3 flex-wrap">
+                  {(dateLabel || duration) && (
+                    <span className="flex items-start gap-1 max-w-full font-medium" style={{ color: 'var(--color-primary)' }}>
+                      <Clock className="w-3.5 h-3.5 shrink-0 mt-[2px]" />
+                      <span className="break-words min-w-0 flex-1">{dateLabel}{duration && ` · ${duration}`}</span>
+                    </span>
+                  )}
+                  {t(item.location) && (
                     <span className="flex items-start gap-1 max-w-full">
                       <MapPin className="w-3.5 h-3.5 shrink-0 mt-[2px]" />
                       <span className="break-words min-w-0 flex-1">{t(item.location)}</span>
@@ -599,12 +730,7 @@ export function ClassicTemplate({
                     <div className="absolute start-3 cq-md:start-5 top-1 bottom-1 w-[3px] rounded-full" style={{ background: 'linear-gradient(to bottom, transparent, var(--color-primary) 12%, var(--color-primary) 88%, transparent)' }} />
                     <div className="space-y-10">
                       {expItems.map((item: any, ei: number) => {
-                        const endLabel = item.isCurrent
-                          ? (lang === 'ar' ? 'الحالي' : 'Present')
-                          : formatExpDate(item.endDate)
-                        const dateLabel = item.startDate
-                          ? `${formatExpDate(item.startDate)}${endLabel ? ` - ${endLabel}` : ''}`
-                          : ''
+                        const dateLabel = formatExperienceRange(item.startDate, item.endDate, Boolean(item.isCurrent), lang)
                         const duration = item.startDate ? calcDuration(item.startDate, item.endDate, item.isCurrent) : ''
                         const bullets = (t(item.description) || '').split('\n').filter((l: string) => l.trim())
                         const itemIcon = getIcon(item.icon, 'w-5 h-5 text-white')
@@ -697,6 +823,121 @@ export function ClassicTemplate({
             </div>
           </section>
         )
+      case 'education': {
+        const educationItems = (Array.isArray(c.items) ? c.items : []).filter(
+          (item: any) => t(item.title),
+        )
+        // Empty base Education sections are intentionally omitted (see
+        // visibleSections above); keep the guard local as well so no caller
+        // can render an empty shell or its "no education" placeholder.
+        if (educationItems.length === 0) return null
+        return (
+          <section id="education" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
+            <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
+              <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-4 text-[var(--color-text)] flex items-center gap-3">
+                {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
+                {t(c.title) || (lang === 'ar' ? 'التعليم' : 'Education')}
+              </h2>
+              {renderSectionDescription(c)}
+              {educationItems.length > 0 ? (
+                <div className="mt-8 grid grid-cols-1 cq-sm:grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8">
+                  {educationItems.map((item: any, index: number) => {
+                    const image = sanitizeUrl(item.image)
+                    const position = normalizeImagePosition(item.imagePosition)
+                    return (
+                      <article
+                        key={item.id || index}
+                        style={{ transitionDelay: `${Math.min(index * 70, 350)}ms` }}
+                        className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 flex flex-col overflow-hidden rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                      >
+                        {image ? (
+                          <button
+                            type="button"
+                            onClick={() => setEducationLightbox(image)}
+                            aria-label={lang === 'ar' ? 'عرض الشهادة' : 'View certificate'}
+                            className="block h-[150px] cq-sm:h-[190px] w-full shrink-0 overflow-hidden bg-[var(--color-bg)] cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-primary)]"
+                          >
+                            <img
+                              src={portfolioImageUrl(image, 700)}
+                              alt={t(item.title)}
+                              loading="lazy"
+                              decoding="async"
+                              className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+                              style={{ objectPosition: `${position.x}% ${position.y}%` }}
+                            />
+                          </button>
+                        ) : null}
+                        <div className="flex flex-1 flex-col p-4 cq-sm:p-6">
+                          <div className="mb-3 flex items-start gap-3">
+                            {getIcon(item.icon, 'h-5 w-5 text-white') ? (
+                              <span
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                                style={{ backgroundColor: 'var(--color-primary)' }}
+                              >
+                                {getIcon(item.icon, 'h-5 w-5 text-white')}
+                              </span>
+                            ) : null}
+                            <div className="min-w-0">
+                              <h3 className="break-words text-base cq-sm:text-lg font-bold tracking-tight text-[var(--color-text)]">
+                                {t(item.title)}
+                              </h3>
+                              {(t(item.institution) || t(item.subtitle)) && (
+                                <p className="break-words text-sm font-medium" style={{ color: 'var(--color-primary)' }}>
+                                  {t(item.institution) || t(item.subtitle)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          {t(item.date) ? (
+                            <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-[var(--color-text-muted)]">
+                              <Clock className="h-3.5 w-3.5 shrink-0" />
+                              <span className="break-words">{t(item.date)}</span>
+                            </p>
+                          ) : null}
+                          {t(item.description) ? (
+                            <p className="whitespace-pre-wrap break-words text-[13px] cq-sm:text-[15px] leading-relaxed text-[var(--color-text-muted)]">
+                              {t(item.description)}
+                            </p>
+                          ) : null}
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-[var(--color-text-muted)] text-center py-12 font-medium">
+                  {lang === 'ar' ? 'لم تتم إضافة أي تعليم بعد' : 'No education added yet.'}
+                </p>
+              )}
+            </div>
+
+            {educationLightbox ? (
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label={lang === 'ar' ? 'عرض الشهادة' : 'Certificate preview'}
+                onClick={() => setEducationLightbox(null)}
+                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+              >
+                <button
+                  type="button"
+                  onClick={() => setEducationLightbox(null)}
+                  aria-label={lang === 'ar' ? 'إغلاق' : 'Close'}
+                  className="absolute end-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+                <img
+                  src={portfolioImageUrl(educationLightbox, 1400)}
+                  alt={lang === 'ar' ? 'شهادة' : 'Certificate'}
+                  onClick={(event) => event.stopPropagation()}
+                  className="max-h-[90vh] max-w-[92vw] rounded-lg object-contain shadow-2xl"
+                />
+              </div>
+            ) : null}
+          </section>
+        )
+      }
       case 'services':
         const serviceItems = c.services || []
         return (
@@ -775,13 +1016,198 @@ export function ClassicTemplate({
             </div>
           </section>
         )
-      case 'projects':
+      case 'projects': {
         // Content pages (`showInProjects === false`) are reachable by direct
         // link only; only card rows render in the Projects section.
         const projects = (profile.projectPages || []).filter(
           (p: any) => p.showInProjects !== false
         )
         const displayMode = c.displayMode || 'grid'
+        // Groups live on the section content; cards reference them by id from
+        // `ProjectPage.content.groupId`. Legacy flat rows have neither and
+        // render exactly as before.
+        const groups = (Array.isArray(c.groups) ? c.groups : []).filter(
+          (group: any) => group && typeof group.id === 'string' && group.id
+        )
+        const groupIds = new Set(groups.map((group: any) => group.id))
+        const projectsByGroup = (groupId: string) =>
+          projects.filter((project: any) => project?.content?.groupId === groupId)
+        const ungroupedProjects = projects.filter((project: any) => {
+          const groupId = project?.content?.groupId
+          return !groupId || !groupIds.has(groupId)
+        })
+        const hasGroupedCards = groups.some((group: any) => projectsByGroup(group.id).length > 0)
+
+        const projectLinkLabel = (project: any) => {
+          if (projectCardVisual(project) === 'file-icon') {
+            return projectFileAction(projectFileType(project), lang)
+          }
+          if (project.linkLabel) return project.linkLabel
+          return lang === 'ar' ? 'عرض المشروع' : 'View Project'
+        }
+
+        const renderProjectLinkIcon = (project: any) =>
+          projectCardVisual(project) === 'file-icon' ? (
+            projectFileIcon(projectFileType(project), 'h-4 w-4 shrink-0')
+          ) : (
+            <ExternalLink className="h-4 w-4 shrink-0" />
+          )
+
+        const renderProjectLinks = (project: any) => {
+          const linkType = project.linkType || (project.content as any)?.linkType || 'none'
+          const linkedSlug = project.linkedPageSlug || (project.content as any)?.linkedPageSlug
+          const isTempSlug = !linkedSlug || String(linkedSlug).startsWith('new-') || String(linkedSlug).startsWith('project-new-')
+          const label = projectLinkLabel(project)
+          return (
+            <>
+              {linkType === 'page' && !isTempSlug && !isFree ? (
+                <Link
+                  href={`/u/${profile.username}/projects/${linkedSlug}`}
+                  className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
+                >
+                  {renderProjectLinkIcon(project)}
+                  {label}
+                </Link>
+              ) : null}
+              {linkType === 'external' && project.externalLink ? (
+                <a
+                  href={sanitizeUrl(project.externalLink)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
+                >
+                  {renderProjectLinkIcon(project)}
+                  {label}
+                </a>
+              ) : null}
+              {project.items?.map((item: any, i: number) => {
+                const itemLinkType = item.linkType || (item.type === 'page_link' ? 'page' : 'none')
+                const itemSlug = item.linkedPageSlug || (item.type === 'page_link' ? item.externalUrl : null)
+                const itemLabel = item.linkLabel || item.title
+                const isItemTempSlug = !itemSlug || String(itemSlug).startsWith('new-') || String(itemSlug).startsWith('project-new-')
+                // FREE users never route to internal project pages — external URLs only.
+                if (itemLinkType === 'page' && !isItemTempSlug && !isFree) {
+                  return (
+                    <Link
+                      key={i}
+                      href={`/u/${profile.username}/projects/${itemSlug}`}
+                      className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
+                    >
+                      <ExternalLink className="h-4 w-4 shrink-0" />
+                      {itemLabel || (lang === 'ar' ? 'عرض المشروع' : 'View Project')}
+                    </Link>
+                  )
+                }
+                if (itemLinkType === 'external' && item.externalUrl) {
+                  return (
+                    <a
+                      key={i}
+                      href={sanitizeUrl(item.externalUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
+                    >
+                      <ExternalLink className="h-4 w-4 shrink-0" />
+                      {itemLabel || (lang === 'ar' ? 'عرض المشروع' : 'View Project')}
+                    </a>
+                  )
+                }
+                return null
+              })}
+            </>
+          )
+        }
+
+        const renderProjectMedia = (project: any, variant: 'list' | 'grid') => {
+          const visual = projectCardVisual(project)
+          if (visual === 'none') return null
+          const wrapperClass = variant === 'list'
+            ? 'w-full cq-sm:w-[300px] h-[200px] cq-sm:h-auto shrink-0 overflow-hidden bg-[var(--color-bg)] border-b cq-sm:border-b-0 cq-sm:border-e border-[var(--color-border)]'
+            : 'h-[120px] cq-sm:h-[200px] w-full shrink-0 overflow-hidden bg-[var(--color-bg)] border-b border-[var(--color-border)]'
+          if (visual === 'file-icon') {
+            return (
+              <div className={`${wrapperClass} flex items-center justify-center`}>
+                <span
+                  className="flex h-16 w-16 cq-sm:h-20 cq-sm:w-20 items-center justify-center rounded-2xl"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--color-primary) 12%, transparent)',
+                    color: 'var(--color-primary)',
+                  }}
+                >
+                  {projectFileIcon(projectFileType(project), 'h-8 w-8 cq-sm:h-10 cq-sm:w-10')}
+                </span>
+              </div>
+            )
+          }
+          if (project.coverImage) {
+            return (
+              <div className={wrapperClass}>
+                <img
+                  src={portfolioImageUrl(sanitizeUrl(project.coverImage), 600)}
+                  alt={project.title}
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+              </div>
+            )
+          }
+          return (
+            <div className={`${wrapperClass} flex items-center justify-center`}>
+              <Code className="h-8 w-8 cq-sm:h-12 cq-sm:w-12 text-[var(--color-border)]" />
+            </div>
+          )
+        }
+
+        const renderProjectBody = (project: any, variant: 'list' | 'grid') => (
+          <div className={variant === 'list' ? 'p-6 flex flex-col flex-1 min-w-0' : 'p-4 cq-sm:p-6 flex flex-col flex-1 min-w-0'}>
+            <h3 className={variant === 'list'
+              ? 'text-xl break-words font-bold tracking-tight text-[var(--color-text)] mb-3'
+              : 'text-base cq-sm:text-xl break-words font-bold tracking-tight text-[var(--color-text)] mb-2 cq-sm:mb-3'
+            }>
+              {project.title}
+            </h3>
+            {project.description ? (
+              <p className={variant === 'list'
+                ? 'text-[var(--color-text-muted)] text-[15px] leading-relaxed break-words mb-4'
+                : 'text-[var(--color-text-muted)] text-[13px] cq-sm:text-[15px] leading-relaxed break-words mb-3 cq-sm:mb-4 line-clamp-3'
+              }>
+                {project.description}
+              </p>
+            ) : null}
+            {project.tags && project.tags.length > 0 ? (
+              <div className="flex flex-wrap gap-2 mb-6">
+                {project.tags.map((tag: string, i: number) => (
+                  <span key={i} className="text-xs font-medium truncate max-w-full text-[var(--color-text)] bg-[var(--color-primary)]/10 px-3 py-1 rounded-full">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            <div className="mt-auto flex flex-wrap items-center gap-3 pt-4 border-t border-[var(--color-border)]">
+              {renderProjectLinks(project)}
+            </div>
+          </div>
+        )
+
+        const renderListCard = (project: any) => (
+          <div key={project.id} className="group flex flex-col cq-sm:flex-row rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
+            {renderProjectMedia(project, 'list')}
+            {renderProjectBody(project, 'list')}
+          </div>
+        )
+
+        const renderGridCard = (project: any, index: number) => (
+          <div
+            key={project.id}
+            style={{ transitionDelay: `${Math.min(index * 70, 350)}ms` }}
+            className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col"
+          >
+            {renderProjectMedia(project, 'grid')}
+            {renderProjectBody(project, 'grid')}
+          </div>
+        )
+
         return (
           <section id="projects" key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
@@ -790,200 +1216,53 @@ export function ClassicTemplate({
                 {t(c.title) || (lang === 'ar' ? 'المشاريع' : 'Featured Projects')}
               </h2>
               {renderSectionDescription(c)}
-              {displayMode === 'list' ? (
-                <div className="flex flex-col gap-6">
-                  {projects.map((proj: any) => (
-                    <div key={proj.id} className="group flex flex-col cq-sm:flex-row rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
-                      {proj.coverImage ? (
-                        <div className="w-full cq-sm:w-[300px] h-[200px] cq-sm:h-auto shrink-0 overflow-hidden bg-[var(--color-bg)]">
-                          <img src={portfolioImageUrl(sanitizeUrl(proj.coverImage), 600)} alt={proj.title} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                        </div>
-                      ) : (
-                        <div className="w-full cq-sm:w-[300px] h-[200px] cq-sm:h-auto shrink-0 bg-[var(--color-bg)] flex items-center justify-center border-b cq-sm:border-b-0 cq-sm:border-r border-[var(--color-border)]">
-                          <Code className="h-12 w-12 text-[var(--color-border)]" />
-                        </div>
-                      )}
-                      <div className="p-6 flex flex-col flex-1 min-w-0">
-                        <h3 className="text-xl break-words font-bold tracking-tight text-[var(--color-text)] mb-3">{proj.title}</h3>
-                        {proj.description && <p className="text-[var(--color-text-muted)] text-[15px] leading-relaxed break-words mb-4">{proj.description}</p>}
-                        {proj.tags && proj.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mb-6">
-                            {proj.tags.map((tag: string, i: number) => (
-                              <span key={i} className="text-xs font-medium truncate max-w-full text-[var(--color-text)] bg-[var(--color-primary)]/10 px-3 py-1 rounded-full">
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        <div className="mt-auto flex items-center gap-3 pt-4 border-t border-[var(--color-border)]">
-                          {(() => {
-                            const linkType = proj.linkType || (proj.content as any)?.linkType || 'none'
-                            const linkedSlug = proj.linkedPageSlug || (proj.content as any)?.linkedPageSlug
-                            const isTempSlug = !linkedSlug || String(linkedSlug).startsWith('new-') || String(linkedSlug).startsWith('project-new-')
-                            // FREE users never route to internal project pages — external URLs only.
-                            if (linkType === 'page' && !isTempSlug && !isFree) {
-                              return (
-                                <Link
-                                  href={`/u/${profile.username}/projects/${linkedSlug}`}
-                                  className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                  {proj.linkLabel || (lang === 'ar' ? 'عرض المشروع' : 'View Project')}
-                                </Link>
-                              )
-                            }
-                            if (linkType === 'external' && proj.externalLink) {
-                              return (
-                                <a
-                                  href={sanitizeUrl(proj.externalLink)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                  {proj.linkLabel || (lang === 'ar' ? 'عرض المشروع' : 'View Project')}
-                                </a>
-                              )
-                            }
-                            return null
-                          })()}
-                          {proj.items?.map((item: any, i: number) => {
-                            const itemLinkType = item.linkType || (item.type === 'page_link' ? 'page' : 'none')
-                            const itemSlug = item.linkedPageSlug || (item.type === 'page_link' ? item.externalUrl : null)
-                            const itemLabel = item.linkLabel || item.title
-                            const isItemTempSlug = !itemSlug || String(itemSlug).startsWith('new-') || String(itemSlug).startsWith('project-new-')
-                            // FREE users never route to internal project pages — external URLs only.
-                            if (itemLinkType === 'page' && !isItemTempSlug && !isFree) {
-                              return (
-                                <Link
-                                  key={i}
-                                  href={`/u/${profile.username}/projects/${itemSlug}`}
-                                  className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                  {itemLabel || (lang === 'ar' ? 'عرض المشروع' : 'View Project')}
-                                </Link>
-                              )
-                            }
-                            if (itemLinkType === 'external' && item.externalUrl) {
-                              return (
-                                <a
-                                  key={i}
-                                  href={sanitizeUrl(item.externalUrl)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                  {itemLabel || (lang === 'ar' ? 'عرض المشروع' : 'View Project')}
-                                </a>
-                              )
-                            }
-                            return null
-                          })}
+
+              {groups.length > 0 ? (
+                <div className="space-y-10">
+                  {groups.map((group: any) => {
+                    const groupCards = projectsByGroup(group.id)
+                    if (groupCards.length === 0) return null
+                    return (
+                      <div key={group.id}>
+                        <h3
+                          className="mb-5 text-xl break-words font-bold tracking-tight"
+                          style={{ color: 'var(--color-primary)' }}
+                        >
+                          {t(group.title) || (lang === 'ar' ? 'مجموعة' : 'Group')}
+                        </h3>
+                        <div className={displayMode === 'list' ? "flex flex-col gap-6" : "grid grid-cols-1 cq-sm:grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8"}>
+                          {groupCards.map((project: any, index: number) =>
+                            displayMode === 'list' ? renderListCard(project) : renderGridCard(project, index)
+                          )}
                         </div>
                       </div>
+                    )
+                  })}
+                  {ungroupedProjects.length > 0 ? (
+                    <div>
+                      {hasGroupedCards ? (
+                        <h3 className="mb-5 text-sm font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+                          {lang === 'ar' ? 'غير مصنّفة' : 'Ungrouped'}
+                        </h3>
+                      ) : null}
+                      <div className={displayMode === 'list' ? "flex flex-col gap-6" : "grid grid-cols-1 cq-sm:grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8"}>
+                        {ungroupedProjects.map((project: any, index: number) =>
+                          displayMode === 'list' ? renderListCard(project) : renderGridCard(project, index)
+                        )}
+                      </div>
                     </div>
-                  ))}
+                  ) : null}
+                </div>
+              ) : displayMode === 'list' ? (
+                <div className="flex flex-col gap-6">
+                  {projects.map(renderListCard)}
                   {projects.length === 0 && (
                     <p className="text-[var(--color-text-muted)] text-center font-medium">{lang === 'ar' ? 'لا توجد مشاريع مضافة' : 'No projects added yet.'}</p>
                   )}
                 </div>
               ) : (
                 <div className="grid grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8">
-                  {projects.map((proj: any, pi: number) => (
-                    <div key={proj.id} style={{ transitionDelay: `${Math.min(pi * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col">
-                      {proj.coverImage ? (
-                        <div className="h-[120px] cq-sm:h-[200px] w-full overflow-hidden bg-[var(--color-bg)] shrink-0">
-                          <img src={portfolioImageUrl(sanitizeUrl(proj.coverImage), 600)} alt={proj.title} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                        </div>
-                      ) : (
-                        <div className="h-[120px] cq-sm:h-[200px] w-full bg-[var(--color-bg)] flex items-center justify-center border-b border-[var(--color-border)]">
-                          <Code className="h-8 w-8 cq-sm:h-12 cq-sm:w-12 text-[var(--color-border)]" />
-                        </div>
-                      )}
-                        <div className="p-4 cq-sm:p-6 flex flex-col flex-1 min-w-0">
-                          <h3 className="text-base cq-sm:text-xl break-words font-bold tracking-tight text-[var(--color-text)] mb-2 cq-sm:mb-3">{proj.title}</h3>
-                          {proj.description && <p className="text-[var(--color-text-muted)] text-[13px] cq-sm:text-[15px] leading-relaxed break-words mb-3 cq-sm:mb-4 line-clamp-3">{proj.description}</p>}
-                          {proj.tags && proj.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mb-6">
-                              {proj.tags.map((tag: string, i: number) => (
-                                <span key={i} className="text-xs font-medium truncate max-w-full text-[var(--color-text)] bg-[var(--color-primary)]/10 px-3 py-1 rounded-full hover:-translate-y-0.5 transition-transform">
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        <div className="mt-auto flex items-center gap-3 pt-4 border-t border-[var(--color-border)]">
-                          {(() => {
-                            const linkType = proj.linkType || (proj.content as any)?.linkType || 'none'
-                            const linkedSlug = proj.linkedPageSlug || (proj.content as any)?.linkedPageSlug
-                            const isTempSlug = !linkedSlug || String(linkedSlug).startsWith('new-') || String(linkedSlug).startsWith('project-new-')
-                            // FREE users never route to internal project pages — external URLs only.
-                            if (linkType === 'page' && !isTempSlug && !isFree) {
-                              return (
-                                <Link
-                                  href={`/u/${profile.username}/projects/${linkedSlug}`}
-                                  className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                  {proj.linkLabel || (lang === 'ar' ? 'عرض المشروع' : 'View Project')}
-                                </Link>
-                              )
-                            }
-                            if (linkType === 'external' && proj.externalLink) {
-                              return (
-                                <a
-                                  href={sanitizeUrl(proj.externalLink)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                  {proj.linkLabel || (lang === 'ar' ? 'عرض المشروع' : 'View Project')}
-                                </a>
-                              )
-                            }
-                            return null
-                          })()}
-                          {proj.items?.map((item: any, i: number) => {
-                            const itemLinkType = item.linkType || (item.type === 'page_link' ? 'page' : 'none')
-                            const itemSlug = item.linkedPageSlug || (item.type === 'page_link' ? item.externalUrl : null)
-                            const itemLabel = item.linkLabel || item.title
-                            const isItemTempSlug = !itemSlug || String(itemSlug).startsWith('new-') || String(itemSlug).startsWith('project-new-')
-                            // FREE users never route to internal project pages — external URLs only.
-                            if (itemLinkType === 'page' && !isItemTempSlug && !isFree) {
-                              return (
-                                <Link
-                                  key={i}
-                                  href={`/u/${profile.username}/projects/${itemSlug}`}
-                                  className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                  {itemLabel || (lang === 'ar' ? 'عرض المشروع' : 'View Project')}
-                                </Link>
-                              )
-                            }
-                              if (itemLinkType === 'external' && item.externalUrl) {
-                                return (
-                                  <a
-                                    key={i}
-                                    href={sanitizeUrl(item.externalUrl)}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
-                                  >
-                                    <ExternalLink className="h-4 w-4" />
-                                    {itemLabel || (lang === 'ar' ? 'عرض المشروع' : 'View Project')}
-                                  </a>
-                                )
-                              }
-                              return null
-                            })}
-                          </div>
-                        </div>
-                    </div>
-                  ))}
+                  {projects.map((project: any, index: number) => renderGridCard(project, index))}
                   {projects.length === 0 && (
                     <p className="text-[var(--color-text-muted)] col-span-full font-medium">{lang === 'ar' ? 'لا توجد مشاريع مضافة' : 'No projects added yet.'}</p>
                   )}
@@ -992,6 +1271,7 @@ export function ClassicTemplate({
             </div>
           </section>
         )
+      }
       case 'gallery': {
         const galleryItems = Array.isArray(c.items) ? c.items : []
         if (galleryItems.length === 0) return null
@@ -1105,22 +1385,105 @@ export function ClassicTemplate({
       }
       case 'custom': {
         const paragraphs = Array.isArray(c.paragraphs) ? c.paragraphs.filter((p: any) => typeof p === 'string' && p.trim() !== '') : []
-        if (!t(c.title) && paragraphs.length === 0 && !t(c.description)) return null
+        const customCards = (Array.isArray(c.cards) ? c.cards : []).filter((card: any) => {
+          if (!card || typeof card !== 'object') return false
+          return Boolean(t(card.title) || t(card.description) || sanitizeUrl(card.image) || card.icon || sanitizeUrl(card.linkUrl))
+        })
+        if (!t(c.title) && paragraphs.length === 0 && !t(c.description) && customCards.length === 0) return null
+        // New custom sections store `showTitleUnderline: true`; legacy rows do
+        // not have the key and must keep rendering without an underline.
+        const showUnderline = c.showTitleUnderline === true
         return (
           <section id={`custom-${section.id}`} key={section.id} className="py-12 cq-md:py-[100px]" style={{ backgroundColor: sectionBg }}>
             <div className="max-w-[1200px] mx-auto px-6 cq-sm:px-12 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0">
               {t(c.title) ? (
-                <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight mb-12 text-[var(--color-text)] flex items-center gap-3">
-                  {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
-                  {t(c.title)}
-                </h2>
+                <div className="mb-8">
+                  <h2 className="text-2xl cq-md:text-3xl break-words font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
+                    {getIcon(sectionIcon, 'text-[var(--color-primary)]')}
+                    {t(c.title)}
+                  </h2>
+                  {showUnderline ? (
+                    <span
+                      className="mt-3 block h-1 w-16 rounded-full"
+                      style={{ backgroundColor: 'var(--color-primary)' }}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </div>
               ) : null}
               {renderSectionDescription(c)}
-              <div className="max-w-[800px] space-y-4 text-[var(--color-text-muted)] leading-[1.75] text-lg break-words">
-                {paragraphs.map((p: string, i: number) => (
-                  <p key={i} className="whitespace-pre-wrap">{p}</p>
-                ))}
-              </div>
+
+              {customCards.length > 0 ? (
+                <div className="mt-6 grid grid-cols-1 cq-sm:grid-cols-2 cq-lg:grid-cols-3 gap-3 cq-sm:gap-8">
+                  {customCards.map((card: any, index: number) => {
+                    const image = sanitizeUrl(card.image)
+                    const href = sanitizeUrl(card.linkUrl)
+                    const position = normalizeImagePosition(card.imagePosition)
+                    const linkLabel = t(card.linkLabel) || (lang === 'ar' ? 'فتح الرابط' : 'Open Link')
+                    return (
+                      <article
+                        key={card.id || index}
+                        style={{ transitionDelay: `${Math.min(index * 70, 350)}ms` }}
+                        className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 flex flex-col overflow-hidden rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                      >
+                        {image ? (
+                          <div className="h-[150px] cq-sm:h-[190px] w-full shrink-0 overflow-hidden bg-[var(--color-bg)]">
+                            <img
+                              src={portfolioImageUrl(image, 700)}
+                              alt={t(card.title)}
+                              loading="lazy"
+                              decoding="async"
+                              className="h-full w-full object-cover"
+                              style={{ objectPosition: `${position.x}% ${position.y}%` }}
+                            />
+                          </div>
+                        ) : null}
+                        <div className="flex flex-1 flex-col p-4 cq-sm:p-6">
+                          <div className="mb-3 flex items-start gap-3">
+                            {getIcon(card.icon, 'h-5 w-5 text-white') ? (
+                              <span
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                                style={{ backgroundColor: 'var(--color-primary)' }}
+                              >
+                                {getIcon(card.icon, 'h-5 w-5 text-white')}
+                              </span>
+                            ) : null}
+                            {t(card.title) ? (
+                              <h3 className="min-w-0 break-words text-base cq-sm:text-lg font-bold tracking-tight text-[var(--color-text)]">
+                                {t(card.title)}
+                              </h3>
+                            ) : null}
+                          </div>
+                          {t(card.description) ? (
+                            <p className="whitespace-pre-wrap break-words text-[13px] cq-sm:text-[15px] leading-relaxed text-[var(--color-text-muted)]">
+                              {t(card.description)}
+                            </p>
+                          ) : null}
+                          {href ? (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-auto inline-flex items-center gap-2 pt-4 text-sm font-semibold text-[var(--color-primary)] transition-opacity hover:opacity-80"
+                            >
+                              {projectFileIcon(card.linkIcon || 'generic', 'h-4 w-4 shrink-0')}
+                              <span className="break-words">{linkLabel}</span>
+                            </a>
+                          ) : null}
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              ) : null}
+
+              {paragraphs.length > 0 ? (
+                <div className="max-w-[800px] space-y-4 text-[var(--color-text-muted)] leading-[1.75] text-lg break-words">
+                  {paragraphs.map((p: string, i: number) => (
+                    <p key={i} className="whitespace-pre-wrap">{p}</p>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </section>
         )
@@ -1135,6 +1498,7 @@ export function ClassicTemplate({
           projects: { en: 'Projects', ar: 'الأعمال' },
           skills: { en: 'Skills', ar: 'المهارات' },
           experience: { en: 'Experience', ar: 'الخبرة' },
+          education: { en: 'Education', ar: 'التعليم' },
           services: { en: 'Services', ar: 'الخدمات' },
           testimonials: { en: 'Testimonials', ar: 'التقييمات' },
           contact: { en: 'Contact', ar: 'تواصل' },
@@ -1161,7 +1525,12 @@ export function ClassicTemplate({
             const fallback = footerSectionLabels[s.sectionType]
             return {
               label: customLabel || (fallback ? fallback[lang] : s.sectionType),
-              href: s.sectionType === 'hero' ? '#hero' : `#${s.sectionType}`,
+              href:
+                s.sectionType === 'hero'
+                  ? '#hero'
+                  : s.sectionType === 'custom'
+                    ? `#custom-${s.id}`
+                    : `#${s.sectionType}`,
             }
           })
         // The contact section is folded into the footer (#contact), so the
@@ -1215,7 +1584,7 @@ export function ClassicTemplate({
               dir={lang === 'ar' ? 'rtl' : 'ltr'}
               className="border-t pt-12 pb-8 cq-sm:pt-16"
               style={{
-                background: 'var(--color-primary)',
+                background: appearance.footerBg || 'var(--color-primary)',
                 color: footerText,
                 borderTopColor: footerBorder,
                 fontFamily: lang === 'ar'
@@ -1440,60 +1809,91 @@ export function ClassicTemplate({
               which never scrolls). */}
           <nav className={`hidden cq-md:block fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${isScrolled ? 'py-2.5 cq-sm:py-3 shadow-md' : 'py-3 cq-sm:py-5'}`} style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 88%, transparent)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderBottom: '1px solid var(--color-border)' }}>
             <div className="max-w-[1200px] mx-auto px-4 cq-sm:px-12">
-              {/* DESKTOP (md+): 3-column split — name | links | contact */}
-              <div className="hidden cq-md:grid w-full items-center gap-6" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
+              {/* DESKTOP (md+): 2-sided split — Brand on start, [Contact Me + Hamburger] on end */}
+              <div className="flex w-full items-center justify-between gap-4">
                 <a
                   href="#hero"
-                  className={`justify-self-start truncate max-w-[240px] text-lg font-bold tracking-tight transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${theme === 'light' ? 'text-[var(--color-text)] hover:text-[var(--color-primary)]' : 'text-white hover:text-white/80'}`}
+                  className={`truncate max-w-[260px] text-lg font-bold tracking-tight transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
+                    theme === 'light' ? 'text-[var(--color-text)] hover:text-[var(--color-primary)]' : 'text-white hover:text-white/80'
+                  }`}
                 >
                   {displayName}
                 </a>
 
-                <ul className="justify-self-center flex items-center gap-5 cq-lg:gap-8 font-medium">
-                  {visibleSections.map((s: any) => {
-                    if (s.sectionType === 'hero') return null
-                    if (s.sectionType === 'skills') {
-                      const groups = s.content?.groups || []
-                      const fallback = s.content?.skills || []
-                      const hasAnySkills = groups.some((g: any) => (g.skills || []).some((sk: any) => sk.name && sk.name.trim())) || fallback.some((f: any) => typeof f === 'string' && f.trim())
-                      if (!hasAnySkills) return null
-                    }
-                    const label =
-                      SECTION_NAV_LABELS[s.sectionType]?.[lang] ||
-                      t(s.content?.title) ||
-                      s.sectionType
-                    const targetId = s.sectionType === 'footer'
-                      ? 'contact'
-                      : s.sectionType === 'contact'
-                        ? 'contact-info'
-                        : s.sectionType
-                    return (
-                      <li key={s.id}>
-                        <a
-                          href={`#${targetId}`}
-                          aria-current={activeId === targetId ? 'location' : undefined}
-                          className={`capitalize transition-colors relative group font-medium rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
-                            activeId === targetId
-                              ? (theme === 'light' ? 'text-[var(--color-primary)]' : 'text-white')
-                              : (theme === 'light' ? 'text-[var(--color-text-muted)] hover:text-[var(--color-primary)]' : 'text-white/90 hover:text-white')
-                          }`}
-                        >
-                          {label}
-                          <span className={`absolute -bottom-1 start-0 h-0.5 transition-all duration-300 group-hover:w-full ${activeId === targetId ? 'w-full' : 'w-0'} ${theme === 'light' ? 'bg-[var(--color-primary)]' : 'bg-white'}`}></span>
-                        </a>
-                      </li>
-                    )
-                  })}
-                </ul>
-
-                <div className="justify-self-end flex items-center gap-3">
+                {/* Other side: flex group with Contact Me button + Hamburger menu button */}
+                <div className="flex items-center gap-2.5 sm:gap-3">
                   <a
                     href="#contact"
-                    className="inline-flex items-center justify-center rounded-full px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:-translate-y-0.5 active:scale-[0.97] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-primary)]"
+                    className="inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-semibold text-white shadow-sm hover:-translate-y-0.5 active:scale-[0.97] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-primary)]"
                     style={{ backgroundColor: 'var(--color-primary)' }}
                   >
                     {lang === 'ar' ? 'تواصل معي' : 'Contact Me'}
                   </a>
+
+                  {navLinks.length > 0 && (
+                    <div className="relative" ref={navMenuRef}>
+                      <button
+                        type="button"
+                        onClick={() => setIsNavMenuOpen((prev) => !prev)}
+                        aria-expanded={isNavMenuOpen}
+                        aria-label={
+                          isNavMenuOpen
+                            ? (lang === 'ar' ? 'إغلاق القائمة' : 'Close menu')
+                            : (lang === 'ar' ? 'فتح القائمة' : 'Open menu')
+                        }
+                        className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
+                          theme === 'light'
+                            ? 'border border-[var(--color-border)] bg-[var(--color-bg)]/80 text-[var(--color-text)] hover:bg-[var(--color-bg-alt)]'
+                            : 'border border-white/20 bg-white/10 text-white hover:bg-white/15'
+                        }`}
+                      >
+                        {isNavMenuOpen ? (
+                          <X className="h-5 w-5" aria-hidden="true" />
+                        ) : (
+                          <Menu className="h-5 w-5" aria-hidden="true" />
+                        )}
+                      </button>
+
+                      {isNavMenuOpen && (
+                        <div
+                          className={`absolute end-0 top-full mt-2.5 min-w-[200px] max-w-[calc(100vw-2rem)] rounded-2xl border p-2 shadow-xl backdrop-blur-md z-50 ${
+                            theme === 'light'
+                              ? 'border-[var(--color-border)] text-[var(--color-text)] shadow-black/10'
+                              : 'border-white/10 text-white shadow-black/40'
+                          }`}
+                          style={{
+                            backgroundColor:
+                              theme === 'light'
+                                ? 'color-mix(in srgb, var(--color-bg) 95%, transparent)'
+                                : 'color-mix(in srgb, var(--color-bg) 92%, black)',
+                          }}
+                        >
+                          <ul className="flex flex-col gap-1">
+                            {navLinks.map((link) => (
+                              <li key={link.id}>
+                                <a
+                                  href={`#${link.targetId}`}
+                                  onClick={() => setIsNavMenuOpen(false)}
+                                  aria-current={activeId === link.targetId ? 'location' : undefined}
+                                  className={`flex items-center px-3.5 py-2 text-sm font-medium transition-colors rounded-xl ${
+                                    activeId === link.targetId
+                                      ? (theme === 'light'
+                                          ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-semibold'
+                                          : 'bg-white/15 text-white font-semibold')
+                                      : (theme === 'light'
+                                          ? 'text-[var(--color-text)] hover:bg-[var(--color-bg-alt)] hover:text-[var(--color-primary)]'
+                                          : 'text-white/85 hover:bg-white/10 hover:text-white')
+                                  }`}
+                                >
+                                  {link.label}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1542,10 +1942,42 @@ export function ClassicTemplate({
 
               const bgPosition = normalizeImagePosition(heroContent.backgroundPosition)
 
+              // Reuse the portfolio's existing social links and icons. Footer
+              // links win (that is what the footer renders); profile-level
+              // contact links are the fallback for legacy profiles.
+              const footerLinks = visibleSections.find((s: any) => s.sectionType === 'footer')?.content?.links
+              const socialSource = Array.isArray(footerLinks) && footerLinks.length > 0 ? footerLinks : (contactLinks || [])
+              const socialHref = (link: any) => {
+                const raw = String(link?.url || link?.value || '').trim()
+                if (!raw) return ''
+                if (/^(https?:|mailto:|tel:)/i.test(raw)) return raw
+                const platform = String(link?.platform || link?.label || '').toLowerCase()
+                if (platform.includes('whatsapp')) {
+                  const digits = normalizeWhatsappNumber(raw)
+                  return digits ? `https://wa.me/${digits}` : ''
+                }
+                if (platform.includes('phone')) {
+                  const phone = raw.replace(/[^\d+]/g, '')
+                  return phone ? `tel:${phone}` : ''
+                }
+                if (raw.includes('@') && !raw.includes('/')) return `mailto:${raw}`
+                return `https://${raw}`
+              }
+              const heroSocialLinks = (socialSource as any[])
+                .map((link) => ({ link, href: socialHref(link) }))
+                .filter((item) => item.href)
+              const heroSocialIcon = (platform: string) => {
+                const p = platform.toLowerCase()
+                if (p.includes('email') || p.includes('mail') || p.includes('phone')) {
+                  return getContactIcon(p)
+                }
+                return getSocialIcon(p)
+              }
+
               return (
                 <section 
                   id="hero" 
-                  className="relative flex items-center justify-center min-h-[50vh] cq-md:min-h-[62vh] overflow-hidden"
+                  className="relative flex items-center justify-center min-h-[50vh] cq-md:min-h-[62vh] overflow-hidden pt-10 pb-8 cq-md:pt-20 cq-md:pb-[35px]"
                   style={{ 
                     backgroundImage: bgImage
                       ? `url("${bgImage}")`
@@ -1553,8 +1985,6 @@ export function ClassicTemplate({
                     backgroundSize: bgImage ? 'cover' : 'auto',
                     backgroundPosition: bgImage ? `${bgPosition.x}% ${bgPosition.y}%` : 'center',
                     backgroundRepeat: 'no-repeat',
-                    paddingTop: '80px',
-                    paddingBottom: '35px'
                   }}
                 >
                   {bgImage && (
@@ -1565,12 +1995,13 @@ export function ClassicTemplate({
                   )}
                   <div
                     dir="ltr"
-                    className="w-full max-w-[1200px] mx-auto px-5 cq-sm:px-12 z-10 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative grid grid-cols-12 items-center gap-4 cq-md:flex cq-md:flex-col cq-md:items-center cq-md:gap-0 cq-md:text-center"
+                    className="w-full max-w-[1200px] mx-auto px-5 cq-sm:px-12 z-10 fade-up opacity-0 translate-y-5 transition-all duration-700 ease-out [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 relative flex flex-col items-center text-center"
                   >
-                    {/* Mobile: square photo on the left, name/title/buttons on
-                        the right. Desktop: round photo above the centred text. */}
+                    {/* Mobile: centred stacked hero (photo → name → title →
+                        CTAs → socials). Desktop: the original centred layout,
+                        with the photo above the text. */}
                     {profile.avatarUrl ? (
-                      <div className="col-span-5 w-full aspect-square cq-md:w-36 cq-md:h-36 cq-md:aspect-auto cq-lg:w-44 cq-lg:h-44 rounded-2xl cq-md:rounded-full overflow-hidden border-4 border-white shadow-2xl cq-md:mb-6 hover:scale-105 transition-transform duration-500 bg-white shrink-0">
+                      <div className="w-[150px] cq-sm:w-[160px] aspect-[3/4] cq-md:w-36 cq-md:h-36 cq-md:aspect-auto cq-lg:w-44 cq-lg:h-44 rounded-2xl cq-md:rounded-full overflow-hidden border-4 border-white shadow-2xl mb-5 cq-md:mb-6 hover:scale-105 transition-transform duration-500 bg-white shrink-0">
                         <img
                           src={portfolioImageUrl(sanitizeUrl(profile.avatarUrl), 400)}
                           alt={displayName}
@@ -1582,19 +2013,19 @@ export function ClassicTemplate({
                         />
                       </div>
                     ) : (
-                      <div className="col-span-5 w-full aspect-square cq-md:w-36 cq-md:h-36 cq-md:aspect-auto cq-lg:w-44 cq-lg:h-44 rounded-2xl cq-md:rounded-full overflow-hidden border-4 border-white shadow-2xl cq-md:mb-6 hover:scale-105 transition-transform duration-500 bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-4xl cq-lg:text-5xl font-black select-none shrink-0">
+                      <div className="w-[150px] cq-sm:w-[160px] aspect-[3/4] cq-md:w-36 cq-md:h-36 cq-md:aspect-auto cq-lg:w-44 cq-lg:h-44 rounded-2xl cq-md:rounded-full overflow-hidden border-4 border-white shadow-2xl mb-5 cq-md:mb-6 hover:scale-105 transition-transform duration-500 bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-4xl cq-lg:text-5xl font-black select-none shrink-0">
                         {initial}
                       </div>
                     )}
                     <div
-                      className="col-span-7 min-w-0 flex flex-col items-start text-start cq-md:contents"
+                      className="flex w-full flex-col items-center"
                       dir={lang === 'ar' ? 'rtl' : 'ltr'}
                     >
-                      <h1 className="text-2xl cq-sm:text-3xl cq-md:text-5xl font-bold text-white mb-1.5 cq-sm:mb-2.5 cq-md:mb-4 text-start cq-md:text-center leading-snug whitespace-pre-line break-words" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
+                      <h1 className="w-full text-[28px] cq-sm:text-3xl cq-md:text-5xl font-bold text-white mb-2 cq-sm:mb-2.5 cq-md:mb-4 text-center leading-snug whitespace-pre-line break-words" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
                         {displayName}
                       </h1>
                       {(title || t(heroContent.subtitle)) ? (
-                        <p className="text-sm cq-md:text-base text-white/90 max-w-xl leading-relaxed mb-3 cq-sm:mb-4 cq-md:mb-7 font-normal text-start cq-md:text-center break-words">
+                        <p className="text-[15px] cq-sm:text-base text-white/90 max-w-xl leading-relaxed mb-6 cq-md:mb-7 font-normal text-center break-words">
                           {title || t(heroContent.subtitle)}
                         </p>
                       ) : null}
@@ -1603,21 +2034,42 @@ export function ClassicTemplate({
                           {t(heroContent.description)}
                         </p>
                       )}
-                      <div className="mt-1 flex w-full flex-col items-stretch justify-start gap-2 cq-sm:gap-2.5 cq-md:mt-0 cq-md:w-auto cq-md:flex-row cq-md:flex-wrap cq-md:items-center cq-md:justify-center cq-sm:gap-4" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+                      <div className="flex w-full flex-col items-stretch gap-3 cq-sm:max-w-[420px] cq-md:mt-0 cq-md:w-auto cq-md:max-w-none cq-md:flex-row cq-md:flex-wrap cq-md:items-center cq-md:justify-center cq-md:gap-4" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
                         <a 
                           href="#projects" 
-                          className="w-full cq-md:w-auto px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                          className="w-full cq-md:w-auto px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[48px] cq-md:min-h-[44px]"
                         >
                           <ArrowRight className="h-3.5 w-3.5 cq-sm:h-4 cq-sm:w-4 rtl:rotate-180" />
                           <span>{lang === 'ar' ? 'شاهد أعمالي' : 'View My Work'}</span>
                         </a>
                         <a 
                           href="#contact" 
-                          className="w-full cq-md:w-auto px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl border-2 border-white text-white font-bold text-sm hover:bg-white/10 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[44px] inline-flex items-center justify-center"
+                          className="w-full cq-md:w-auto px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl border-2 border-white text-white font-bold text-sm hover:bg-white/10 hover:-translate-y-0.5 transition-all cursor-pointer min-h-[48px] cq-md:min-h-[44px] inline-flex items-center justify-center"
                         >
                           <span>{lang === 'ar' ? 'تواصل معي' : 'Contact Me'}</span>
                         </a>
                       </div>
+                      {heroSocialLinks.length > 0 && (
+                        <div className="mt-6 flex flex-wrap items-center justify-center gap-3 cq-md:hidden">
+                          {heroSocialLinks.map(({ link, href }: any, idx: number) => {
+                            const platform = link.platform || link.label || 'globe'
+                            const label = t(link.label) || link.platform || (lang === 'ar' ? 'رابط' : 'Link')
+                            return (
+                              <a
+                                key={idx}
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={label}
+                                title={label}
+                                className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[var(--color-primary)] shadow-md transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                              >
+                                {heroSocialIcon(platform)}
+                              </a>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </section>
@@ -1638,7 +2090,7 @@ export function ClassicTemplate({
             <div
               className="w-full border-t py-5 px-4"
               style={{
-                background: 'var(--color-primary)',
+                background: appearance.footerBg || 'var(--color-primary)',
                 color: 'var(--color-bg)',
                 borderTopColor: 'color-mix(in srgb, var(--color-bg) 30%, transparent)',
                 fontFamily: lang === 'ar'

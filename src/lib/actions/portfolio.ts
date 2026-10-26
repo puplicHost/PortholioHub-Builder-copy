@@ -93,6 +93,48 @@ export async function getOrCreateProfile() {
       migrated = true
     }
 
+    // — Education: ensure one exists directly after Experience. It is a
+    // first-class base section (never converted to/from custom). An empty
+    // section is omitted by the template, so an existing published page is
+    // unchanged until its owner adds an item.
+    const educationSec = sections.find((s: any) => s.sectionType === 'education')
+
+    if (!educationSec && sections.length > 0) {
+      const experienceSec = sections.find((s: any) => s.sectionType === 'experience')
+      const aboutSec = sections.find((s: any) => s.sectionType === 'about')
+      const insertOrder = experienceSec
+        ? experienceSec.sectionOrder + 1
+        : aboutSec
+          ? aboutSec.sectionOrder + 1
+          : 3
+
+      for (const sec of sections) {
+        if (sec.sectionOrder >= insertOrder) {
+          await prisma.pageSection.update({
+            where: { id: sec.id },
+            data: { sectionOrder: sec.sectionOrder + 1 },
+          })
+          sec.sectionOrder = sec.sectionOrder + 1
+        }
+      }
+
+      const created = await prisma.pageSection.create({
+        data: {
+          pageId,
+          sectionType: 'education',
+          sectionOrder: insertOrder,
+          content: {
+            title: { en: 'Education', ar: 'التعليم' },
+            description: { en: '', ar: '' },
+            items: [],
+          } as Prisma.InputJsonValue,
+          settings: { isVisible: true } as Prisma.InputJsonValue,
+        },
+      })
+      sections.push(created)
+      migrated = true
+    }
+
     // — Footer: ensure one exists (contact is a first-class section type
     // since Sprint F3 and is never converted or deleted here) —
     const footerSec = sections.find((s: any) => s.sectionType === 'footer')
@@ -233,11 +275,12 @@ export async function getOrCreateProfile() {
                 { sectionType: 'hero', sectionOrder: 1, content: { title: {en: '', ar: ''}, subtitle: {en: '', ar: ''} } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
                 { sectionType: 'about', sectionOrder: 2, content: { text: {en: '', ar: ''} } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
                 { sectionType: 'experience', sectionOrder: 3, content: { heading: {en: 'Work Experience', ar: 'الخبرات العملية'}, description: {en: 'A journey through my professional career', ar: 'رحلتي في مسيرتي المهنية'}, items: [] } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
-                { sectionType: 'skills', sectionOrder: 4, content: { skills: [] } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
-                { sectionType: 'services', sectionOrder: 5, content: { items: [] } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
-                { sectionType: 'projects', sectionOrder: 6, content: { title: {en: 'Projects', ar: 'المشاريع'} } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
-                { sectionType: 'testimonials', sectionOrder: 7, content: { title: {en: 'Testimonials', ar: 'آراء العملاء'}, subtitle: {en: 'What clients say', ar: 'ماذا يقول العملاء'}, icon: 'message', items: [] } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
-                { sectionType: 'footer', sectionOrder: 8, content: { headline: {en: 'Work with me', ar: 'تواصل معي'}, subheading: {en: "Let's build something great together.", ar: 'دعنا نبني شيئاً رائعاً معاً.'}, links: [] } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
+                { sectionType: 'education', sectionOrder: 4, content: { title: {en: 'Education', ar: 'التعليم'}, description: {en: '', ar: ''}, items: [] } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
+                { sectionType: 'skills', sectionOrder: 5, content: { skills: [] } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
+                { sectionType: 'services', sectionOrder: 6, content: { items: [] } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
+                { sectionType: 'projects', sectionOrder: 7, content: { title: {en: 'Projects', ar: 'المشاريع'} } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
+                { sectionType: 'testimonials', sectionOrder: 8, content: { title: {en: 'Testimonials', ar: 'آراء العملاء'}, subtitle: {en: 'What clients say', ar: 'ماذا يقول العملاء'}, icon: 'message', items: [] } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
+                { sectionType: 'footer', sectionOrder: 9, content: { headline: {en: 'Work with me', ar: 'تواصل معي'}, subheading: {en: "Let's build something great together.", ar: 'دعنا نبني شيئاً رائعاً معاً.'}, links: [] } as Prisma.InputJsonValue, settings: { isVisible: true } as Prisma.InputJsonValue },
               ]
             }
           }
@@ -698,6 +741,36 @@ export async function updatePortfolio(data: {
   }
 }
 
+/**
+ * Delete a single home-page section. Used by the builder's custom section
+ * actions. Ownership is enforced in the WHERE clause, so a foreign id
+ * deletes nothing. Temporary client ids (`new-…`) never reach this action.
+ */
+export async function deleteSection(sectionId: string) {
+  try {
+    const user = await requireUserWithWorkspace()
+    if (typeof sectionId !== 'string' || !sectionId || sectionId.startsWith('new-')) {
+      return { success: false, error: 'Section not found' }
+    }
+    const result = await prisma.pageSection.deleteMany({
+      where: { id: sectionId, page: { profile: { userId: user.id } } },
+    })
+    if (result.count === 0) {
+      return { success: false, error: 'Section not found' }
+    }
+    revalidatePath('/profile/builder')
+    const profile = await prisma.userProfile.findUnique({
+      where: { userId: user.id },
+      select: { username: true },
+    })
+    if (profile?.username) revalidatePath(`/u/${profile.username}`)
+    return { success: true }
+  } catch (error: any) {
+    console.error('deleteSection error:', error)
+    return { success: false, error: error.message || 'Failed to delete section' }
+  }
+}
+
 export interface PublishCheck {
   ok: boolean
   missing: string[]
@@ -1024,13 +1097,36 @@ export async function migrateCardItemsToLinkedPage(): Promise<{
 export async function deleteProjectPage(id: string) {
   try {
     const user = await requireUserWithWorkspace()
-    // deleteMany + ownership filter: a foreign/unknown id matches 0 rows.
-    const result = await prisma.projectPage.deleteMany({
+    const target = await prisma.projectPage.findFirst({
       where: { id, profile: { userId: user.id } },
+      select: { id: true, slug: true, profileId: true },
     })
-    if (result.count === 0) {
+    if (!target) {
       return { success: false, error: 'Project page not found' }
     }
+
+    // Clear linkedPageSlug on any project cards referencing this page
+    const cards = await prisma.projectPage.findMany({
+      where: { profileId: target.profileId, showInProjects: true },
+    })
+    for (const card of cards) {
+      const content = (card.content && typeof card.content === 'object' && !Array.isArray(card.content)
+        ? card.content
+        : {}) as Record<string, unknown>
+      if (content.linkedPageSlug === target.slug || (card as any).linkedPageSlug === target.slug) {
+        const nextContent = { ...content, linkType: 'none', linkedPageSlug: '' }
+        await prisma.projectPage.update({
+          where: { id: card.id },
+          data: {
+            content: nextContent as Prisma.InputJsonValue,
+          },
+        })
+      }
+    }
+
+    await prisma.projectPage.delete({
+      where: { id: target.id },
+    })
 
     revalidatePath('/profile/builder')
     return { success: true }

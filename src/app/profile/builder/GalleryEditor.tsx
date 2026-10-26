@@ -8,6 +8,7 @@ import { uploadToCloudinary } from '@/lib/cloudinary'
 import { useBuilderI18n } from './i18n/BuilderI18nContext'
 import { useConfirm } from './ui/ConfirmModal'
 import { FileButton } from './ui/FileButton'
+import { ImageDeleteButton } from './ui/ImageDeleteButton'
 
 interface GalleryEditorProps {
   sectionId: string
@@ -172,6 +173,12 @@ export function GalleryEditor({
                       )}
                       {uploadingIdx === idx ? t('common.uploading') : t('common.upload')}
                     </FileButton>
+                    {item.imageUrl && (
+                      <ImageDeleteButton
+                        onDelete={() => updateItem(idx, { imageUrl: '' })}
+                        className="h-[44px] min-h-[44px]"
+                      />
+                    )}
                   </div>
                 </div>
                 <div>
