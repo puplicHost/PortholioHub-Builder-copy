@@ -484,6 +484,21 @@ export function ClassicTemplate({
   useEffect(() => {
     const root = rootRef.current
     if (!root) return
+
+    // Safety net: force-reveal all fade-up elements after a short timeout
+    // if the IntersectionObserver never fires (e.g., very tall section on
+    // small viewport where intersection ratio never reaches threshold).
+    // Respects prefers-reduced-motion via the existing CSS rule.
+    const safetyTimer = setTimeout(() => {
+      root.querySelectorAll('.fade-up:not(.animate-in), .skill-bar:not(.animate-in)').forEach((el) => {
+        el.classList.add('animate-in')
+        if (el.classList.contains('skill-bar')) {
+          const width = el.getAttribute('data-width')
+          if (width) (el as HTMLElement).style.width = width
+        }
+      })
+    }, 2000)
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -497,13 +512,19 @@ export function ClassicTemplate({
           observer.unobserve(entry.target)
         })
       },
-      { threshold: 0.1, root: getScrollParent(root) }
+      // threshold: 0 fires as soon as ANY pixel intersects (even 1px).
+      // This guarantees reveal on tall sections where 0.1 threshold
+      // would never be reached on small viewports.
+      { threshold: 0, root: getScrollParent(root) }
     )
 
     root
       .querySelectorAll('.fade-up:not(.animate-in), .skill-bar:not(.animate-in)')
       .forEach((el) => observer.observe(el))
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      clearTimeout(safetyTimer)
+    }
   }, [revealKey])
 
   // Scroll-spy: highlight the nav link for the section currently in view.
