@@ -1,16 +1,41 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import type { CSSProperties, MouseEvent } from 'react'
 import type { Prisma } from '@prisma/client'
+import { ArrowLeft, ExternalLink } from 'lucide-react'
 import { sanitizeUrl } from '@/lib/urls'
 import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
+import { isSectionVisible } from '@/lib/section-visibility'
+import { PortfolioFooter } from '@/components/portfolio/PortfolioFooter'
+import { ProjectCardBody, ProjectCardMedia, ProjectFileIcon } from '@/components/portfolio/ProjectCard'
+import {
+  getDynamicGridCols,
+  normalizeProjectCardVisual,
+  normalizeProjectFileType,
+  normalizeProjectImageFit,
+  projectItemLinkLabel,
+  readProjectItemCards,
+  type ProjectItemCardMeta,
+} from '@/lib/project-card-visuals'
 
 /** The subset of the owner profile rendered by a project detail page. */
 export type ProjectPageProfile = {
   username: string
   displayName?: string | null
-  localized?: { displayName?: { ar?: string | null; en?: string | null } | null } | null
+  bio?: string | null
+  location?: string | null
+  contactLinks?: any[] | null
+  localized?: {
+    displayName?: { ar?: string | null; en?: string | null } | null
+    professionalTitle?: { ar?: string | null; en?: string | null } | null
+    bio?: { ar?: string | null; en?: string | null } | null
+    location?: { ar?: string | null; en?: string | null } | null
+  } | null
+  pages?: Array<{
+    slug?: string | null
+    sections?: any[] | null
+  }> | null
   appearance?: {
     colorMode?: 'light' | 'dark' | null
     primaryColor?: string | null
@@ -24,76 +49,80 @@ export type ProjectPageProfile = {
     logoUrl?: string | null
     footerBg?: string | null
     footerText?: string | null
-    actionButtons?: { showScrollToTop?: boolean } | null
+    actionButtons?: {
+      showScrollToTop?: boolean
+      whatsappNumber?: string | null
+    } | null
   } | null
 }
 
 type ProjectPageWithItems = Prisma.ProjectPageGetPayload<{ include: { items: true } }>
 
-function ArrowUp({ className }: { className?: string }) {
-  return (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m3 8 4-4 4 4" /><path d="M7 4v16" />
-      <path d="M11 12h4" /><path d="M11 16h7" /><path d="M11 20h10" />
-    </svg>
-  )
-}
-
-function ExternalLink({ className }: { className?: string }) {
-  return (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-    </svg>
-  )
-}
-
-function Code({ className }: { className?: string }) {
-  return (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
-    </svg>
-  )
-}
-
 function adjustColor(color: string, amount: number) {
   return '#' + color.replace(/^#/, '').replace(/../g, color => ('0' + Math.min(255, Math.max(0, parseInt(color, 16) + amount)).toString(16)).substr(-2))
 }
 
-export function ProjectPageView({ profile, projectPage }: { profile: ProjectPageProfile; projectPage: ProjectPageWithItems }) {
+function itemHref(username: string, item: any): string {
+  const raw = typeof item.externalUrl === 'string' ? item.externalUrl.trim() : ''
+  if (!raw) return ''
+  if (item.type === 'page_link') {
+    // Page links store the target slug, not a URL.
+    if (raw.startsWith('new-') || raw.startsWith('project-new-')) return ''
+    if (!/^[a-z0-9-]+$/i.test(raw)) return ''
+    return `/u/${username}/projects/${encodeURIComponent(raw)}`
+  }
+  return sanitizeUrl(raw)
+}
+
+function extraLinks(meta: ProjectItemCardMeta) {
+  return (meta.links || []).filter((link) => Boolean(sanitizeUrl(link.url)))
+}
+
+/**
+ * Public project page and builder preview. Both render this component so the
+ * header, cards, and footer can never drift apart.
+ *
+ * `preview` only disables navigation (links stay inert) and switches the
+ * minimum height to the preview container; content is identical.
+ */
+export function ProjectPageView({
+  profile,
+  projectPage,
+  preview = false,
+}: {
+  profile: ProjectPageProfile
+  projectPage: ProjectPageWithItems
+  preview?: boolean
+}) {
   const appearance = profile.appearance || {}
-  const defaultLangMode = getPortfolioLang(appearance)
-  const defaultColorMode = appearance.colorMode || 'light'
-  const [lang] = useState<'ar' | 'en'>(defaultLangMode === 'ar' ? 'ar' : 'en')
-  const [theme] = useState<'light' | 'dark'>(defaultColorMode)
-  const [showScrollTop, setShowScrollTop] = useState(false)
-
-  // The visitor theme + language toggles were REMOVED from the portfolio
-  // output (owner request): the page always renders with the owner's saved
-  // defaults (`appearance.colorMode` / `getPortfolioLang`). No localStorage
-  // read/write, so a stale visitor preference can never override the owner.
-
-  useEffect(() => {
-    const handleScroll = () => setShowScrollTop(window.scrollY > 300)
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
+  const lang = getPortfolioLang(appearance) === 'ar' ? 'ar' : 'en'
+  const theme = appearance.colorMode === 'dark' ? 'dark' : 'light'
 
   const primary = appearance.primaryColor || '#60a5fa'
   const primaryLight = adjustColor(primary, 40)
   const bgLight = appearance.bgColorLight || '#f9fafb'
   const bgDark = appearance.bgColorDark || '#111827'
   const currentBg = theme === 'dark' ? bgDark : bgLight
-  const currentText = theme === 'dark' 
-    ? (appearance.textColorDark || '#f3f4f6') 
+  const currentText = theme === 'dark'
+    ? (appearance.textColorDark || '#f3f4f6')
     : (appearance.textColorLight || '#1f2937')
   const currentCard = theme === 'dark' ? adjustColor(bgDark, 15) : adjustColor(bgLight, -5)
   const currentBorder = appearance.borderColor || (theme === 'dark' ? '#374151' : '#e5e7eb')
   const currentOutline = appearance.outlineColor || primary
   const fontFam = appearance.font || 'Inter'
   const displayName = pickLang(profile.localized?.displayName, lang) || profile.displayName || profile.username
+  const role = pickLang(profile.localized?.professionalTitle, lang)
+  const bio = pickLang(profile.localized?.bio, lang)
+  const localizedLocation = pickLang(profile.localized?.location, lang)
   const initial = displayName.substring(0, 2).toUpperCase()
   const projects = projectPage.items || []
+  const itemCards = readProjectItemCards(projectPage.content)
   const displayMode = projectPage.displayMode || 'grid'
+
+  const homePage = (profile.pages || []).find((p) => p.slug === 'home') || (profile.pages || [])[0]
+  const sections = (homePage?.sections || []).filter(isSectionVisible)
+  const footerContent = sections.find((section: any) => section.sectionType === 'footer')?.content || {}
+  const t = (value: unknown) => pickLang(value as never, lang)
 
   const style = {
     '--color-primary': primary,
@@ -108,126 +137,217 @@ export function ProjectPageView({ profile, projectPage }: { profile: ProjectPage
     '--color-outline': currentOutline,
     '--outline-color': currentOutline,
     fontFamily: `"${fontFam}", system-ui, sans-serif`,
-  } as React.CSSProperties
+  } as CSSProperties
+
+  const backHref = preview ? '#' : `/u/${profile.username}`
+  const preventPreviewNavigation = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (preview) event.preventDefault()
+  }
+
+  const renderItemLinks = (item: any, meta: ProjectItemCardMeta) => {
+    const href = itemHref(profile.username, item)
+    const extras = extraLinks(meta)
+    if (!href && extras.length === 0) return null
+
+    const visual = normalizeProjectCardVisual(meta.cardVisual)
+    return (
+      <>
+        {href ? (
+          <a
+            href={preview ? '#' : href}
+            onClick={preventPreviewNavigation}
+            target={item.type === 'page_link' || preview ? undefined : '_blank'}
+            rel={item.type === 'page_link' || preview ? undefined : 'noreferrer'}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--color-primary)] transition-opacity hover:opacity-80"
+          >
+            {visual === 'file-icon' ? (
+              <ProjectFileIcon fileType={normalizeProjectFileType(meta.fileType)} className="h-4 w-4 shrink-0" />
+            ) : (
+              <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
+            )}
+            <span className="break-words">{projectItemLinkLabel(meta, lang)}</span>
+          </a>
+        ) : null}
+        {extras.map((link, index) => {
+          const url = sanitizeUrl(link.url)
+          if (!url) return null
+          return (
+            <a
+              key={`${url}-${index}`}
+              href={preview ? '#' : url}
+              onClick={preventPreviewNavigation}
+              target={preview ? undefined : '_blank'}
+              rel={preview ? undefined : 'noreferrer'}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--color-primary)] transition-opacity hover:opacity-80"
+            >
+              {link.iconType ? (
+                <ProjectFileIcon fileType={link.iconType} className="h-4 w-4 shrink-0" />
+              ) : (
+                <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
+              )}
+              <span className="break-words">{link.label || url}</span>
+            </a>
+          )
+        })}
+      </>
+    )
+  }
 
   return (
-    <div className="relative min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]" dir={lang === 'ar' ? 'rtl' : 'ltr'} style={style}>
-      {/* Navbar */}
-      <nav className="sticky top-0 z-40 py-3" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 85%, transparent)', backdropFilter: 'blur(10px)' }}>
-        <div className="max-w-[1200px] mx-auto px-6 sm:px-12 flex items-center justify-between">
-          <Link href={`/u/${profile.username}`} className="flex items-center">
+    <div
+      className={`${preview ? 'min-h-full' : 'min-h-screen no-cq'} flex flex-col bg-[var(--color-bg)] text-[var(--color-text)]`}
+      dir={lang === 'ar' ? 'rtl' : 'ltr'}
+      style={style}
+    >
+      {/* Compact navbar — brand only. The old visitor theme toggle was
+          removed so the page always uses the owner's saved color mode. */}
+      <nav
+        className="sticky top-0 z-40 shrink-0 py-3"
+        style={{
+          backgroundColor: 'color-mix(in srgb, var(--color-bg) 85%, transparent)',
+          backdropFilter: 'blur(10px)',
+        }}
+      >
+        <div className="mx-auto flex max-w-[1200px] items-center px-6 cq-sm:px-12">
+          <Link
+            href={backHref}
+            onClick={preventPreviewNavigation}
+            className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:rounded"
+            aria-label={displayName}
+          >
             {appearance.logoUrl ? (
-              <img src={sanitizeUrl(appearance.logoUrl)} alt="Logo" className="h-9 w-auto object-contain" />
+              <img src={sanitizeUrl(appearance.logoUrl)} alt={displayName} className="h-9 w-auto object-contain" />
             ) : (
-              <span className="text-2xl font-black text-[var(--color-primary)] tracking-tight">{initial}</span>
+              <span className="text-2xl font-black tracking-tight text-[var(--color-primary)]">{initial}</span>
             )}
           </Link>
         </div>
       </nav>
 
-      {/* Back Button */}
-      {projectPage.showBackButton !== false && (
-        <div className="max-w-[1200px] mx-auto px-6 sm:px-12 pt-6">
-          <Link
-            href={`/u/${profile.username}`}
-            className="inline-flex items-center gap-2 text-sm font-medium text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
-          >
-            <ArrowUp className="h-4 w-4 rotate-[-90deg]" />
-            {projectPage.backButtonLabel || 'Back to Portfolio'}
-          </Link>
+      <main className="flex-1">
+        {/* Header — back button + title + optional description only. Legacy
+            coverImage data is intentionally ignored (kept in storage). */}
+        <header className={`mx-auto max-w-[1200px] px-6 cq-sm:px-12 ${projectPage.showBackButton !== false ? 'pt-5' : 'pt-8'} pb-6 cq-sm:pb-8`}>
+          {projectPage.showBackButton !== false && (
+            <Link
+              href={backHref}
+              onClick={preventPreviewNavigation}
+              className="inline-flex items-center gap-2 text-sm font-medium text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-primary)]"
+            >
+              <ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
+              {projectPage.backButtonLabel || 'Back to Portfolio'}
+            </Link>
+          )}
+          <h1 className={`${projectPage.showBackButton !== false ? 'mt-4' : ''} break-words text-2xl font-bold tracking-tight text-[var(--color-text)] cq-sm:text-3xl`}>
+            {projectPage.title}
+          </h1>
+          {projectPage.description ? (
+            <p className="mt-2 max-w-3xl break-words text-base leading-relaxed text-[var(--color-text-muted)] cq-sm:text-lg">
+              {projectPage.description}
+            </p>
+          ) : null}
+        </header>
+
+        <div className="mx-auto max-w-[1200px] px-6 pb-16 cq-sm:px-12">
+          {displayMode === 'list' ? (
+            <div className="flex flex-col gap-6">
+              {projects.map((item, index) => {
+                const meta = itemCards[index] || {}
+                const requestedVisual = normalizeProjectCardVisual(meta.cardVisual)
+                // Image cards with nothing to show collapse instead of leaving
+                // a large empty placeholder area.
+                const visual = requestedVisual === 'image' && !sanitizeUrl(item.imageUrl)
+                  ? 'none'
+                  : requestedVisual
+                return (
+                  <div
+                    key={item.id}
+                    className="group flex flex-col overflow-hidden rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm transition-all duration-300 hover:shadow-xl cq-sm:flex-row"
+                  >
+                    <ProjectCardMedia
+                      visual={visual}
+                      fileType={normalizeProjectFileType(meta.fileType)}
+                      imageUrl={item.imageUrl}
+                      imageFit={normalizeProjectImageFit(meta.imageFit)}
+                      title={item.title}
+                      variant="list"
+                    />
+                    <ProjectCardBody
+                      title={item.title || (lang === 'ar' ? 'عنصر' : 'Project Item')}
+                      description={item.textContent}
+                      links={renderItemLinks(item, meta)}
+                      variant="list"
+                    />
+                  </div>
+                )
+              })}
+              {projects.length === 0 && (
+                <p className="py-8 text-center font-medium text-[var(--color-text-muted)]">
+                  {lang === 'ar' ? 'لا توجد عناصر في هذه الصفحة بعد.' : 'No projects on this page yet.'}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className={`grid gap-4 cq-sm:gap-8 ${getDynamicGridCols(projects.length)}`}>
+              {projects.map((item, index) => {
+                const meta = itemCards[index] || {}
+                const requestedVisual = normalizeProjectCardVisual(meta.cardVisual)
+                const visual = requestedVisual === 'image' && !sanitizeUrl(item.imageUrl)
+                  ? 'none'
+                  : requestedVisual
+                return (
+                  <div
+                    key={item.id}
+                    className="group flex flex-col overflow-hidden rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm transition-all duration-300 hover:-translate-y-2 hover:shadow-xl"
+                  >
+                    <ProjectCardMedia
+                      visual={visual}
+                      fileType={normalizeProjectFileType(meta.fileType)}
+                      imageUrl={item.imageUrl}
+                      imageFit={normalizeProjectImageFit(meta.imageFit)}
+                      title={item.title}
+                      variant="grid"
+                    />
+                    <ProjectCardBody
+                      title={item.title || (lang === 'ar' ? 'عنصر' : 'Project Item')}
+                      description={item.textContent}
+                      links={renderItemLinks(item, meta)}
+                      variant="grid"
+                    />
+                  </div>
+                )
+              })}
+              {projects.length === 0 && (
+                <p className="col-span-full py-8 text-center font-medium text-[var(--color-text-muted)]">
+                  {lang === 'ar' ? 'لا توجد عناصر في هذه الصفحة بعد.' : 'No projects on this page yet.'}
+                </p>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </main>
 
-      {/* Page Title */}
-      <div className="max-w-[1200px] mx-auto px-6 sm:px-12 py-8">
-        <h1 className="text-3xl font-bold tracking-tight text-[var(--color-text)] break-words">{projectPage.title}</h1>
-        {projectPage.description && (
-          <p className="mt-3 text-[var(--color-text-muted)] text-lg break-words">{projectPage.description}</p>
-        )}
-      </div>
-
-      {/* Projects Grid/List */}
-      <div className="max-w-[1200px] mx-auto px-6 sm:px-12 pb-16">
-        {displayMode === 'list' ? (
-          <div className="flex flex-col gap-6">
-            {projects.map((item) => (
-              <div key={item.id} className="flex flex-col sm:flex-row rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm">
-                <div className="w-full sm:w-[300px] h-[200px] sm:h-auto shrink-0 bg-[var(--color-bg)] flex items-center justify-center border-b sm:border-b-0 sm:border-r border-[var(--color-border)] overflow-hidden">
-                  {item.imageUrl ? (
-                    <img src={sanitizeUrl(item.imageUrl)} alt={item.title || 'Project'} className="w-full h-full object-cover" />
-                  ) : (
-                    <Code className="h-12 w-12 text-[var(--color-border)]" />
-                  )}
-                </div>
-                <div className="p-6 flex flex-col flex-1 min-w-0">
-                  <h3 className="text-xl break-words font-bold tracking-tight text-[var(--color-text)] mb-3">{item.title || 'Project Item'}</h3>
-                  {item.textContent && <p className="text-[var(--color-text-muted)] text-[15px] leading-relaxed break-words mb-4">{item.textContent}</p>}
-                  {item.externalUrl && (
-                    <a href={sanitizeUrl(item.externalUrl)} target="_blank" rel="noreferrer" className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity mt-auto">
-                      <ExternalLink className="h-4 w-4" /> View
-                    </a>
-                  )}
-                </div>
-              </div>
-            ))}
-            {projects.length === 0 && (
-              <p className="text-[var(--color-text-muted)] text-center font-medium py-8">No projects on this page yet.</p>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-            {projects.map((item) => (
-              <div key={item.id} className="group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col">
-                <div className="h-[200px] w-full bg-[var(--color-bg)] flex items-center justify-center border-b border-[var(--color-border)] overflow-hidden">
-                  {item.imageUrl ? (
-                    <img src={sanitizeUrl(item.imageUrl)} alt={item.title || 'Project'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                  ) : (
-                    <Code className="h-12 w-12 text-[var(--color-border)]" />
-                  )}
-                </div>
-                <div className="p-6 flex flex-col flex-1 min-w-0">
-                  <h3 className="text-xl break-words font-bold tracking-tight text-[var(--color-text)] mb-3">{item.title || 'Project Item'}</h3>
-                  {item.textContent && <p className="text-[var(--color-text-muted)] text-[15px] leading-relaxed break-words mb-4 line-clamp-3">{item.textContent}</p>}
-                  {item.externalUrl && (
-                    <a href={sanitizeUrl(item.externalUrl)} target="_blank" rel="noreferrer" className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity mt-auto">
-                      <ExternalLink className="h-4 w-4" /> View
-                    </a>
-                  )}
-                </div>
-              </div>
-            ))}
-            {projects.length === 0 && (
-              <p className="text-[var(--color-text-muted)] text-center font-medium py-8 col-span-full">No projects on this page yet.</p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Footer — sits on the site's PRIMARY colour with BACKGROUND-toned ink
-          (owner request); `appearance.footerBg`/`footerText` are explicit
-          owner overrides and win when set. */}
-      <footer
-        className="py-16"
-        style={{ backgroundColor: appearance.footerBg || 'var(--color-primary)', color: appearance.footerText || 'var(--color-bg)' }}
-      >
-        <div className="max-w-[1200px] mx-auto px-6 sm:px-12">
-          <div className="flex items-center justify-between">
-            <p className="text-[15px]" style={{ color: appearance.footerText || 'var(--color-bg)' }}>© {new Date().getFullYear()} · Developed with PortfolioHub</p>
-          </div>
-        </div>
-      </footer>
-
-      {/* Scroll to Top */}
-      {appearance.actionButtons?.showScrollToTop && (
-        <button
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className={`fixed bottom-6 right-6 h-12 w-12 rounded-full bg-[var(--color-primary)] text-white shadow-lg flex items-center justify-center transition-all duration-300 z-50 ${
-            showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
-          }`}
-        >
-          <ArrowUp className="h-5 w-5 rotate-180" />
-        </button>
-      )}
+      {/* Shared website footer. Quick Links point back at the main portfolio
+          sections instead of in-page anchors. */}
+      <PortfolioFooter
+        profile={profile}
+        sections={sections}
+        footerContent={footerContent}
+        lang={lang}
+        t={t}
+        displayName={displayName}
+        role={role}
+        bio={bio}
+        localizedLocation={localizedLocation}
+        contactLinks={profile.contactLinks || []}
+        whatsappNumber={appearance.actionButtons?.whatsappNumber || ''}
+        linkPrefix={`/u/${profile.username}`}
+        showScrollToTop={appearance.actionButtons?.showScrollToTop !== false}
+        onScrollToTop={() => {
+          if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+        onLinkClick={preview ? preventPreviewNavigation : undefined}
+      />
     </div>
   )
 }

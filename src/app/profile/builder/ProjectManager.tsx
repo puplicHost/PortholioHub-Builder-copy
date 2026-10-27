@@ -48,7 +48,7 @@ function cardVisual(page: any): 'image' | 'file-icon' | 'none' {
 
 function cardFileType(page: any): string {
   const value = projectContent(page).fileType
-  return ['pdf', 'sheet', 'doc', 'folder', 'photo', 'generic'].includes(value) ? value : 'generic'
+  return ['pdf', 'sheet', 'doc', 'slides', 'folder', 'photo', 'script', 'generic'].includes(value) ? value : 'generic'
 }
 
 function groupTitle(group: ProjectGroup, locale: 'en' | 'ar'): string {
@@ -508,7 +508,7 @@ export function ProjectManager({
 
   const cardFileType = (page: any): string => {
     const value = projectContent(page).fileType
-    return ['pdf', 'sheet', 'doc', 'folder', 'photo', 'generic'].includes(value) ? value : 'generic'
+    return ['pdf', 'sheet', 'doc', 'slides', 'folder', 'photo', 'script', 'generic'].includes(value) ? value : 'generic'
   }
 
   const setCardVisual = (value: 'image' | 'file-icon' | 'none') => {
@@ -608,7 +608,6 @@ export function ProjectManager({
       textContent: '',
       imageUrl: '',
       linkType: 'none',
-      externalLink: '',
       linkLabel: 'View Project',
       linkedPageSlug: '',
     }
@@ -842,8 +841,10 @@ export function ProjectManager({
                 { value: 'pdf', label: t('fileIcon.pdf') },
                 { value: 'sheet', label: t('fileIcon.sheet') },
                 { value: 'doc', label: t('fileIcon.doc') },
+                { value: 'slides', label: t('fileIcon.slides') },
                 { value: 'folder', label: t('fileIcon.folder') },
                 { value: 'photo', label: t('fileIcon.photo') },
+                { value: 'script', label: t('fileIcon.script') },
                 { value: 'generic', label: t('fileIcon.generic') },
               ]}
             />
@@ -1317,7 +1318,7 @@ export function ProjectManager({
                 onClick={() => {
                   updateItemField(editingIndex, 'linkType', type)
                   if (type === 'none') {
-                    updateItemField(editingIndex, 'externalLink', '')
+                    updateItemField(editingIndex, 'externalUrl', '')
                     updateItemField(editingIndex, 'linkLabel', '')
                     updateItemField(editingIndex, 'linkedPageSlug', '')
                   }
@@ -1341,8 +1342,8 @@ export function ProjectManager({
                   id="pmi-external"
                   type="url"
                   inputMode="url"
-                  value={editingItem.externalLink || ''}
-                  onChange={e => updateItemField(editingIndex, 'externalLink', e.target.value)}
+                  value={editingItem.externalUrl || ''}
+                  onChange={e => updateItemField(editingIndex, 'externalUrl', e.target.value)}
                   className="mt-1"
                   placeholder="https://example.com/project"
                 />

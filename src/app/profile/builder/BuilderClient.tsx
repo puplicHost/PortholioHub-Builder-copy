@@ -55,6 +55,18 @@ import {
   presentLabel,
 } from '@/lib/experience-dates'
 import { LivePreview } from './LivePreview'
+import { ProjectPageView } from '@/app/u/[username]/projects/[slug]/ProjectPageView'
+import {
+  PROJECT_FILE_TYPES,
+  normalizeProjectCardVisual,
+  normalizeProjectFileType,
+  normalizeProjectImageFit,
+  readProjectItemCardMeta,
+  spliceProjectItemCards,
+  withProjectItemCardMeta,
+  type ProjectItemCardLink,
+  type ProjectItemCardMeta,
+} from '@/lib/project-card-visuals'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { ThemeSettings } from './ThemeSettings'
 import { ProjectManager } from './ProjectManager'
@@ -235,195 +247,14 @@ function ImagePositionControl({
 }
 
 function ProjectPagePreview({ profile, projectPage }: { profile: any; projectPage: any }) {
-  const appearance = profile.appearance || {}
-  const defaultLangMode = getPortfolioLang(appearance)
-  const defaultColorMode = appearance.colorMode || 'light'
-  const [lang, setLang] = useState<'ar' | 'en'>(defaultLangMode === 'ar' ? 'ar' : 'en')
-  const [theme, setTheme] = useState<'light' | 'dark'>(defaultColorMode)
-  // Sync when the incoming defaults change (render-phase adjustment instead
-  // of setState-in-effect: same end state, no cascading render pass).
-  const [prevDefaults, setPrevDefaults] = useState({ lang: defaultLangMode, theme: defaultColorMode })
-  if (prevDefaults.lang !== defaultLangMode || prevDefaults.theme !== defaultColorMode) {
-    setPrevDefaults({ lang: defaultLangMode, theme: defaultColorMode })
-    setLang(defaultLangMode === 'ar' ? 'ar' : 'en')
-    setTheme(defaultColorMode)
-  }
-
-  const primary = appearance.primaryColor || '#60a5fa'
-  const primaryLight = adjustColor(primary, 40)
-  const bgLight = appearance.bgColorLight || '#f9fafb'
-  const bgDark = appearance.bgColorDark || '#111827'
-  const currentBg = theme === 'dark' ? bgDark : bgLight
-  const currentText = theme === 'dark' 
-    ? (appearance.textColorDark || '#f3f4f6') 
-    : (appearance.textColorLight || '#1f2937')
-  const currentCard = theme === 'dark' ? adjustColor(bgDark, 15) : adjustColor(bgLight, -5)
-  const currentBorder = appearance.borderColor || (theme === 'dark' ? '#374151' : '#e5e7eb')
-  const fontFam = appearance.font || 'Inter'
-  const localized = profile.localized || {}
-  const displayName = localized.displayName?.[lang] || profile.displayName || profile.username
-  const initial = displayName.substring(0, 2).toUpperCase()
-  const projects = projectPage.items || []
-  const displayMode = projectPage.displayMode || 'grid'
-
-  const style = {
-    '--color-primary': primary,
-    '--color-primary-light': primaryLight,
-    '--color-bg': currentBg,
-    '--color-bg-alt': currentCard,
-    '--color-text': currentText,
-    '--color-text-muted': `color-mix(in srgb, ${currentText} 70%, ${currentBg})`,
-    '--color-card': currentCard,
-    '--color-border': currentBorder,
-    fontFamily: `"${fontFam}", system-ui, sans-serif`,
-  } as React.CSSProperties
-
+  // The public page and the builder preview intentionally render the exact
+  // same component. The preview only disables navigation and lets the shared
+  // page fill the preview container (sticky footer included).
   return (
-    <div className="relative w-full h-full overflow-y-auto" style={style}>
-      <div className="min-h-full bg-[var(--color-bg)] text-[var(--color-text)]" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-        {/* Navbar */}
-        <nav className="sticky top-0 z-40 py-3" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 85%, transparent)', backdropFilter: 'blur(10px)' }}>
-          <div className="max-w-[1200px] mx-auto px-6 sm:px-12 flex items-center justify-between">
-            <a href="#" className="flex items-center">
-              {appearance.logoUrl ? (
-                <img src={appearance.logoUrl} alt="Logo" className="h-9 w-auto object-contain" />
-              ) : (
-                <span className="text-2xl font-black text-[var(--color-primary)] tracking-tight">{initial}</span>
-              )}
-            </a>
-            <div className="flex items-center gap-6">
-              <button
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="h-9 w-9 flex items-center justify-center rounded-full bg-[var(--color-card)] border border-[var(--color-border)] shadow-sm text-[var(--color-text)] cursor-pointer"
-              >
-                {theme === 'dark' ? '☀' : '☾'}
-              </button>
-            </div>
-          </div>
-        </nav>
-
-        {/* Back Button */}
-        {projectPage.showBackButton !== false && (
-          <div className="max-w-[1200px] mx-auto px-6 sm:px-12 pt-6">
-            <a href="#" className="inline-flex items-center gap-2 text-sm font-medium text-[var(--color-text)] opacity-70 hover:opacity-100 hover:text-[var(--color-primary)] transition-colors">
-              <ArrowUp className="h-4 w-4 rotate-[-90deg]" />
-              {projectPage.backButtonLabel || 'Back to Portfolio'}
-            </a>
-          </div>
-        )}
-
-        {/* Page Title */}
-        <div className="max-w-[1200px] mx-auto px-6 sm:px-12 py-8">
-          <h1 className="text-3xl font-bold tracking-tight text-[var(--color-text)] break-words">{projectPage.title}</h1>
-          {projectPage.description && (
-            <p className="mt-3 text-[var(--color-text-muted)] text-lg break-words">{projectPage.description}</p>
-          )}
-        </div>
-
-        {/* Projects Grid/List */}
-        <div className="max-w-[1200px] mx-auto px-6 sm:px-12 pb-16">
-          {displayMode === 'list' ? (
-            <div className="flex flex-col gap-6">
-              {projects.map((item: any) => (
-                <div key={item.id} className="flex flex-col sm:flex-row rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm">
-                  <div className="w-full sm:w-[300px] h-[200px] sm:h-auto shrink-0 bg-[var(--color-bg)] flex items-center justify-center border-b sm:border-b-0 sm:border-e border-[var(--color-border)] overflow-hidden">
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt={item.title || 'Project'} className="w-full h-full object-cover" />
-                    ) : (
-                      <Code className="h-12 w-12 text-[var(--color-border)]" />
-                    )}
-                  </div>
-                  <div className="p-6 flex flex-col flex-1 min-w-0">
-                    <h3 className="text-xl font-bold tracking-tight break-words text-[var(--color-text)] mb-3">{item.title || 'Project Item'}</h3>
-                    {item.textContent && <p className="text-[var(--color-text-muted)] text-[15px] leading-relaxed break-words mb-4">{item.textContent}</p>}
-                    {(() => {
-                      const itemLinkType = item.linkType || (item.type === 'page_link' ? 'page' : 'none')
-                      const itemSlug = item.linkedPageSlug || (item.type === 'page_link' ? item.externalUrl : null)
-                      if (itemLinkType === 'page' && itemSlug) {
-                        return (
-                          <a href={`/u/${profile.username}/projects/${itemSlug}`} className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity mt-auto">
-                            <ExternalLink className="h-4 w-4" /> {item.linkLabel || item.title || 'View'}
-                          </a>
-                        )
-                      }
-                      if (itemLinkType === 'external' && item.externalUrl) {
-                        return (
-                          <a href={item.externalUrl} target="_blank" rel="noreferrer" className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity mt-auto">
-                            <ExternalLink className="h-4 w-4" /> {item.linkLabel || item.title || 'View'}
-                          </a>
-                        )
-                      }
-                      return null
-                    })()}
-                  </div>
-                </div>
-              ))}
-              {projects.length === 0 && (
-                <p className="text-[var(--color-text)] opacity-70 text-center py-8">No projects on this page yet.</p>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-              {projects.map((item: any) => (
-                <div key={item.id} className="group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col">
-                  <div className="h-[200px] w-full bg-[var(--color-bg)] flex items-center justify-center border-b border-[var(--color-border)] overflow-hidden">
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt={item.title || 'Project'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                    ) : (
-                      <Code className="h-12 w-12 text-[var(--color-border)]" />
-                    )}
-                  </div>
-                  <div className="p-6 flex flex-col flex-1 min-w-0">
-                    <h3 className="text-xl font-bold tracking-tight break-words text-[var(--color-text)] mb-3">{item.title || 'Project Item'}</h3>
-                    {item.textContent && <p className="text-[var(--color-text-muted)] text-[15px] leading-relaxed break-words mb-4 line-clamp-3">{item.textContent}</p>}
-                    {(() => {
-                      const itemLinkType = item.linkType || (item.type === 'page_link' ? 'page' : 'none')
-                      const itemSlug = item.linkedPageSlug || (item.type === 'page_link' ? item.externalUrl : null)
-                      if (itemLinkType === 'page' && itemSlug) {
-                        return (
-                          <a href={`/u/${profile.username}/projects/${itemSlug}`} className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity mt-auto">
-                            <ExternalLink className="h-4 w-4" /> {item.linkLabel || item.title || 'View'}
-                          </a>
-                        )
-                      }
-                      if (itemLinkType === 'external' && item.externalUrl) {
-                        return (
-                          <a href={item.externalUrl} target="_blank" rel="noreferrer" className="text-sm font-semibold flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80 transition-opacity mt-auto">
-                            <ExternalLink className="h-4 w-4" /> {item.linkLabel || item.title || 'View'}
-                          </a>
-                        )
-                      }
-                      return null
-                    })()}
-                  </div>
-                </div>
-              ))}
-              {projects.length === 0 && (
-                <p className="text-[var(--color-text)] opacity-70 text-center py-8 col-span-full">No projects on this page yet.</p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer — matches the public project page: primary-colour band with
-            background-toned ink (owner request); owner overrides win. */}
-        <footer
-          className="py-16"
-          style={{ backgroundColor: appearance.footerBg || 'var(--color-primary)', color: appearance.footerText || 'var(--color-bg)' }}
-        >
-          <div className="max-w-[1200px] mx-auto px-6 sm:px-12">
-            <div className="text-center text-sm opacity-60">
-              © 2026 · Developed with PortfolioHub
-            </div>
-          </div>
-        </footer>
-      </div>
+    <div className="relative h-full w-full overflow-y-auto @container">
+      <ProjectPageView profile={profile} projectPage={projectPage} preview />
     </div>
   )
-}
-
-function adjustColor(color: string, amount: number) {
-  return '#' + color.replace(/^#/, '').replace(/../g, color => ('0'+Math.min(255, Math.max(0, parseInt(color, 16) + amount)).toString(16)).substr(-2))
 }
 
 // The preview is inline (no iframe). ClassicTemplate uses container-query
@@ -2188,45 +2019,6 @@ export function BuilderClient({
           <FormCard title={t('form.pageHeader')} subtitle={t('form.subtitlePageHeader')}>
             <div className="space-y-4">
               <div>
-                <label htmlFor={`pp-cover-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.coverImageUrl')}</label>
-                <div className="flex gap-2">
-                  <Input
-                    id={`pp-cover-${pp.id}`}
-                    value={pp.coverImage || ''}
-                    onChange={(e) => updateProjectPageField(pp.id, 'coverImage', e.target.value)}
-                    className="flex-1 min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                    placeholder={t('placeholder.url')}
-                  />
-                  <FileButton
-                    accept="image/*"
-                    disabled={isUploading(`project-cover-${pp.id}`)}
-                    onFiles={(files) =>
-                      void uploadImage(`project-cover-${pp.id}`, files?.[0], (url) =>
-                        updateProjectPageField(pp.id, 'coverImage', url),
-                      )
-                    }
-                    className="h-[44px] min-h-[44px] px-4"
-                  >
-                    {isUploading(`project-cover-${pp.id}`) && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {isUploading(`project-cover-${pp.id}`) ? `${t('common.uploading')} ${uploadPercent(`project-cover-${pp.id}`)}%` : t('common.upload')}
-                  </FileButton>
-                  {pp.coverImage && (
-                    <ImageDeleteButton
-                      onDelete={() => updateProjectPageField(pp.id, 'coverImage', '')}
-                      className="h-[44px] min-h-[44px]"
-                    />
-                  )}
-                </div>
-                {(pp.coverImage || isUploading(`project-cover-${pp.id}`)) && (
-                  <div className="relative mt-2 h-28 w-full overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
-                    {pp.coverImage && (
-                      <img src={pp.coverImage} alt={t('misc.coverPreview')} className="h-full w-full object-cover" />
-                    )}
-                    <UploadOverlay active={isUploading(`project-cover-${pp.id}`)} progress={uploadPercent(`project-cover-${pp.id}`)} label={t('common.uploading')} />
-                  </div>
-                )}
-              </div>
-              <div>
                 <label htmlFor={`pp-desc-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.description')}</label>
                 <textarea
                   id={`pp-desc-${pp.id}`}
@@ -2304,25 +2096,57 @@ export function BuilderClient({
               </div>
 
               <div className="space-y-4">
-                {(pp.items || []).map((item: any, idx: number) => (
+                {(pp.items || []).map((item: any, idx: number) => {
+                  const itemMeta = readProjectItemCardMeta(pp.content, idx)
+                  const visual = normalizeProjectCardVisual(itemMeta.cardVisual)
+                  const itemLinks = itemMeta.links || []
+                  const updateItemCard = (patch: ProjectItemCardMeta) => {
+                    updateProfile((p: any) => ({
+                      ...p,
+                      projectPages: (p.projectPages || []).map((page: any) =>
+                        page.id === pp.id
+                          ? { ...page, content: withProjectItemCardMeta(page.content, idx, patch) }
+                          : page
+                      ),
+                    }))
+                  }
+                  const setItemLinks = (links: ProjectItemCardLink[]) => updateItemCard({ links })
+                  return (
                   <ItemCard
                     key={item.id}
                     title={item.title || t('common.item')}
                     onRemove={() => {
-                      const removed = (pp.items || [])[idx]
-                      const newItems = [...(pp.items || [])]
-                      newItems.splice(idx, 1)
-                      updateProjectPageField(pp.id, 'items', newItems)
-                      if (removed !== undefined) {
-                        toast('info', t('toasts.itemRemoved'), {
-                          label: t('common.undo'),
-                          onClick: () => {
-                            const restored = [...newItems]
-                            restored.splice(Math.max(0, Math.min(idx, restored.length)), 0, removed)
-                            updateProjectPageField(pp.id, 'items', restored)
-                          },
-                        })
-                      }
+                      updateProfile((p: any) => ({
+                        ...p,
+                        projectPages: (p.projectPages || []).map((page: any) => {
+                          if (page.id !== pp.id) return page
+                          const nextItems = [...(page.items || [])]
+                          nextItems.splice(idx, 1)
+                          return {
+                            ...page,
+                            items: nextItems,
+                            content: spliceProjectItemCards(page.content, idx, 1),
+                          }
+                        }),
+                      }))
+                      toast('info', t('toasts.itemRemoved'), {
+                        label: t('common.undo'),
+                        onClick: () => {
+                          updateProfile((p: any) => ({
+                            ...p,
+                            projectPages: (p.projectPages || []).map((page: any) => {
+                              if (page.id !== pp.id) return page
+                              const restored = [...(page.items || [])]
+                              restored.splice(Math.max(0, Math.min(idx, restored.length)), 0, item)
+                              return {
+                                ...page,
+                                items: restored,
+                                content: spliceProjectItemCards(page.content, idx, 0, [itemMeta]),
+                              }
+                            }),
+                          }))
+                        },
+                      })
                     }}
                   >
                     <div className="flex flex-col gap-4 mt-2">
@@ -2340,6 +2164,44 @@ export function BuilderClient({
                         />
                       </div>
                       <div>
+                        <label id={`pp-item-${item.id}-visual`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('project.cardVisual')}</label>
+                        <div role="group" aria-labelledby={`pp-item-${item.id}-visual`} className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
+                          {(['image', 'file-icon', 'none'] as const).map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              aria-pressed={visual === option}
+                              onClick={() => updateItemCard({ cardVisual: option })}
+                              className={`flex-1 cursor-pointer rounded-md py-1.5 text-[11px] font-semibold transition-colors ${
+                                visual === option
+                                  ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
+                                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
+                              }`}
+                            >
+                              {option === 'image'
+                                ? t('project.visualImage')
+                                : option === 'file-icon'
+                                  ? t('project.visualFileIcon')
+                                  : t('project.visualNone')}
+                            </button>
+                          ))}
+                        </div>
+                        {visual === 'file-icon' && (
+                          <div className="mt-2">
+                            <label htmlFor={`pp-item-${item.id}-filetype`} className="mb-1 block text-[11px] font-medium text-[var(--color-text-muted)]">{t('project.fileType')}</label>
+                            <Select
+                              id={`pp-item-${item.id}-filetype`}
+                              value={normalizeProjectFileType(itemMeta.fileType)}
+                              onChange={(value) => updateItemCard({ fileType: normalizeProjectFileType(value) })}
+                              options={PROJECT_FILE_TYPES.filter((type) => type !== 'code').map((type) => ({
+                                value: type,
+                                label: t(`fileIcon.${type}`),
+                              }))}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div>
                         <label htmlFor={`pp-item-${item.id}-desc`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.description')}</label>
                         <textarea
                           id={`pp-item-${item.id}-desc`}
@@ -2352,6 +2214,7 @@ export function BuilderClient({
                           className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
                         />
                       </div>
+                      {visual === 'image' && (
                       <div>
                         <label htmlFor={`pp-item-${item.id}-image`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('common.imageUrl')}</label>
                         <div className="flex gap-2">
@@ -2399,7 +2262,20 @@ export function BuilderClient({
                             <UploadOverlay active={isUploading(`project-item-${pp.id}-${item.id}`)} progress={uploadPercent(`project-item-${pp.id}-${item.id}`)} label={t('common.uploading')} />
                           </div>
                         )}
+                        <div className="mt-2">
+                          <label htmlFor={`pp-item-${item.id}-fit`} className="mb-1 block text-[11px] font-medium text-[var(--color-text-muted)]">{t('project.imageFit')}</label>
+                          <Select
+                            id={`pp-item-${item.id}-fit`}
+                            value={normalizeProjectImageFit(itemMeta.imageFit)}
+                            onChange={(value) => updateItemCard({ imageFit: normalizeProjectImageFit(value) })}
+                            options={[
+                              { value: 'cover', label: t('project.fitCover') },
+                              { value: 'contain', label: t('project.fitContain') },
+                            ]}
+                          />
+                        </div>
                       </div>
+                      )}
                       <div>
                         <label htmlFor={`pp-item-${item.id}-link`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('project.externalLink')}</label>
                         <Input
@@ -2414,9 +2290,68 @@ export function BuilderClient({
                           placeholder={t('placeholder.url')}
                         />
                       </div>
+                      <div>
+                        <label htmlFor={`pp-item-${item.id}-link-label`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('project.linkLabel')}</label>
+                        <Input
+                          id={`pp-item-${item.id}-link-label`}
+                          value={itemMeta.linkLabel || ''}
+                          onChange={(e) => updateItemCard({ linkLabel: e.target.value })}
+                          className="w-full min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
+                          placeholder={t('project.linkLabel')}
+                        />
+                      </div>
+                      <div className="space-y-2 border-t border-[var(--color-border)] pt-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t('project.extraLinks')}</span>
+                          <button
+                            type="button"
+                            onClick={() => setItemLinks([...itemLinks, { label: '', url: '' }])}
+                            className="inline-flex min-h-[32px] items-center gap-1 text-[12px] font-semibold text-[var(--color-primary)] hover:underline"
+                          >
+                            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                            {t('project.addExtraLink')}
+                          </button>
+                        </div>
+                        {itemLinks.map((link, linkIndex) => (
+                          <div key={linkIndex} className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-2">
+                            <div className="flex gap-2">
+                              <Input
+                                value={link.url || ''}
+                                onChange={(e) => {
+                                  const next = itemLinks.slice()
+                                  next[linkIndex] = { ...next[linkIndex], url: e.target.value }
+                                  setItemLinks(next)
+                                }}
+                                aria-label={t('project.externalUrl')}
+                                placeholder={t('placeholder.url')}
+                                className="flex-1"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setItemLinks(itemLinks.filter((_, i) => i !== linkIndex))}
+                                aria-label={t('common.remove')}
+                                className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-md border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-danger)]"
+                              >
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            </div>
+                            <Input
+                              value={link.label || ''}
+                              onChange={(e) => {
+                                const next = itemLinks.slice()
+                                next[linkIndex] = { ...next[linkIndex], label: e.target.value }
+                                setItemLinks(next)
+                              }}
+                              aria-label={t('project.linkLabel')}
+                              placeholder={t('project.linkLabel')}
+                            />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </ItemCard>
-                ))}
+                  )
+                })}
                 
                 {(pp.items || []).length === 0 && (
                   <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-surface-secondary)]">
@@ -2426,12 +2361,22 @@ export function BuilderClient({
                 
                 <AddActionCard 
                   onClick={() => {
-                    const newItems = [...(pp.items || []), {
-                      id: Math.random().toString(36).substr(2, 9),
-                      title: 'New Item',
-                      type: 'external_link',
-                    }]
-                    updateProjectPageField(pp.id, 'items', newItems)
+                    updateProfile((p: any) => ({
+                      ...p,
+                      projectPages: (p.projectPages || []).map((page: any) => {
+                        if (page.id !== pp.id) return page
+                        const newItems = [...(page.items || []), {
+                          id: Math.random().toString(36).substr(2, 9),
+                          title: 'New Item',
+                          type: 'external_link',
+                        }]
+                        return {
+                          ...page,
+                          items: newItems,
+                          content: spliceProjectItemCards(page.content, newItems.length - 1, 0, [{}]),
+                        }
+                      }),
+                    }))
                   }}
                   label={t('actions.addProjectItem')}
                   icon={Palette}
