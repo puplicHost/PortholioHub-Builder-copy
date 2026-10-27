@@ -177,17 +177,24 @@ export function PortfolioFooter({
   const footerDescription = t(c.description)
   const ctaHref = emailHref || waHref || contactHref
 
-  // Footer sits on the site's PRIMARY colour and its ink is the site
-  // BACKGROUND colour (owner request): coloured band + background-toned
-  // text/borders. `appearance.footerText`, when set, is an explicit
-  // owner override and wins.
+  // Footer follows the active theme: the page surface (light or dark) with
+  // theme-aware text and hairlines, so it always matches the portfolio rather
+  // than sitting on a fixed coloured band. Explicit `footerBg` / `footerText`
+  // values from older profiles still win when present.
   const appearance = profile.appearance || {}
+  const footerBg = appearance.footerBg || 'var(--color-bg)'
   const footerOverride = appearance.footerText || ''
-  const footerText = footerOverride || 'var(--color-bg)'
-  const footerMuted = footerOverride || 'color-mix(in srgb, var(--color-bg) 78%, transparent)'
-  const footerBorder = 'color-mix(in srgb, var(--color-bg) 30%, transparent)'
-  const footerSocialBorder = 'color-mix(in srgb, var(--color-bg) 40%, transparent)'
-  const footerSocialBg = 'color-mix(in srgb, var(--color-bg) 15%, transparent)'
+  const footerText = footerOverride || 'var(--color-text)'
+  const footerMuted = footerOverride || 'var(--color-muted)'
+  const footerBorder = footerOverride
+    ? `color-mix(in srgb, ${footerOverride} 22%, transparent)`
+    : 'var(--color-border)'
+  const footerSocialBorder = footerOverride
+    ? `color-mix(in srgb, ${footerOverride} 30%, transparent)`
+    : 'color-mix(in srgb, var(--color-text) 22%, transparent)'
+  const footerSocialBg = footerOverride
+    ? `color-mix(in srgb, ${footerOverride} 10%, transparent)`
+    : 'color-mix(in srgb, var(--color-text) 7%, transparent)'
   const year = new Date().getFullYear()
   const cairoLink = 'https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap'
 
@@ -200,7 +207,7 @@ export function PortfolioFooter({
         data-testid="portfolio-footer"
         className="border-t pt-12 pb-8 cq-sm:pt-16"
         style={{
-          background: appearance.footerBg || 'var(--color-primary)',
+          background: footerBg,
           color: footerText,
           borderTopColor: footerBorder,
           fontFamily: lang === 'ar'
@@ -345,7 +352,7 @@ export function PortfolioFooter({
                     href={ctaHref}
                     onClick={onLinkClick}
                     className="mt-6 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold shadow-sm transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
-                    style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}
+                    style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}
                   >
                     {lang === 'ar' ? 'تواصل معي' : 'Get in touch'}
                     <ArrowRight className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />

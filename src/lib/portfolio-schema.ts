@@ -598,11 +598,17 @@ const appearanceSchema = z
     theme: safeStr(60),
     font: safeFont,
     primaryColor: safeColor,
+    accentColor: safeColor.optional(),
     bgColorLight: safeColor,
     bgColorDark: safeColor,
+    cardBackground: safeColor.optional(),
+    cardBackgroundDark: safeColor.optional(),
     textColorLight: safeColor,
     textColorDark: safeColor,
+    mutedText: safeColor.optional(),
+    mutedTextDark: safeColor.optional(),
     borderColor: safeColor,
+    borderColorDark: safeColor.optional(),
     outlineColor: safeColor,
     footerBg: safeColor,
     footerText: safeColor,
@@ -615,6 +621,10 @@ const appearanceSchema = z
       .object({ x: z.number().min(0).max(100), y: z.number().min(0).max(100) })
       .optional()
       .catch(undefined),
+    showThemeToggle: z.boolean().optional(),
+    defaultColorMode: z
+      .enum(['light', 'dark', 'light-with-toggle', 'dark-with-toggle'])
+      .optional(),
   })
   .catchall(z.unknown());
 

@@ -25,7 +25,7 @@ import {
   projectFileType,
   projectImageFit,
 } from '@/lib/project-card-visuals'
-import { Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin, FileText, Table2, FolderOpen, Image as ImageIcon, File, X, Menu } from 'lucide-react'
+import { Globe, Mail, Phone, ExternalLink, ArrowRight, ArrowUp, Code, Layout, Palette, Database, PenTool, CheckCircle, Briefcase, User as UserIcon, MessageCircle, Trophy, Star, Users, Heart, Zap, Target, Award, Clock, TrendingUp, Layers, Rocket, MapPin, FileText, Table2, FolderOpen, Image as ImageIcon, File, X, Menu, Sun, Moon } from 'lucide-react'
 
 // Helper to lighten/darken a hex color
 function adjustColor(color: string, amount: number) {
@@ -218,24 +218,53 @@ export function ClassicTemplate({
   const contactLinks = profile.contactLinks || []
   
   const defaultLangMode = getPortfolioLang(appearance)
-  const defaultColorMode = appearance.colorMode || 'light'
+  // New profiles store `defaultColorMode`; `colorMode` is the legacy field.
+  const defaultColorMode: string = appearance.defaultColorMode || appearance.colorMode || 'light'
+  const defaultTheme: 'light' | 'dark' = defaultColorMode.startsWith('dark') ? 'dark' : 'light'
+
+  // Visitor theme: read from localStorage on mount, fall back to owner's defaultColorMode
+  const [visitorTheme, setVisitorTheme] = useState<'light' | 'dark'>(defaultTheme)
+  // If there's a saved visitor preference, use it; otherwise fall back to owner default
+  useEffect(() => {
+    const saved = typeof window !== 'undefined'
+      ? localStorage.getItem(`portfolio-theme-${profile.username || 'unknown'}`)
+      : null
+    if (saved === 'light' || saved === 'dark') {
+      setVisitorTheme(saved)
+    }
+  }, [profile.username])
 
   const [lang, setLang] = useState<'ar' | 'en'>(defaultLangMode === 'ar' ? 'ar' : 'en')
-  const [theme, setTheme] = useState<'light' | 'dark'>(defaultColorMode)
-  // Sync when the incoming defaults change (render-phase adjustment instead
-  // of setState-in-effect: same end state, no cascading render pass).
-  const [prevDefaults, setPrevDefaults] = useState({ lang: defaultLangMode, theme: defaultColorMode })
-  if (prevDefaults.lang !== defaultLangMode || prevDefaults.theme !== defaultColorMode) {
-    setPrevDefaults({ lang: defaultLangMode, theme: defaultColorMode })
+  // Sync when the incoming language default changes (render-phase adjustment
+  // instead of setState-in-effect: same end state, no cascading render pass).
+  const [prevDefaultLang, setPrevDefaultLang] = useState(defaultLangMode)
+  if (prevDefaultLang !== defaultLangMode) {
+    setPrevDefaultLang(defaultLangMode)
     setLang(defaultLangMode === 'ar' ? 'ar' : 'en')
-    setTheme(defaultColorMode)
   }
 
-  // The visitor-facing theme + language toggles were REMOVED from the
-  // portfolio output (owner request): the published portfolio always renders
-  // with the owner's saved defaults (`appearance.colorMode` /
-  // `getPortfolioLang`). No localStorage read/write, so a stale visitor
-  // preference can never override the owner's choice.
+  // Live-update the preview when the owner changes the default color mode.
+  const [prevDefaultTheme, setPrevDefaultTheme] = useState(defaultTheme)
+  if (prevDefaultTheme !== defaultTheme) {
+    setPrevDefaultTheme(defaultTheme)
+    setVisitorTheme(defaultTheme)
+  }
+
+  // Show toggle only when defaultColorMode includes "with-toggle" and showThemeToggle is not false
+  const showToggle = defaultColorMode?.includes('with-toggle') && appearance.showThemeToggle !== false
+
+  // Theme toggle function: flip visitor theme and persist to localStorage
+  const toggleTheme = () => {
+    const newTheme = visitorTheme === 'light' ? 'dark' : 'light'
+    setVisitorTheme(newTheme)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`portfolio-theme-${profile.username || 'unknown'}`, newTheme)
+    }
+  }
+
+  // The owner's default theme (`defaultColorMode`) seeds the visitor theme.
+  // When the owner enables a "with-toggle" mode, visitors may switch and their
+  // choice is persisted in localStorage per username.
 
 
   const [isScrolled, setIsScrolled] = useState(false)
@@ -342,18 +371,27 @@ export function ClassicTemplate({
     .sort((a: any, b: any) => (a.sectionOrder ?? 0) - (b.sectionOrder ?? 0))
 
   // Derived colors
-  const primary = appearance.primaryColor || '#60a5fa'
+  const primary = appearance.primaryColor || '#38BDF8'
+  const accent = appearance.accentColor || '#818CF8'
   const primaryLight = adjustColor(primary, 40)
   
-  const bgLight = appearance.bgColorLight || '#f9fafb'
+  const bgLight = appearance.bgColorLight || '#F0F9FF'
   const bgDark = appearance.bgColorDark || '#111827'
   
-  const currentBg = theme === 'dark' ? bgDark : bgLight
-  const currentText = theme === 'dark' 
-    ? (appearance.textColorDark || '#f3f4f6') 
-    : (appearance.textColorLight || '#1f2937')
-  const currentCard = theme === 'dark' ? adjustColor(bgDark, 15) : adjustColor(bgLight, -5)
-  const currentBorder = appearance.borderColor || (theme === 'dark' ? '#374151' : '#e5e7eb')
+  const isDark = visitorTheme === 'dark'
+  const currentBg = isDark ? bgDark : bgLight
+  const currentText = isDark 
+    ? (appearance.textColorDark || '#E5E7EB') 
+    : (appearance.textColorLight || '#0F172A')
+  const currentMuted = isDark
+    ? (appearance.mutedTextDark || '#858688')
+    : (appearance.mutedText || '#64748B')
+  const currentCard = isDark
+    ? (appearance.cardBackgroundDark || '#374151')
+    : (appearance.cardBackground || '#FFFFFF')
+  const currentBorder = isDark
+    ? (appearance.borderColorDark || '#4B5563')
+    : (appearance.borderColor || '#BAE6FD')
   const currentOutline = appearance.outlineColor || primary
   
   // Font name is charset-guarded: only letters/digits/space/+/- may reach the
@@ -373,13 +411,19 @@ export function ClassicTemplate({
     '--color-primary': primary,
     '--color-primary-light': primaryLight,
     '--color-on-primary': onPrimary,
+    '--color-accent': accent,
+    '--color-gradient': `linear-gradient(135deg, ${primary}, ${accent})`,
     '--color-bg': currentBg,
     '--color-bg-alt': currentCard,
     '--color-text': currentText,
-    '--color-text-muted': `color-mix(in srgb, ${currentText} 70%, ${currentBg})`,
+    '--color-text-muted': currentMuted,
+    '--color-muted': currentMuted,
     '--color-card': currentCard,
+    '--color-card-border': currentBorder,
+    '--border-radius-card': '15px',
+    '--shadow-subtle': 'rgba(0,0,0,0.1) 0px 2px 10px 0px',
+    '--shadow-medium': 'rgba(0,0,0,0.1) 0px 5px 15px 0px',
     '--color-border': currentBorder,
-    '--border-color': currentBorder,
     '--color-outline': currentOutline,
     '--outline-color': currentOutline,
     fontFamily: `"${fontFam}", system-ui, sans-serif`,
@@ -782,7 +826,7 @@ export function ClassicTemplate({
                 {categories.map((cat, i) => {
                   const groupIcon = cat.icon ? getIcon(cat.icon, 'w-4 h-4 cq-sm:w-5 cq-sm:h-5') : null
                   return (
-                    <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group relative overflow-hidden rounded-[15px] border border-[var(--color-border)] p-5 cq-sm:p-[30px] bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                    <div key={i} style={{ transitionDelay: `${Math.min(i * 70, 350)}ms` }} className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group relative overflow-hidden rounded-[var(--border-radius-card)] border border-[var(--color-card-border)] p-5 cq-sm:p-[30px] bg-[var(--color-card)] shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
                       <span className="absolute top-0 inset-x-6 h-1 rounded-full" style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))' }} />
                       <div className="flex items-center gap-2.5 cq-sm:gap-3 mb-5 cq-sm:mb-6">
                         {groupIcon ? (
@@ -1115,7 +1159,7 @@ export function ClassicTemplate({
                       <article
                         key={item.id || index}
                         style={{ transitionDelay: `${Math.min(index * 70, 350)}ms` }}
-                        className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 flex flex-col overflow-hidden rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                        className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 flex flex-col overflow-hidden rounded-[var(--border-radius-card)] border border-[var(--color-card-border)] bg-[var(--color-card)] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
                       >
                         {image ? (
                           <button
@@ -1429,7 +1473,7 @@ export function ClassicTemplate({
         }
 
         const renderListCard = (project: any) => (
-          <div key={project.id} className="group flex flex-col cq-sm:flex-row rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
+          <div key={project.id} className="group flex flex-col cq-sm:flex-row rounded-[var(--border-radius-card)] border border-[var(--color-card-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
             <ProjectCardMedia
               visual={projectCardVisual(project)}
               fileType={projectFileType(project)}
@@ -1452,7 +1496,7 @@ export function ClassicTemplate({
           <div
             key={project.id}
             style={{ transitionDelay: `${Math.min(index * 70, 350)}ms` }}
-            className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col"
+            className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 group rounded-[var(--border-radius-card)] border border-[var(--color-card-border)] bg-[var(--color-card)] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col"
           >
             <ProjectCardMedia
               visual={projectCardVisual(project)}
@@ -1666,7 +1710,7 @@ export function ClassicTemplate({
                   const src = sanitizeUrl(item.imageUrl || item.url || '')
                   if (!src) return null
                   return (
-                    <figure key={item.id || i} className="group rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm">
+                    <figure key={item.id || i} className="group rounded-[var(--border-radius-card)] border border-[var(--color-card-border)] bg-[var(--color-card)] overflow-hidden shadow-sm">
                       <img src={portfolioImageUrl(src, 600)} alt={t(item.caption)} loading="lazy" decoding="async" width={600} height={600} className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500" />
                       {t(item.caption) ? (
                         <figcaption className="px-4 py-3 text-sm text-[var(--color-text-muted)] break-words">{t(item.caption)}</figcaption>
@@ -1707,7 +1751,7 @@ export function ClassicTemplate({
                       download
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center justify-between gap-4 rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-4 shadow-sm hover:shadow-md transition-shadow"
+                      className="flex items-center justify-between gap-4 rounded-[var(--border-radius-card)] border border-[var(--color-card-border)] bg-[var(--color-card)] px-5 py-4 shadow-sm hover:shadow-md transition-shadow"
                     >
                       <span className="text-sm font-medium text-[var(--color-text)] break-words">
                         {t(file.label) || t(file.title) || href}
@@ -1759,7 +1803,7 @@ export function ClassicTemplate({
                       href={href}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center gap-4 rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-4 shadow-sm hover:shadow-md transition-shadow"
+                      className="flex items-center gap-4 rounded-[var(--border-radius-card)] border border-[var(--color-card-border)] bg-[var(--color-card)] px-5 py-4 shadow-sm hover:shadow-md transition-shadow"
                     >
                       <span className="h-10 w-10 shrink-0 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] flex items-center justify-center">
                         {getSocialIcon(platform) || getContactIcon(platform)}
@@ -1816,7 +1860,7 @@ export function ClassicTemplate({
                       <article
                         key={card.id || index}
                         style={{ transitionDelay: `${Math.min(index * 70, 350)}ms` }}
-                        className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 flex flex-col overflow-hidden rounded-[15px] border border-[var(--color-border)] bg-[var(--color-card)] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                        className="fade-up opacity-0 translate-y-5 [&.animate-in]:opacity-100 [&.animate-in]:translate-y-0 flex flex-col overflow-hidden rounded-[var(--border-radius-card)] border border-[var(--color-card-border)] bg-[var(--color-card)] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
                       >
                         {image ? (
                           <div className="h-[150px] cq-sm:h-[190px] w-full shrink-0 overflow-hidden bg-[var(--color-bg)]">
@@ -1996,7 +2040,7 @@ export function ClassicTemplate({
                   className={`truncate max-w-[260px] text-lg font-bold tracking-tight transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
                     isNavbarTransparent
                       ? 'hover:opacity-85'
-                      : theme === 'light'
+                      : !isDark
                         ? 'text-[var(--color-text)] hover:text-[var(--color-primary)]'
                         : 'text-[var(--color-text)] hover:opacity-80'
                   }`}
@@ -2010,6 +2054,33 @@ export function ClassicTemplate({
 
                 {/* Other side: flex group with Contact Me button + Hamburger menu button */}
                 <div className="flex items-center gap-2.5 sm:gap-3">
+                  {showToggle && (
+                    <button
+                      type="button"
+                      onClick={toggleTheme}
+                      aria-label={
+                        isDark
+                          ? (lang === 'ar' ? 'التبديل إلى الوضع الفاتح' : 'Switch to light mode')
+                          : (lang === 'ar' ? 'التبديل إلى الوضع الداكن' : 'Switch to dark mode')
+                      }
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                      style={{
+                        borderColor: isNavbarTransparent
+                          ? 'color-mix(in srgb, var(--color-on-primary) 30%, transparent)'
+                          : 'var(--color-border)',
+                        backgroundColor: isNavbarTransparent
+                          ? 'color-mix(in srgb, var(--color-on-primary) 18%, transparent)'
+                          : 'color-mix(in srgb, var(--color-bg) 80%, transparent)',
+                        color: isNavbarTransparent ? 'var(--color-on-primary)' : 'var(--color-text)',
+                      }}
+                    >
+                      {isDark ? (
+                        <Sun className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <Moon className="h-4 w-4" aria-hidden="true" />
+                      )}
+                    </button>
+                  )}
                   <a
                     href="#contact"
                     className="inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 shadow-sm hover:-translate-y-0.5 active:scale-[0.97]"
@@ -2040,7 +2111,7 @@ export function ClassicTemplate({
                         style={{
                           backgroundColor: isNavbarTransparent
                             ? 'color-mix(in srgb, var(--color-on-primary) 18%, transparent)'
-                            : theme === 'light'
+                            : !isDark
                               ? 'color-mix(in srgb, var(--color-bg) 80%, transparent)'
                               : 'color-mix(in srgb, var(--color-text) 10%, transparent)',
                           borderColor: isNavbarTransparent
@@ -2064,13 +2135,13 @@ export function ClassicTemplate({
                       {isNavMenuOpen && (
                         <div
                           className={`absolute end-0 top-full mt-2.5 min-w-[200px] max-w-[calc(100vw-2rem)] rounded-2xl border p-2 shadow-xl backdrop-blur-md z-50 ${
-                            theme === 'light'
+                            !isDark
                               ? 'border-[var(--color-border)] text-[var(--color-text)] shadow-black/10'
                               : 'border-white/10 text-white shadow-black/40'
                           }`}
                           style={{
                             backgroundColor:
-                              theme === 'light'
+                              !isDark
                                 ? 'color-mix(in srgb, var(--color-bg) 95%, transparent)'
                                 : 'color-mix(in srgb, var(--color-bg) 92%, black)',
                           }}
@@ -2084,10 +2155,10 @@ export function ClassicTemplate({
                                   aria-current={activeId === link.targetId ? 'location' : undefined}
                                   className={`flex items-center px-3.5 py-2 text-sm font-medium transition-colors rounded-xl ${
                                     activeId === link.targetId
-                                      ? (theme === 'light'
+                                      ? (!isDark
                                           ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-semibold'
                                           : 'bg-white/15 text-white font-semibold')
-                                      : (theme === 'light'
+                                      : (!isDark
                                           ? 'text-[var(--color-text)] hover:bg-[var(--color-bg-alt)] hover:text-[var(--color-primary)]'
                                           : 'text-white/85 hover:bg-white/10 hover:text-white')
                                   }`}
@@ -2283,7 +2354,10 @@ export function ClassicTemplate({
                         <div className="flex w-full flex-col items-stretch gap-3 cq-sm:max-w-[420px]" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
                           <a 
                             href="#projects" 
-                            className="w-full px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl bg-white text-[var(--color-primary)] font-bold text-sm shadow-md hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[48px]"
+                            className="w-full px-5 py-2.5 cq-sm:px-6 cq-sm:py-3 rounded-xl text-white font-bold text-sm shadow-medium hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[48px]"
+  style={{
+    background: 'var(--color-gradient)',
+  }}
                           >
                             <ArrowRight className="h-3.5 w-3.5 cq-sm:h-4 cq-sm:w-4 rtl:rotate-180" />
                             <span>{lang === 'ar' ? 'شاهد أعمالي' : 'View My Work'}</span>
@@ -2451,26 +2525,29 @@ export function ClassicTemplate({
             <div
               className="w-full border-t py-5 px-4"
               style={{
-                background: appearance.footerBg || 'var(--color-primary)',
-                color: 'var(--color-bg)',
-                borderTopColor: 'color-mix(in srgb, var(--color-bg) 30%, transparent)',
+                background: appearance.footerBg || 'var(--color-bg)',
+                color: appearance.footerText || 'var(--color-text)',
+                borderTopColor: 'var(--color-border)',
                 fontFamily: lang === 'ar'
                   ? "'Cairo', system-ui, -apple-system, sans-serif"
                   : 'Inter, system-ui, -apple-system, sans-serif',
               }}
             >
               <div className="mx-auto flex max-w-[1200px] flex-col items-center gap-2 text-xs cq-sm:flex-row cq-sm:justify-between">
-                <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--color-bg) 78%, transparent)' }}>
+                <p className="text-xs" style={{ color: appearance.footerText || 'var(--color-muted)' }}>
                   © {new Date().getFullYear()} · {displayName}
                 </p>
-                <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--color-bg) 78%, transparent)' }}>
+                <p className="text-xs" style={{ color: appearance.footerText || 'var(--color-muted)' }}>
                   {lang === 'ar' ? 'بُني بواسطة' : 'Developed with'}{' '}
                   <a
                     href="https://portfolio-hub.online"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-semibold underline underline-offset-2 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-[var(--color-bg)]"
-                    style={{ color: 'var(--color-bg)', textDecorationColor: 'color-mix(in srgb, var(--color-bg) 40%, transparent)' }}
+                    className="font-semibold underline underline-offset-2 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
+                    style={{
+                      color: appearance.footerText || 'var(--color-text)',
+                      textDecorationColor: 'color-mix(in srgb, var(--color-text) 40%, transparent)',
+                    }}
                   >
                     PortfolioHub
                   </a>

@@ -38,12 +38,18 @@ export type ProjectPageProfile = {
   }> | null
   appearance?: {
     colorMode?: 'light' | 'dark' | null
+    defaultColorMode?: 'light' | 'dark' | 'light-with-toggle' | 'dark-with-toggle' | null
     primaryColor?: string | null
     bgColorLight?: string | null
     bgColorDark?: string | null
+    cardBackground?: string | null
+    cardBackgroundDark?: string | null
     textColorLight?: string | null
     textColorDark?: string | null
+    mutedText?: string | null
+    mutedTextDark?: string | null
     borderColor?: string | null
+    borderColorDark?: string | null
     outlineColor?: string | null
     font?: string | null
     logoUrl?: string | null
@@ -60,6 +66,24 @@ type ProjectPageWithItems = Prisma.ProjectPageGetPayload<{ include: { items: tru
 
 function adjustColor(color: string, amount: number) {
   return '#' + color.replace(/^#/, '').replace(/../g, color => ('0' + Math.min(255, Math.max(0, parseInt(color, 16) + amount)).toString(16)).substr(-2))
+}
+
+function isLightColor(colorStr?: string): boolean {
+  if (!colorStr) return false
+  const hex = colorStr.replace('#', '')
+  if (hex.length === 3) {
+    const r = parseInt(hex[0] + hex[0], 16)
+    const g = parseInt(hex[1] + hex[1], 16)
+    const b = parseInt(hex[2] + hex[2], 16)
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6
+  }
+  if (hex.length === 6) {
+    const r = parseInt(hex.substring(0, 2), 16)
+    const g = parseInt(hex.substring(2, 4), 16)
+    const b = parseInt(hex.substring(4, 6), 16)
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6
+  }
+  return false
 }
 
 function itemHref(username: string, item: any): string {
@@ -96,18 +120,26 @@ export function ProjectPageView({
 }) {
   const appearance = profile.appearance || {}
   const lang = getPortfolioLang(appearance) === 'ar' ? 'ar' : 'en'
-  const theme = appearance.colorMode === 'dark' ? 'dark' : 'light'
+  const defaultColorMode = appearance.defaultColorMode || appearance.colorMode || 'light'
+  const theme = defaultColorMode.startsWith('dark') ? 'dark' : 'light'
 
-  const primary = appearance.primaryColor || '#60a5fa'
+  const primary = appearance.primaryColor || '#38BDF8'
   const primaryLight = adjustColor(primary, 40)
-  const bgLight = appearance.bgColorLight || '#f9fafb'
+  const bgLight = appearance.bgColorLight || '#F0F9FF'
   const bgDark = appearance.bgColorDark || '#111827'
   const currentBg = theme === 'dark' ? bgDark : bgLight
   const currentText = theme === 'dark'
-    ? (appearance.textColorDark || '#f3f4f6')
-    : (appearance.textColorLight || '#1f2937')
-  const currentCard = theme === 'dark' ? adjustColor(bgDark, 15) : adjustColor(bgLight, -5)
-  const currentBorder = appearance.borderColor || (theme === 'dark' ? '#374151' : '#e5e7eb')
+    ? (appearance.textColorDark || '#E5E7EB')
+    : (appearance.textColorLight || '#0F172A')
+  const currentMuted = theme === 'dark'
+    ? (appearance.mutedTextDark || '#858688')
+    : (appearance.mutedText || '#64748B')
+  const currentCard = theme === 'dark'
+    ? (appearance.cardBackgroundDark || '#374151')
+    : (appearance.cardBackground || '#FFFFFF')
+  const currentBorder = theme === 'dark'
+    ? (appearance.borderColorDark || '#4B5563')
+    : (appearance.borderColor || '#BAE6FD')
   const currentOutline = appearance.outlineColor || primary
   const fontFam = appearance.font || 'Inter'
   const displayName = pickLang(profile.localized?.displayName, lang) || profile.displayName || profile.username
@@ -127,11 +159,14 @@ export function ProjectPageView({
   const style = {
     '--color-primary': primary,
     '--color-primary-light': primaryLight,
+    '--color-on-primary': isLightColor(primary) ? '#0F172A' : '#FFFFFF',
     '--color-bg': currentBg,
     '--color-bg-alt': currentCard,
     '--color-text': currentText,
-    '--color-text-muted': `color-mix(in srgb, ${currentText} 70%, ${currentBg})`,
+    '--color-text-muted': currentMuted,
+    '--color-muted': currentMuted,
     '--color-card': currentCard,
+    '--color-card-border': currentBorder,
     '--color-border': currentBorder,
     '--border-color': currentBorder,
     '--color-outline': currentOutline,
