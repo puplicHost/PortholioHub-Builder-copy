@@ -5,8 +5,8 @@ import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } f
 import {
   ArrowLeft, Monitor, Smartphone, ExternalLink, Globe,
   Undo2, Redo2, CheckCircle, Check, Loader2, AlertCircle,
-  GripVertical, Eye, EyeOff, ChevronRight, LayoutGrid,
-  Palette, Layout, FileText, Menu, X, Sliders, Plus, Trash2,
+  GripVertical, Eye, EyeOff, ChevronRight, ChevronUp, ChevronDown, LayoutGrid,
+  Palette, Layout, FileText, Menu, X, Sliders, Plus, Trash2, Edit,
   Trophy, Star, Users, Briefcase, Heart, Zap, Target, Award,
   Clock, TrendingUp, Code, Layers, Rocket, PenTool, Sun, Moon,
   ArrowUp, BarChart3, LogOut, Languages, User, AlertTriangle, Lock, Save,
@@ -48,12 +48,14 @@ import { uploadToCloudinary } from '@/lib/cloudinary'
 import {
   experienceDateError,
   experienceYearOptions,
+  formatExperienceRange,
   isLegacyExperienceDate,
   isStoredMonth,
   monthOptions,
   parseLegacyExperienceDate,
   presentLabel,
 } from '@/lib/experience-dates'
+import { ReorderButtons, sortableRowHandleClass } from './ui/ReorderButtons'
 import { LivePreview } from './LivePreview'
 import { ProjectPageView } from '@/app/u/[username]/projects/[slug]/ProjectPageView'
 import {
@@ -383,6 +385,157 @@ function ItemCard({ children, title, subtitle, onRemove, onEdit }: { children: R
       </div>
       <div className="space-y-3">
         {children}
+      </div>
+    </div>
+  )
+}
+
+// Experience items live inside the section content as a plain array, so their
+// order is the array order. dnd-kit needs a stable id per row. Rows saved with
+// an id use it; legacy rows without one get a stable per-object uid. The uid
+// lives under a Symbol key, so JSON.stringify never persists it while object
+// spread carries it through edits — ids survive reorders and edits without
+// remounting rows. Duplicate ids are disambiguated.
+const EXPERIENCE_UID = Symbol('experienceUid')
+let experienceUidCounter = 0
+
+function experienceSortableIds(items: any[]): string[] {
+  const seen = new Map<string, number>()
+  return items.map((item) => {
+    let raw: string
+    if (typeof item?.id === 'string' && item.id.trim()) {
+      raw = item.id.trim()
+    } else {
+      if (!item[EXPERIENCE_UID]) item[EXPERIENCE_UID] = `experience-item-${++experienceUidCounter}`
+      raw = item[EXPERIENCE_UID]
+    }
+    const count = seen.get(raw) ?? 0
+    seen.set(raw, count + 1)
+    return count === 0 ? raw : `${raw}--${count}`
+  })
+}
+
+function SortableExperienceRow({
+  id,
+  index,
+  total,
+  title,
+  subtitle,
+  logo,
+  selected,
+  dragHandleLabel,
+  moveUpLabel,
+  moveDownLabel,
+  selectLabel,
+  removeLabel,
+  onSelect,
+  onMoveUp,
+  onMoveDown,
+  onDelete,
+}: {
+  id: string
+  index: number
+  total: number
+  title: string
+  subtitle: string
+  logo?: string
+  selected?: boolean
+  dragHandleLabel: string
+  moveUpLabel: string
+  moveDownLabel: string
+  selectLabel: string
+  removeLabel: string
+  onSelect: () => void
+  onMoveUp: () => void
+  onMoveDown: () => void
+  onDelete: () => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      data-experience-row={id}
+      data-selected={selected ? 'true' : undefined}
+      className={`flex items-center justify-between rounded-lg border bg-[var(--color-surface)] p-3 transition-all ${
+        selected ? 'border-[var(--color-primary)]' : 'border-[var(--color-border)]'
+      } ${
+        isDragging ? 'z-50 opacity-60 shadow-lg ring-2 ring-[var(--color-primary)]' : ''
+      }`}
+    >
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <div
+          {...attributes}
+          {...listeners}
+          aria-label={dragHandleLabel}
+          data-experience-row-handle
+          className={sortableRowHandleClass}
+        >
+          <GripVertical className="h-4 w-4" aria-hidden="true" />
+        </div>
+
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-secondary)] text-[var(--color-text-muted)]" aria-hidden="true">
+          {logo ? (
+            <img src={logo} alt="" className="h-9 w-9 rounded-md object-cover" />
+          ) : (
+            <Briefcase className="h-4 w-4" aria-hidden="true" />
+          )}
+        </span>
+
+        <button
+          type="button"
+          onClick={onSelect}
+          aria-label={selectLabel}
+          aria-current={selected ? 'true' : undefined}
+          className="min-w-0 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+        >
+          <span className="block truncate text-sm font-medium text-[var(--color-text-primary)]">{title}</span>
+          <span className="block text-[10px] text-[var(--color-text-muted)]">{subtitle}</span>
+        </button>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1">
+        <ReorderButtons
+          index={index}
+          total={total}
+          upLabel={moveUpLabel}
+          downLabel={moveDownLabel}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+        />
+
+        <button
+          type="button"
+          aria-label={selectLabel}
+          title={selectLabel}
+          onClick={onSelect}
+          className="rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+        >
+          <Edit className="h-4 w-4" aria-hidden="true" />
+        </button>
+
+        <button
+          type="button"
+          aria-label={removeLabel}
+          title={removeLabel}
+          onClick={onDelete}
+          className="rounded p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-danger)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+        </button>
       </div>
     </div>
   )
@@ -933,6 +1086,7 @@ export function BuilderClient({
   const [leftTab, setLeftTab] = useState<'sections' | 'pages'>('sections')
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
   const [selectedSectionType, setSelectedSectionType] = useState<string | null>(null)
+  const [selectedExpBySection, setSelectedExpBySection] = useState<Record<string, string | null>>({})
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop')
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false)
   const [rightSheetOpen, setRightSheetOpen] = useState(false)
@@ -956,6 +1110,9 @@ export function BuilderClient({
     'idle' | 'publishing' | 'unpublishing' | 'published' | 'unpublished'
   >('idle')
   const publishResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Right-panel scroll container: reset to top on section switch so the
+  // section's first card (e.g. the Experience items list) is immediately visible.
+  const rightPanelScrollRef = useRef<HTMLDivElement | null>(null)
   // Mobile bottom-bar "Save Changes" feedback: idle → saving → saved → idle.
   const [mobileSaveState, setMobileSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const saveResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -986,6 +1143,12 @@ export function BuilderClient({
       if (saveResetTimer.current) clearTimeout(saveResetTimer.current)
     }
   }, [])
+
+  // Section switch resets the right panel scroll so the section's top card
+  // (e.g. the Experience items list) is immediately visible without scrolling.
+  useEffect(() => {
+    if (rightPanelScrollRef.current) rightPanelScrollRef.current.scrollTop = 0
+  }, [selectedSectionId, selectedSectionType])
 
   // On a real phone the device switcher is hidden, so the phone frame is
   // always used there regardless of the desktop/mobile toggle.
@@ -2935,41 +3098,190 @@ case 'skills':
           </div>
         )
       case 'experience':
-        const experienceItems = c.items || []
+        const experienceItems = Array.isArray(c.items) ? c.items : []
         const expDisplayMode = c.displayMode || 'timeline'
+        const experienceIds = experienceSortableIds(experienceItems)
+        const moveExperienceItem = (from: number, to: number) => {
+          if (from < 0 || from >= experienceItems.length) return
+           if (to < 0 || to >= experienceItems.length) return
+           if (from === to) return
+          updateSectionContentRaw(selectedSection.id, 'items', arrayMove(experienceItems, from, to))
+        }
+        const storedExpSelectedId = selectedExpBySection[selectedSection.id]
+        const selectedExpId =
+          storedExpSelectedId && experienceIds.includes(storedExpSelectedId)
+            ? storedExpSelectedId
+            : (experienceIds[0] ?? null)
+        const selectedExpIdx = selectedExpId ? experienceIds.indexOf(selectedExpId) : -1
+        const selectedExpItem = selectedExpIdx >= 0 ? experienceItems[selectedExpIdx] : null
+        const handleSelectExperience = (id: string) => {
+          setSelectedExpBySection((prev) => ({ ...prev, [selectedSection.id]: id }))
+        }
+        const handleAddExperience = () => {
+          const newId = Math.random().toString(36).slice(2, 11)
+          const newItems = [...experienceItems, {
+            id: newId,
+            jobTitle: 'New Role',
+            companyName: '',
+            isCurrent: false
+          }]
+          updateSectionContentRaw(selectedSection.id, 'items', newItems)
+          setSelectedExpBySection((prev) => ({ ...prev, [selectedSection.id]: newId }))
+        }
+        const handleRemoveExperience = (idx: number) => {
+          const removedId = experienceIds[idx]
+          const nextItems = experienceItems.filter((_: any, i: number) => i !== idx)
+          const nextIds = experienceSortableIds(nextItems)
+          let nextSelected: string | null = selectedExpId
+          if (removedId === selectedExpId) {
+            if (nextIds.length === 0) nextSelected = null
+            else if (idx < nextIds.length) nextSelected = nextIds[idx]
+            else nextSelected = nextIds[nextIds.length - 1]
+          }
+          setSelectedExpBySection((prev) => ({ ...prev, [selectedSection.id]: nextSelected }))
+          removeSectionArrayItem(selectedSection.id, 'items', experienceItems, idx)
+        }
+        // Single mutation helper for one experience item: shallow-merges a patch
+        // into items[i] and saves the array (object spread also carries the
+        // legacy-row Symbol uid, keeping sortable ids stable across edits).
+        const updateExperienceItem = (i: number, patch: Record<string, any>) => {
+          const newItems = [...experienceItems]
+          newItems[i] = { ...newItems[i], ...patch }
+          updateSectionContentRaw(selectedSection.id, 'items', newItems)
+        }
         // Bilingual setter for item sub-fields: keeps the `{en,ar}` shape and
         // upgrades legacy flat strings on first edit (item 8).
         const setExpField = (i: number, field: string, l: 'ar' | 'en', val: string) => {
-          const newItems = [...experienceItems]
-          const cur = newItems[i][field]
+          const cur = experienceItems[i][field]
           const obj = (cur && typeof cur === 'object') ? cur : { en: typeof cur === 'string' ? cur : '' }
-          newItems[i] = { ...newItems[i], [field]: { ...obj, [l]: val } }
-          updateSectionContentRaw(selectedSection.id, 'items', newItems)
+          updateExperienceItem(i, { [field]: { ...obj, [l]: val } })
         }
         const expMonths = monthOptions(locale)
         const expYears = experienceYearOptions().map((year) => ({ value: year, label: year }))
         const monthPart = (value: unknown) => (isStoredMonth(value) ? value.slice(5, 7) : '')
         const yearPart = (value: unknown) => (isStoredMonth(value) ? value.slice(0, 4) : '')
         const setExpDatePart = (i: number, field: 'startDate' | 'endDate', part: 'month' | 'year', value: string) => {
-          const newItems = [...experienceItems]
-          const current = isStoredMonth(newItems[i][field]) ? newItems[i][field] : ''
+          const current = isStoredMonth(experienceItems[i][field]) ? experienceItems[i][field] : ''
           const [currentYear, currentMonth] = current.split('-')
-          if (!value) {
-            newItems[i][field] = ''
-          } else {
+          let next = ''
+          if (value) {
             const nextYear = part === 'year' ? value : currentYear || String(new Date().getFullYear())
             const nextMonth = part === 'month' ? value : currentMonth || '01'
-            newItems[i][field] = `${nextYear}-${nextMonth}`
+            next = `${nextYear}-${nextMonth}`
           }
-          updateSectionContentRaw(selectedSection.id, 'items', newItems)
+          updateExperienceItem(i, { [field]: next })
         }
         const editLegacyDate = (i: number, field: 'startDate' | 'endDate') => {
-          const newItems = [...experienceItems]
-          newItems[i][field] = parseLegacyExperienceDate(newItems[i][field])
-          updateSectionContentRaw(selectedSection.id, 'items', newItems)
+          updateExperienceItem(i, { [field]: parseLegacyExperienceDate(experienceItems[i][field]) })
+        }
+        const expRowTitle = (it: any) => pickLang(it.jobTitle, 'en') || t('experience.untitledRole')
+        const expRowSubtitle = (it: any) => {
+          const company = pickLang(it.companyName, 'en') || t('experience.untitledCompany')
+          const range = formatExperienceRange(it.startDate, it.endDate, Boolean(it.isCurrent), locale)
+          return range ? `${company} · ${range}` : company
         }
         return (
           <div className="space-y-6">
+            <div id="experience-reorder-card" className="scroll-mt-4">
+            <FormCard title={t('form.reorderExperienceItems')} subtitle={t('form.subtitleReorderExperienceItems')}>
+              <div className="space-y-2">
+                {experienceItems.length === 0 ? (
+                  <p className="text-xs text-[var(--color-text-muted)] font-medium">{t('empty.experience')}</p>
+                ) : (
+                  experienceItems.map((item: any, idx: number) => (
+                    <div
+                      key={experienceIds[idx]}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-2"
+                    >
+                      <span className="min-w-0 truncate text-sm font-medium text-[var(--color-text-primary)]">
+                        {expRowTitle(item)}
+                      </span>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          aria-label={t('experience.moveUp')}
+                          title={t('experience.moveUp')}
+                          disabled={idx === 0}
+                          onClick={() => moveExperienceItem(idx, idx - 1)}
+                          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                        >
+                          <ChevronUp className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={t('experience.moveDown')}
+                          title={t('experience.moveDown')}
+                          disabled={idx === experienceItems.length - 1}
+                          onClick={() => moveExperienceItem(idx, idx + 1)}
+                          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                        >
+                          <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </FormCard>
+            </div>
+            <div id="experience-entries-card" className="scroll-mt-4">
+            <FormCard title={t('form.experienceItems')} subtitle={t('experience.entriesListHint')}>
+              <div className="space-y-3">
+                <DndContext
+                  id={`dnd-experience-list-${selectedSection.id}`}
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(event) => {
+                    const { active, over } = event
+                    if (!over || active.id === over.id) return
+                    const oldIndex = experienceIds.indexOf(String(active.id))
+                    const newIndex = experienceIds.indexOf(String(over.id))
+                    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
+                    moveExperienceItem(oldIndex, newIndex)
+                  }}
+                >
+                  <SortableContext items={experienceIds} strategy={verticalListSortingStrategy}>
+                    <div className="max-h-80 space-y-2 overflow-y-auto scrollbar-thin pe-1">
+                      {experienceItems.map((item: any, idx: number) => (
+                        <SortableExperienceRow
+                          key={experienceIds[idx]}
+                          id={experienceIds[idx]}
+                          index={idx}
+                          total={experienceItems.length}
+                          title={expRowTitle(item)}
+                          subtitle={expRowSubtitle(item)}
+                          logo={item.companyLogo}
+                          selected={experienceIds[idx] === selectedExpId}
+                          dragHandleLabel={t('experience.dragReorder')}
+                          moveUpLabel={t('experience.moveUp')}
+                          moveDownLabel={t('experience.moveDown')}
+                          selectLabel={t('experience.selectRow', { name: pickLang(item.jobTitle, 'en') || 'New Role' })}
+                          removeLabel={t('common.removeItem')}
+                          onSelect={() => handleSelectExperience(experienceIds[idx])}
+                          onMoveUp={() => moveExperienceItem(idx, idx - 1)}
+                          onMoveDown={() => moveExperienceItem(idx, idx + 1)}
+                          onDelete={() => handleRemoveExperience(idx)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+
+                {experienceItems.length === 0 && (
+                  <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-surface-secondary)]">
+                    <p className="text-xs text-[var(--color-text-muted)] font-medium">{t('empty.experience')}</p>
+                  </div>
+                )}
+
+                <AddActionCard
+                  onClick={handleAddExperience}
+                  label={t('actions.addExperience')}
+                  icon={Briefcase}
+                />
+              </div>
+            </FormCard>
+            </div>
+
             <FormCard title={t('form.sectionSettings')} subtitle={t('form.subtitleSectionSettings')}>
               <div className="space-y-4">
                 <div>
@@ -3030,247 +3342,221 @@ case 'skills':
               </div>
             </FormCard>
 
-            <FormCard title={t('form.experienceItems')} subtitle={t('form.subtitleExperienceItems')}>
+            <div id="experience-detail-card" className="scroll-mt-4">
+            <FormCard title={t('experience.selectedEntry')} subtitle={t('experience.selectedEntryHint')}>
               <div className="space-y-4">
-                {experienceItems.map((item: any, idx: number) => (
-                  <ItemCard
-                    key={item.id}
-                    title={pickLang(item.jobTitle, 'en') || 'New Role'}
-                    subtitle={pickLang(item.companyName, 'en') || 'Company'}
-                    onRemove={() => removeSectionArrayItem(selectedSection.id, 'items', experienceItems, idx)}
-                  >
-                      <div className="flex flex-col gap-4 mt-3">
-                        <BiField
-                          idBase={`exp-${item.id}-job`}
-                          label={t('field.jobTitle')}
-                          value={item.jobTitle}
-                          showEn={showEn}
-                          showAr={showAr}
-                          onChange={(l, v) => setExpField(idx, 'jobTitle', l, v)}
-                        />
-                        <BiField
-                          idBase={`exp-${item.id}-company`}
-                          label={t('field.companyName')}
-                          value={item.companyName}
-                          showEn={showEn}
-                          showAr={showAr}
-                          onChange={(l, v) => setExpField(idx, 'companyName', l, v)}
-                        />
-                      <div>
-                        <label htmlFor={`exp-${item.id}-logo`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.companyLogoUrl')}</label>
-                        <div className="flex gap-2">
-                          {(item.companyLogo || isUploading(`experience-logo-${item.id}`)) && (
-                            <div className="relative h-[44px] w-[44px] shrink-0 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
-                              {item.companyLogo && (
-                                <img src={item.companyLogo} alt={t('field.companyLogoUrl')} className="h-full w-full object-cover" />
-                              )}
-                              <UploadOverlay active={isUploading(`experience-logo-${item.id}`)} progress={uploadPercent(`experience-logo-${item.id}`)} label={t('common.uploading')} />
+                {selectedExpItem && selectedExpIdx >= 0 ? (
+                      <div key={experienceIds[selectedExpIdx]} id={`experience-detail-${experienceIds[selectedExpIdx]}`} className="scroll-mt-4">
+                      <ItemCard
+                        title={expRowTitle(selectedExpItem)}
+                        subtitle={expRowSubtitle(selectedExpItem)}
+                        onRemove={() => handleRemoveExperience(selectedExpIdx)}
+                      >
+                        <div className="flex flex-col gap-4 mt-3">
+                          <BiField
+                            idBase={`exp-${selectedExpItem.id}-job`}
+                            label={t('field.jobTitle')}
+                            value={selectedExpItem.jobTitle}
+                            showEn={showEn}
+                            showAr={showAr}
+                            onChange={(l, v) => setExpField(selectedExpIdx, 'jobTitle', l, v)}
+                          />
+                          <BiField
+                            idBase={`exp-${selectedExpItem.id}-company`}
+                            label={t('field.companyName')}
+                            value={selectedExpItem.companyName}
+                            showEn={showEn}
+                            showAr={showAr}
+                            onChange={(l, v) => setExpField(selectedExpIdx, 'companyName', l, v)}
+                          />
+                        <div>
+                          <label htmlFor={`exp-${selectedExpItem.id}-logo`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.companyLogoUrl')}</label>
+                          <div className="flex gap-2">
+                            {(selectedExpItem.companyLogo || isUploading(`experience-logo-${selectedExpItem.id}`)) && (
+                              <div className="relative h-[44px] w-[44px] shrink-0 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)]">
+                                {selectedExpItem.companyLogo && (
+                                  <img src={selectedExpItem.companyLogo} alt={t('field.companyLogoUrl')} className="h-full w-full object-cover" />
+                                )}
+                                <UploadOverlay active={isUploading(`experience-logo-${selectedExpItem.id}`)} progress={uploadPercent(`experience-logo-${selectedExpItem.id}`)} label={t('common.uploading')} />
+                              </div>
+                            )}
+                            <Input
+                              id={`exp-${selectedExpItem.id}-logo`}
+                              value={selectedExpItem.companyLogo || ''}
+                              onChange={(e) => {
+                                updateExperienceItem(selectedExpIdx, { companyLogo: e.target.value })
+                              }}
+                              className="flex-1 min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
+                              placeholder={t('placeholder.url')}
+                            />
+                            <FileButton
+                              accept="image/*"
+                              disabled={isUploading(`experience-logo-${selectedExpItem.id}`)}
+                              onFiles={(files) =>
+                                void uploadImage(`experience-logo-${selectedExpItem.id}`, files?.[0], (url) => {
+                                  updateExperienceItem(selectedExpIdx, { companyLogo: url })
+                                })
+                              }
+                              className="h-[44px] min-h-[44px] px-3"
+                            >
+                              {isUploading(`experience-logo-${selectedExpItem.id}`) && <Loader2 className="h-4 w-4 animate-spin" />}
+                              {isUploading(`experience-logo-${selectedExpItem.id}`) ? `${t('common.uploading')} ${uploadPercent(`experience-logo-${selectedExpItem.id}`)}%` : t('common.upload')}
+                            </FileButton>
+                            {selectedExpItem.companyLogo && (
+                              <ImageDeleteButton
+                                onDelete={() => {
+                                  updateExperienceItem(selectedExpIdx, { companyLogo: '' })
+                                }}
+                                className="h-[44px] min-h-[44px]"
+                              />
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label htmlFor={`exp-${selectedExpItem.id}-start`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.startDate')}</label>
+                          {isLegacyExperienceDate(selectedExpItem.startDate) ? (
+                            <div className="flex min-h-[44px] items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-2">
+                              <span className="min-w-0 flex-1 truncate text-[14px] text-[var(--color-text-primary)]" title={selectedExpItem.startDate}>
+                                {selectedExpItem.startDate}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => editLegacyDate(selectedExpIdx, 'startDate')}
+                                className="shrink-0 cursor-pointer rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] font-semibold text-[var(--color-primary)] hover:border-[var(--color-primary)]"
+                              >
+                                {t('misc.editDate')}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                              <Select
+                                id={`exp-${selectedExpItem.id}-start-month`}
+                                value={monthPart(selectedExpItem.startDate)}
+                                onChange={(value) => setExpDatePart(selectedExpIdx, 'startDate', 'month', value)}
+                                placeholder={t('field.month')}
+                                options={expMonths}
+                              />
+                              <Select
+                                id={`exp-${selectedExpItem.id}-start-year`}
+                                value={yearPart(selectedExpItem.startDate)}
+                                onChange={(value) => setExpDatePart(selectedExpIdx, 'startDate', 'year', value)}
+                                placeholder={t('field.year')}
+                                options={expYears}
+                              />
                             </div>
                           )}
-                          <Input
-                            id={`exp-${item.id}-logo`}
-                            value={item.companyLogo || ''}
-                            onChange={(e) => {
-                              const newItems = [...experienceItems]
-                              newItems[idx].companyLogo = e.target.value
-                              updateSectionContentRaw(selectedSection.id, 'items', newItems)
-                            }}
-                            className="flex-1 min-h-[44px] h-[44px] text-[15px] px-[12px] py-[10px]"
-                            placeholder={t('placeholder.url')}
-                          />
-                          <FileButton
-                            accept="image/*"
-                            disabled={isUploading(`experience-logo-${item.id}`)}
-                            onFiles={(files) =>
-                              void uploadImage(`experience-logo-${item.id}`, files?.[0], (url) => {
-                                const newItems = [...experienceItems]
-                                newItems[idx].companyLogo = url
-                                updateSectionContentRaw(selectedSection.id, 'items', newItems)
-                              })
-                            }
-                            className="h-[44px] min-h-[44px] px-3"
-                          >
-                            {isUploading(`experience-logo-${item.id}`) && <Loader2 className="h-4 w-4 animate-spin" />}
-                            {isUploading(`experience-logo-${item.id}`) ? `${t('common.uploading')} ${uploadPercent(`experience-logo-${item.id}`)}%` : t('common.upload')}
-                          </FileButton>
-                          {item.companyLogo && (
-                            <ImageDeleteButton
-                              onDelete={() => {
-                                const newItems = [...experienceItems]
-                                newItems[idx].companyLogo = ''
-                                updateSectionContentRaw(selectedSection.id, 'items', newItems)
+                        </div>
+                        <div>
+                          <label htmlFor={`exp-${selectedExpItem.id}-end`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.endDate')}</label>
+                          {selectedExpItem.isCurrent ? (
+                            <div className="flex min-h-[44px] items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-2 text-[14px] font-semibold text-[var(--color-primary)]">
+                              {presentLabel(locale)}
+                            </div>
+                          ) : isLegacyExperienceDate(selectedExpItem.endDate) ? (
+                            <div className="flex min-h-[44px] items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-2">
+                              <span className="min-w-0 flex-1 truncate text-[14px] text-[var(--color-text-primary)]" title={selectedExpItem.endDate}>
+                                {selectedExpItem.endDate}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => editLegacyDate(selectedExpIdx, 'endDate')}
+                                className="shrink-0 cursor-pointer rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] font-semibold text-[var(--color-primary)] hover:border-[var(--color-primary)]"
+                              >
+                                {t('misc.editDate')}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                              <Select
+                                id={`exp-${selectedExpItem.id}-end-month`}
+                                value={monthPart(selectedExpItem.endDate)}
+                                onChange={(value) => setExpDatePart(selectedExpIdx, 'endDate', 'month', value)}
+                                placeholder={t('field.month')}
+                                options={expMonths}
+                                disabled={selectedExpItem.isCurrent}
+                              />
+                              <Select
+                                id={`exp-${selectedExpItem.id}-end-year`}
+                                value={yearPart(selectedExpItem.endDate)}
+                                onChange={(value) => setExpDatePart(selectedExpIdx, 'endDate', 'year', value)}
+                                placeholder={t('field.year')}
+                                options={expYears}
+                                disabled={selectedExpItem.isCurrent}
+                              />
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 mt-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedExpItem.isCurrent || false}
+                              onChange={(e) => {
+                                updateExperienceItem(selectedExpIdx, e.target.checked ? { isCurrent: true, endDate: '' } : { isCurrent: false })
                               }}
-                              className="h-[44px] min-h-[44px]"
+                              className="w-4 h-4 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] bg-[var(--color-surface)]"
+                              id={`current-${selectedExpItem.id}`}
                             />
+                            <label htmlFor={`current-${selectedExpItem.id}`} className="text-xs font-medium text-[var(--color-text-secondary)] cursor-pointer">
+                              {t('misc.currentlyWorking')}
+                            </label>
+                          </div>
+                          {experienceDateError(selectedExpItem, locale) && (
+                            <p role="alert" className="mt-2 text-xs font-semibold text-[var(--color-danger)]">
+                              {experienceDateError(selectedExpItem, locale)}
+                            </p>
                           )}
                         </div>
-                      </div>
-                      
-                      <div>
-                        <label htmlFor={`exp-${item.id}-start`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.startDate')}</label>
-                        {isLegacyExperienceDate(item.startDate) ? (
-                          <div className="flex min-h-[44px] items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-2">
-                            <span className="min-w-0 flex-1 truncate text-[14px] text-[var(--color-text-primary)]" title={item.startDate}>
-                              {item.startDate}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => editLegacyDate(idx, 'startDate')}
-                              className="shrink-0 cursor-pointer rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] font-semibold text-[var(--color-primary)] hover:border-[var(--color-primary)]"
-                            >
-                              {t('misc.editDate')}
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-2 gap-2">
-                            <Select
-                              id={`exp-${item.id}-start-month`}
-                              value={monthPart(item.startDate)}
-                              onChange={(value) => setExpDatePart(idx, 'startDate', 'month', value)}
-                              placeholder={t('field.month')}
-                              options={expMonths}
-                            />
-                            <Select
-                              id={`exp-${item.id}-start-year`}
-                              value={yearPart(item.startDate)}
-                              onChange={(value) => setExpDatePart(idx, 'startDate', 'year', value)}
-                              placeholder={t('field.year')}
-                              options={expYears}
-                            />
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <label htmlFor={`exp-${item.id}-end`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.endDate')}</label>
-                        {item.isCurrent ? (
-                          <div className="flex min-h-[44px] items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-2 text-[14px] font-semibold text-[var(--color-primary)]">
-                            {presentLabel(locale)}
-                          </div>
-                        ) : isLegacyExperienceDate(item.endDate) ? (
-                          <div className="flex min-h-[44px] items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-2">
-                            <span className="min-w-0 flex-1 truncate text-[14px] text-[var(--color-text-primary)]" title={item.endDate}>
-                              {item.endDate}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => editLegacyDate(idx, 'endDate')}
-                              className="shrink-0 cursor-pointer rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] font-semibold text-[var(--color-primary)] hover:border-[var(--color-primary)]"
-                            >
-                              {t('misc.editDate')}
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-2 gap-2">
-                            <Select
-                              id={`exp-${item.id}-end-month`}
-                              value={monthPart(item.endDate)}
-                              onChange={(value) => setExpDatePart(idx, 'endDate', 'month', value)}
-                              placeholder={t('field.month')}
-                              options={expMonths}
-                              disabled={item.isCurrent}
-                            />
-                            <Select
-                              id={`exp-${item.id}-end-year`}
-                              value={yearPart(item.endDate)}
-                              onChange={(value) => setExpDatePart(idx, 'endDate', 'year', value)}
-                              placeholder={t('field.year')}
-                              options={expYears}
-                              disabled={item.isCurrent}
-                            />
-                          </div>
-                        )}
-                        <div className="flex items-center gap-2 mt-2">
-                          <input
-                            type="checkbox"
-                            checked={item.isCurrent || false}
-                            onChange={(e) => {
-                              const newItems = [...experienceItems]
-                              newItems[idx].isCurrent = e.target.checked
-                              if (e.target.checked) newItems[idx].endDate = ''
-                              updateSectionContentRaw(selectedSection.id, 'items', newItems)
+  
+                        <BiField
+                          idBase={`exp-${selectedExpItem.id}-location`}
+                          label={t('field.location')}
+                          value={selectedExpItem.location}
+                          showEn={showEn}
+                          showAr={showAr}
+                          onChange={(l, v) => setExpField(selectedExpIdx, 'location', l, v)}
+                          placeholderEn={t('placeholder.locationEn')}
+                          placeholderAr={t('placeholder.locationAr')}
+                        />
+                        <div>
+                          <label htmlFor={`exp-${selectedExpItem.id}-mode`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.workMode')}</label>
+                          <Select
+                            id={`exp-${selectedExpItem.id}-mode`}
+                            value={selectedExpItem.workMode || ''}
+                            onChange={(value) => {
+                              updateExperienceItem(selectedExpIdx, { workMode: value })
                             }}
-                            className="w-4 h-4 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] bg-[var(--color-surface)]"
-                            id={`current-${item.id}`}
+                            placeholder={t('common.select')}
+                            options={[
+                              { value: 'Remote', label: t('display.remote') },
+                              { value: 'Hybrid', label: t('display.hybrid') },
+                              { value: 'On-site', label: t('display.onsite') },
+                            ]}
                           />
-                          <label htmlFor={`current-${item.id}`} className="text-xs font-medium text-[var(--color-text-secondary)] cursor-pointer">
-                            {t('misc.currentlyWorking')}
-                          </label>
                         </div>
-                        {experienceDateError(item, locale) && (
-                          <p role="alert" className="mt-2 text-xs font-semibold text-[var(--color-danger)]">
-                            {experienceDateError(item, locale)}
-                          </p>
-                        )}
+  
+                        <div>
+                          <label htmlFor={`exp-${selectedExpItem.id}-desc`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.descriptionBullets')}</label>
+                          <textarea
+                            id={`exp-${selectedExpItem.id}-desc`}
+                            value={selectedExpItem.description || ''}
+                            onChange={(e) => {
+                              updateExperienceItem(selectedExpIdx, { description: e.target.value })
+                            }}
+                            className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
+                            placeholder={t('placeholder.experienceBullets')}
+                          />
+                        </div>
                       </div>
-
-                      <BiField
-                        idBase={`exp-${item.id}-location`}
-                        label={t('field.location')}
-                        value={item.location}
-                        showEn={showEn}
-                        showAr={showAr}
-                        onChange={(l, v) => setExpField(idx, 'location', l, v)}
-                        placeholderEn={t('placeholder.locationEn')}
-                        placeholderAr={t('placeholder.locationAr')}
-                      />
-                      <div>
-                        <label htmlFor={`exp-${item.id}-mode`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.workMode')}</label>
-                        <Select
-                          id={`exp-${item.id}-mode`}
-                          value={item.workMode || ''}
-                          onChange={(value) => {
-                            const newItems = [...experienceItems]
-                            newItems[idx].workMode = value
-                            updateSectionContentRaw(selectedSection.id, 'items', newItems)
-                          }}
-                          placeholder={t('common.select')}
-                          options={[
-                            { value: 'Remote', label: t('display.remote') },
-                            { value: 'Hybrid', label: t('display.hybrid') },
-                            { value: 'On-site', label: t('display.onsite') },
-                          ]}
-                        />
+                      </ItemCard>
                       </div>
-
-                      <div>
-                        <label htmlFor={`exp-${item.id}-desc`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.descriptionBullets')}</label>
-                        <textarea
-                          id={`exp-${item.id}-desc`}
-                          value={item.description || ''}
-                          onChange={(e) => {
-                            const newItems = [...experienceItems]
-                            newItems[idx].description = e.target.value
-                            updateSectionContentRaw(selectedSection.id, 'items', newItems)
-                          }}
-                          className="w-full min-h-[100px] resize-y rounded-lg border border-[var(--color-border)] bg-transparent p-3 text-[15px] text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]"
-                          placeholder={t('placeholder.experienceBullets')}
-                        />
-                      </div>
-                    </div>
-                  </ItemCard>
-                ))}
-                
-                {experienceItems.length === 0 && (
+                ) : (
                   <div className="text-center py-6 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-surface-secondary)]">
-                    <p className="text-xs text-[var(--color-text-muted)] font-medium">{t('empty.experience')}</p>
+                    <p className="text-xs text-[var(--color-text-muted)] font-medium">{experienceItems.length === 0 ? t('empty.experience') : t('experience.noSelection')}</p>
                   </div>
                 )}
-                
-                <AddActionCard 
-                  onClick={() => {
-                    const newItems = [...experienceItems, { 
-                      id: Math.random().toString(36).substr(2, 9), 
-                      jobTitle: 'New Role', 
-                      companyName: '', 
-                      isCurrent: false 
-                    }]
-                    updateSectionContentRaw(selectedSection.id, 'items', newItems)
-                  }}
-                  label={t('actions.addExperience')}
-                  icon={Briefcase}
-                />
               </div>
             </FormCard>
+            </div>
           </div>
         )
       case 'services':
@@ -4530,7 +4816,7 @@ case 'skills':
         </div>
 
         {/* Scrollable Property Fields */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 scrollbar-thin space-y-6">
+        <div ref={rightPanelScrollRef} className="flex-1 overflow-y-auto p-5 sm:p-6 scrollbar-thin space-y-6">
           {renderRightPanelContent()}
         </div>
 

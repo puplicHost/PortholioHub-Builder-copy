@@ -944,7 +944,7 @@ export function ClassicTemplate({
           </section>
         )
       case 'experience':
-        const expItems = c.items || []
+        const expItems = Array.isArray(c.items) ? c.items : []
         const expDisplayMode = c.displayMode || 'timeline'
         const renderExpItem = (item: any) => {
           const dateLabel = formatExperienceRange(item.startDate, item.endDate, Boolean(item.isCurrent), lang)
