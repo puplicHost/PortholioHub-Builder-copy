@@ -42,9 +42,10 @@ import { isSectionLockedForFree, stripLockedSectionsForFree } from '@/lib/free-s
 import { isSectionVisible, withSectionVisibility } from '@/lib/section-visibility'
 import { getWhatsAppLink, digitsOnly } from '@/lib/whatsapp'
 import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { updatePortfolio, createProjectPage, deleteProjectPage, deleteSection as deletePortfolioSection, publishProfile, unpublishProfile, getOrCreateProfile } from '@/lib/actions/portfolio'
 import { uploadToCloudinary } from '@/lib/cloudinary'
+import { uploadToR2 } from '@/lib/r2-client'
 import {
   experienceDateError,
   experienceYearOptions,
@@ -60,9 +61,11 @@ import { LivePreview } from './LivePreview'
 import { ProjectPageView } from '@/app/u/[username]/projects/[slug]/ProjectPageView'
 import {
   PROJECT_FILE_TYPES,
+  PROJECT_MEDIA_ASPECTS,
   normalizeProjectCardVisual,
   normalizeProjectFileType,
   normalizeProjectImageFit,
+  normalizeProjectMediaAspect,
   readProjectItemCardMeta,
   spliceProjectItemCards,
   withProjectItemCardMeta,
@@ -1523,6 +1526,111 @@ export function BuilderClient({
     [locale, t, toast],
   )
 
+  const uploadProjectItemFile = useCallback(
+    async (ppId: string, itemId: string, file: File | undefined) => {
+      if (!file) return
+      const key = `project-item-file-${ppId}-${itemId}`
+      setUploadProgress((prev) => ({ ...prev, [key]: 0 }))
+      try {
+        const result = await uploadToR2(file, 'public', 'document', (percent) => {
+          setUploadProgress((prev) => (prev[key] === percent ? prev : { ...prev, [key]: percent }))
+        })
+        updateProfile((p: any) => {
+          const newPages = [...(p.projectPages || [])]
+          const pageIdx = newPages.findIndex((pg: any) => pg.id === ppId)
+          if (pageIdx === -1) return p
+          const page = newPages[pageIdx]
+          const newItems = [...(page.items || [])]
+          const itemIdx = newItems.findIndex((it: any) => it.id === itemId)
+          if (itemIdx === -1) return p
+          newItems[itemIdx] = {
+            ...newItems[itemIdx],
+            // Stable MediaFile reference; the viewer resolves a fresh signed URL.
+            externalUrl: `/api/files/r2/${result.id}`,
+          }
+          // Persist attachment metadata in the page content JSON so it survives reload.
+          const content = { ...(page.content || {}) }
+          const cards = Array.isArray(content.itemCards) ? content.itemCards.slice() : []
+          while (cards.length <= itemIdx) cards.push({})
+          cards[itemIdx] = { ...(cards[itemIdx] || {}), attachmentName: file.name, attachmentType: result.mimeType, attachmentSize: result.size, attachmentId: result.id }
+          content.itemCards = cards
+          newPages[pageIdx] = { ...page, items: newItems, content }
+          return { ...p, projectPages: newPages }
+        })
+        toast('success', locale === 'ar' ? 'تم رفع الملف بنجاح' : 'File uploaded successfully')
+      } catch (err) {
+        console.error(err)
+        toast('error', t('media.uploadFailed'))
+      } finally {
+        setUploadProgress((prev) => {
+          if (!(key in prev)) return prev
+          const next = { ...prev }
+          delete next[key]
+          return next
+        })
+      }
+    },
+    [locale, t, toast, updateProfile],
+  )
+
+  const uploadProjectItemVideo = useCallback(
+    async (ppId: string, itemId: string, file: File | undefined) => {
+      if (!file) return
+      const allowed = ['video/mp4', 'video/webm']
+      if (!allowed.includes(file.type)) {
+        toast('error', locale === 'ar' ? 'صيغة الفيديو غير مدعومة. استخدم MP4 أو WEBM.' : 'Unsupported video format. Use MP4 or WEBM.')
+        return
+      }
+      if (file.size > 52_428_800) {
+        toast('error', locale === 'ar' ? 'الحد الأقصى لحجم الفيديو هو 50 ميجابايت.' : 'Maximum video size is 50 MB.')
+        return
+      }
+      const key = `project-item-video-${ppId}-${itemId}`
+      setUploadProgress((prev) => ({ ...prev, [key]: 0 }))
+      try {
+        const result = await uploadToR2(file, 'public', 'video', (percent) => {
+          setUploadProgress((prev) => (prev[key] === percent ? prev : { ...prev, [key]: percent }))
+        })
+        updateProfile((p: any) => {
+          const newPages = [...(p.projectPages || [])]
+          const pageIdx = newPages.findIndex((pg: any) => pg.id === ppId)
+          if (pageIdx === -1) return p
+          const page = newPages[pageIdx]
+          const newItems = [...(page.items || [])]
+          const itemIdx = newItems.findIndex((it: any) => it.id === itemId)
+          if (itemIdx === -1) return p
+          // Use the inline content route (Range + inline disposition) for playback.
+          const content = { ...(page.content || {}) }
+          const cards = Array.isArray(content.itemCards) ? content.itemCards.slice() : []
+          while (cards.length <= itemIdx) cards.push({})
+          cards[itemIdx] = {
+            ...(cards[itemIdx] || {}),
+            videoName: file.name,
+            videoType: result.mimeType,
+            videoSize: result.size,
+            videoId: result.id,
+            videoUrl: `/api/files/r2/${result.id}/content`,
+          }
+          content.itemCards = cards
+          newPages[pageIdx] = { ...page, items: newItems, content }
+          return { ...p, projectPages: newPages }
+        })
+        toast('success', locale === 'ar' ? 'تم رفع الفيديو بنجاح' : 'Video uploaded successfully')
+      } catch (err) {
+        console.error(err)
+        toast('error', t('media.uploadFailed'))
+      } finally {
+        setUploadProgress((prev) => {
+          if (!(key in prev)) return prev
+          const next = { ...prev }
+          delete next[key]
+          return next
+        })
+      }
+    },
+    [locale, t, toast, updateProfile],
+  )
+
   // Theme toggle from inside the live preview canvas: persists the choice to
   // the owner's saved `appearance.colorMode` (survives reload). Stable
   // identity so the memoized preview is not invalidated by unrelated builder
@@ -2000,6 +2108,77 @@ export function BuilderClient({
     }
   }
 
+  // ---- URL-driven Builder navigation restoration -------------------------
+  // The URL is the source of truth for tab/page/section so a refresh returns
+  // the user to the same editing context. IDs are validated against the
+  // loaded profile; missing/deleted targets fall back safely.
+  const searchParams = useSearchParams()
+  const restoredRef = useRef(false)
+  const urlReadyRef = useRef(false)
+  const scrollSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (restoredRef.current) return
+    restoredRef.current = true
+    const tab = searchParams.get('tab')
+    const pageId = searchParams.get('page')
+    const sectionId = searchParams.get('section')
+
+    const page = pageId ? projectPages.find((p: any) => p.id === pageId) : null
+    const section = sectionId ? sections.find((s: any) => s.id === sectionId) : null
+
+    if (page) {
+      handleSelectProjectPage(page)
+    } else if (section && !(isFreePlan && isSectionLockedForFree(section.sectionType))) {
+      setLeftTab('sections')
+      setActivePage('home')
+      handleSelectSection(section)
+    } else if (tab === 'pages') {
+      setLeftTab('pages')
+    }
+
+    // Restore window scroll for the same profile.
+    try {
+      const y = sessionStorage.getItem(`builder-scroll:${profile.id}`)
+      if (y) requestAnimationFrame(() => window.scrollTo(0, Number(y)))
+    } catch { /* storage unavailable */ }
+
+    urlReadyRef.current = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  // Keep the URL in sync with the active tab/page/section (no navigation).
+  useEffect(() => {
+    if (!urlReadyRef.current) return
+    const params = new URLSearchParams()
+    if (leftTab === 'pages') params.set('tab', 'pages')
+    if (activePage !== 'home') params.set('page', activePage)
+    if (selectedSectionId) params.set('section', selectedSectionId)
+    const qs = params.toString()
+    const url = `/profile/builder${qs ? `?${qs}` : ''}`
+    if (window.location.pathname + window.location.search !== url) {
+      window.history.replaceState(null, '', url)
+    }
+  }, [leftTab, activePage, selectedSectionId])
+
+  // Persist scroll position (throttled) so refresh can restore it.
+  useEffect(() => {
+    const onScroll = () => {
+      if (scrollSaveTimer.current) return
+      scrollSaveTimer.current = setTimeout(() => {
+        scrollSaveTimer.current = null
+        try {
+          sessionStorage.setItem(`builder-scroll:${profile.id}`, String(window.scrollY))
+        } catch { /* storage unavailable */ }
+      }, 250)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (scrollSaveTimer.current) clearTimeout(scrollSaveTimer.current)
+    }
+  }, [profile.id])
+
   const updateProjectPageField = (pageId: string, field: string, value: any) => {
     updateProfile((p: any) => ({
       ...p,
@@ -2329,7 +2508,7 @@ export function BuilderClient({
                       <div>
                         <label id={`pp-item-${item.id}-visual`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('project.cardVisual')}</label>
                         <div role="group" aria-labelledby={`pp-item-${item.id}-visual`} className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
-                          {(['image', 'file-icon', 'none'] as const).map((option) => (
+                          {(['image', 'file-icon', 'video', 'none'] as const).map((option) => (
                             <button
                               key={option}
                               type="button"
@@ -2345,12 +2524,14 @@ export function BuilderClient({
                                 ? t('project.visualImage')
                                 : option === 'file-icon'
                                   ? t('project.visualFileIcon')
-                                  : t('project.visualNone')}
+                                  : option === 'video'
+                                    ? t('project.visualVideo')
+                                    : t('project.visualNone')}
                             </button>
                           ))}
                         </div>
                         {visual === 'file-icon' && (
-                          <div className="mt-2">
+                          <div className="mt-2 space-y-2">
                             <label htmlFor={`pp-item-${item.id}-filetype`} className="mb-1 block text-[11px] font-medium text-[var(--color-text-muted)]">{t('project.fileType')}</label>
                             <Select
                               id={`pp-item-${item.id}-filetype`}
@@ -2361,9 +2542,105 @@ export function BuilderClient({
                                 label: t(`fileIcon.${type}`),
                               }))}
                             />
+                            <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-2">
+                              <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">{t('project.fileAttachment')}</span>
+                              <div className="flex items-center gap-2">
+                                <FileButton
+                                  accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.mp4,.webm,.mov"
+                                  disabled={isUploading(`project-item-file-${pp.id}-${item.id}`)}
+                                  onFiles={(files) => void uploadProjectItemFile(pp.id, item.id, files?.[0])}
+                                  aria-label={t('common.uploadFile')}
+                                  className="h-[44px] shrink-0 px-3 text-xs"
+                                >
+                                  {isUploading(`project-item-file-${pp.id}-${item.id}`) && <Loader2 className="h-4 w-4 animate-spin" />}
+                                  {isUploading(`project-item-file-${pp.id}-${item.id}`) ? `${t('common.uploading')} ${uploadPercent(`project-item-file-${pp.id}-${item.id}`)}%` : t('common.uploadFile')}
+                                </FileButton>
+                                {itemMeta.attachmentName ? (
+                                  <span className="truncate text-xs text-[var(--color-text-muted)]">{itemMeta.attachmentName} {itemMeta.attachmentSize ? `· ${Math.round(itemMeta.attachmentSize / 1024)} KB` : ''}</span>
+                                ) : (
+                                  <span className="text-xs text-[var(--color-text-muted)]">{t('common.dragAndDropFile')}</span>
+                                )}
+                              </div>
+                              {itemMeta.attachmentName && (
+                                <div className="flex items-center justify-between gap-2">
+                                  <a
+                                    href={(() => {
+                                      const m = typeof item.externalUrl === 'string' ? item.externalUrl.match(/^\/api\/files\/r2\/([a-zA-Z0-9_-]+)$/) : null
+                                      return m ? `/portfolio/viewer/${encodeURIComponent(m[1])}` : (item.externalUrl || '#')
+                                    })()}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs font-semibold text-[var(--color-primary)] hover:underline"
+                                  >
+                                    {t('common.explore') || 'Explore'}
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newItems = [...(pp.items || [])]
+                                      const i = newItems.findIndex((it: any) => it.id === item.id)
+                                      if (i !== -1) {
+                                        newItems[i] = { ...newItems[i], externalUrl: '' }
+                                        updateProjectPageField(pp.id, 'items', newItems)
+                                      }
+                                      updateItemCard({ attachmentName: '', attachmentType: '', attachmentSize: 0, attachmentId: '' })
+                                    }}
+                                    aria-label={t('common.removeFile')}
+                                    className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded p-1 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
+                      {visual === 'video' && (
+                        <div className="mt-2 space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-2">
+                          <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">{t('project.video')}</span>
+                          <p className="text-[11px] text-[var(--color-text-muted)]">{t('project.videoLimit')}</p>
+                          <div className="flex items-center gap-2">
+                            <FileButton
+                              accept="video/mp4,video/webm"
+                              disabled={isUploading(`project-item-video-${pp.id}-${item.id}`)}
+                              onFiles={(files) => void uploadProjectItemVideo(pp.id, item.id, files?.[0])}
+                              aria-label={t('project.uploadVideo')}
+                              className="h-[44px] shrink-0 px-3 text-xs"
+                            >
+                              {isUploading(`project-item-video-${pp.id}-${item.id}`) && <Loader2 className="h-4 w-4 animate-spin" />}
+                              {isUploading(`project-item-video-${pp.id}-${item.id}`) ? `${t('common.uploading')} ${uploadPercent(`project-item-video-${pp.id}-${item.id}`)}%` : t('project.uploadVideo')}
+                            </FileButton>
+                            {itemMeta.videoName ? (
+                              <span className="truncate text-xs text-[var(--color-text-muted)]">{itemMeta.videoName} {itemMeta.videoSize ? `· ${Math.round(itemMeta.videoSize / 1024)} KB` : ''}</span>
+                            ) : null}
+                          </div>
+                          {itemMeta.videoUrl && (
+                            <div className="flex items-center justify-between gap-2">
+                              <video src={itemMeta.videoUrl} controls preload="metadata" className="w-full max-h-40 rounded-md border border-[var(--color-border)] bg-black" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateItemCard({ videoName: '', videoType: '', videoSize: 0, videoId: '', videoUrl: '' })
+                                }}
+                                aria-label={t('common.removeFile')}
+                                className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded p-1 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
+                          <div>
+                            <label htmlFor={`pp-item-${item.id}-video-aspect`} className="mb-1 block text-[11px] font-medium text-[var(--color-text-muted)]">{t('project.videoAspect')}</label>
+                            <Select
+                              id={`pp-item-${item.id}-video-aspect`}
+                              value={normalizeProjectMediaAspect(itemMeta.videoAspect)}
+                              onChange={(value) => updateItemCard({ videoAspect: normalizeProjectMediaAspect(value) })}
+                              options={PROJECT_MEDIA_ASPECTS.map((a) => ({ value: a, label: t(`aspect.${a}`) }))}
+                            />
+                          </div>
+                        </div>
+                      )}
                       <div>
                         <label htmlFor={`pp-item-${item.id}-desc`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.description')}</label>
                         <textarea
@@ -2435,6 +2712,15 @@ export function BuilderClient({
                               { value: 'cover', label: t('project.fitCover') },
                               { value: 'contain', label: t('project.fitContain') },
                             ]}
+                          />
+                        </div>
+                        <div className="mt-2">
+                          <label htmlFor={`pp-item-${item.id}-aspect`} className="mb-1 block text-[11px] font-medium text-[var(--color-text-muted)]">{t('project.imageAspect')}</label>
+                          <Select
+                            id={`pp-item-${item.id}-aspect`}
+                            value={normalizeProjectMediaAspect(itemMeta.imageAspect)}
+                            onChange={(value) => updateItemCard({ imageAspect: normalizeProjectMediaAspect(value) })}
+                            options={PROJECT_MEDIA_ASPECTS.map((a) => ({ value: a, label: t(`aspect.${a}`) }))}
                           />
                         </div>
                       </div>
@@ -4567,6 +4853,18 @@ case 'skills':
                 </SortableContext>
               </DndContext>
 
+              {isFreePlan ? (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => showLockedToast()}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2.5 text-xs font-semibold text-[var(--color-text-muted)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                  >
+                    <Lock className="h-3.5 w-3.5" />
+                    {t('sections.lockedTitle')}
+                  </button>
+                </div>
+              ) : (
               <div className="pt-1">
                 <button
                   type="button"
@@ -4577,6 +4875,7 @@ case 'skills':
                   {t('actions.addSection')}
                 </button>
               </div>
+              )}
             </>
           ) : (
             <div className="space-y-3 pt-1">

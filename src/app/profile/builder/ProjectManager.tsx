@@ -7,11 +7,14 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { MediaPicker } from './MediaPicker'
 import { uploadToCloudinary } from '@/lib/cloudinary'
+import { uploadToR2 } from '@/lib/r2-client'
 import { useBuilderI18n } from './i18n/BuilderI18nContext'
 import { useConfirm } from './ui/ConfirmModal'
 import { Select } from './ui/Select'
 import { FileButton } from './ui/FileButton'
 import { ImageDeleteButton } from './ui/ImageDeleteButton'
+import { StorageUsage } from './ui/StorageUsage'
+import { PROJECT_MEDIA_ASPECTS, normalizeProjectMediaAspect } from '@/lib/project-card-visuals'
 import type { Prisma } from '@prisma/client'
 import {
   DndContext,
@@ -41,9 +44,9 @@ function projectContent(page: any): Record<string, any> {
     : {}
 }
 
-function cardVisual(page: any): 'image' | 'file-icon' | 'none' {
+function cardVisual(page: any): 'image' | 'file-icon' | 'video' | 'none' {
   const value = projectContent(page).cardVisual
-  return value === 'file-icon' || value === 'none' ? value : 'image'
+  return value === 'file-icon' || value === 'video' || value === 'none' ? value : 'image'
 }
 
 function cardFileType(page: any): string {
@@ -341,6 +344,8 @@ export function ProjectManager({
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [storageRefresh, setStorageRefresh] = useState(0)
 
   const groupIds = new Set(groups.map((group) => group.id))
   const groupedCards = groups.map((group) => ({
@@ -501,9 +506,9 @@ export function ProjectManager({
   }
 
   // ─── Card visuals (stored on ProjectPage.content) ─────────────────
-  const cardVisual = (page: any): 'image' | 'file-icon' | 'none' => {
+  const cardVisual = (page: any): 'image' | 'file-icon' | 'video' | 'none' => {
     const value = projectContent(page).cardVisual
-    return value === 'file-icon' || value === 'none' ? value : 'image'
+    return value === 'file-icon' || value === 'video' || value === 'none' ? value : 'image'
   }
 
   const cardFileType = (page: any): string => {
@@ -511,7 +516,7 @@ export function ProjectManager({
     return ['pdf', 'sheet', 'doc', 'slides', 'folder', 'photo', 'script', 'generic'].includes(value) ? value : 'generic'
   }
 
-  const setCardVisual = (value: 'image' | 'file-icon' | 'none') => {
+  const setCardVisual = (value: 'image' | 'file-icon' | 'video' | 'none') => {
     updateEditingCard('content', { ...projectContent(editingItem), cardVisual: value })
   }
 
@@ -526,6 +531,15 @@ export function ProjectManager({
 
   const setCardImageFit = (value: 'cover' | 'contain') => {
     updateEditingCard('content', { ...projectContent(editingItem), imageFit: value })
+  }
+
+  const cardImageAspect = (page: any) => normalizeProjectMediaAspect(projectContent(page).imageAspect)
+  const cardVideoAspect = (page: any) => normalizeProjectMediaAspect(projectContent(page).videoAspect)
+  const setCardImageAspect = (value: string) => {
+    updateEditingCard('content', { ...projectContent(editingItem), imageAspect: normalizeProjectMediaAspect(value) })
+  }
+  const setCardVideoAspect = (value: string) => {
+    updateEditingCard('content', { ...projectContent(editingItem), videoAspect: normalizeProjectMediaAspect(value) })
   }
 
   // ─── Card Mode (home page): manages project pages ─────────────────
@@ -675,11 +689,66 @@ export function ProjectManager({
     if (!file) return
     setUploading(true)
     setUploadProgress(0)
+    setUploadError(null)
     try {
       const result = await uploadToCloudinary(file, setUploadProgress)
       updateItemField(index, 'imageUrl', result.url)
     } catch (err) {
       console.error(err)
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+      setUploadProgress(0)
+    }
+  }
+
+  const handleItemFileUpload = async (file: File | undefined, index: number) => {
+    if (!file) return
+    setUploading(true)
+    setUploadProgress(0)
+    setUploadError(null)
+    try {
+      const result = await uploadToR2(file, 'public', 'document', setUploadProgress)
+      updateItemField(index, 'externalUrl', result.url)
+      updateItemField(index, 'attachmentName', file.name)
+      updateItemField(index, 'attachmentType', result.mimeType)
+      updateItemField(index, 'attachmentSize', result.size)
+      updateItemField(index, 'attachmentId', result.id)
+      if (!editingItem?.linkLabel) updateItemField(index, 'linkLabel', file.name)
+    } catch (err) {
+      console.error(err)
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+      setUploadProgress(0)
+    }
+  }
+
+  const handleCardVideoUpload = async (file: File | undefined) => {
+    if (!file) return
+    if (!['video/mp4', 'video/webm'].includes(file.type)) {
+      setUploadError('Unsupported video format. Use MP4 or WEBM.')
+      return
+    }
+    if (file.size > 52_428_800) {
+      setUploadError('Maximum video size is 50 MB.')
+      return
+    }
+    setUploading(true)
+    setUploadProgress(0)
+    setUploadError(null)
+    try {
+      const result = await uploadToR2(file, 'public', 'video', setUploadProgress)
+      updateEditingCard('content', {
+        ...projectContent(editingItem),
+        videoUrl: `/api/files/r2/${result.id}/content`,
+        videoName: file.name,
+        videoSize: result.size,
+      })
+      setStorageRefresh((n) => n + 1)
+    } catch (err) {
+      console.error(err)
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
       setUploading(false)
       setUploadProgress(0)
@@ -734,6 +803,8 @@ export function ProjectManager({
           <h3 className="text-sm font-semibold">{t('project.editCard')}</h3>
           <button onClick={() => { setEditingItem(null); setEditingIndex(null) }} className="text-xs text-[var(--color-primary)] hover:underline">{t('common.back')}</button>
         </div>
+
+        <StorageUsage refreshKey={storageRefresh} />
 
         <div>
           <label htmlFor="pmc-title" className="text-xs text-[var(--color-text-secondary)]">{t('project.projectTitle')}</label>
@@ -796,6 +867,15 @@ export function ProjectManager({
                   ))}
                 </div>
               </div>
+              <div>
+                <label htmlFor="pmc-image-aspect" className="mb-1 block text-[11px] font-medium text-[var(--color-text-muted)]">{t('project.imageAspect')}</label>
+                <Select
+                  id="pmc-image-aspect"
+                  value={cardImageAspect(editingItem)}
+                  onChange={setCardImageAspect}
+                  options={PROJECT_MEDIA_ASPECTS.map((a) => ({ value: a, label: t(`aspect.${a}`) }))}
+                />
+              </div>
               <img
                 src={editingItem.coverImage}
                 alt={t('misc.coverPreview')}
@@ -812,7 +892,7 @@ export function ProjectManager({
             {t('project.cardVisual')}
           </label>
           <div role="group" aria-labelledby="pmc-visual" className="flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5">
-            {(['image', 'file-icon', 'none'] as const).map((visual) => (
+            {(['image', 'file-icon', 'video', 'none'] as const).map((visual) => (
               <button
                 key={visual}
                 type="button"
@@ -828,7 +908,9 @@ export function ProjectManager({
                   ? t('project.visualImage')
                   : visual === 'file-icon'
                     ? t('project.visualFileIcon')
-                    : t('project.visualNone')}
+                    : visual === 'video'
+                      ? t('project.visualVideo')
+                      : t('project.visualNone')}
               </button>
             ))}
           </div>
@@ -848,6 +930,34 @@ export function ProjectManager({
                 { value: 'generic', label: t('fileIcon.generic') },
               ]}
             />
+          )}
+          {cardVisual(editingItem) === 'video' && (
+            <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-2">
+              <p className="text-[11px] text-[var(--color-text-muted)]">{t('project.videoLimit')}</p>
+              <FileButton
+                accept="video/mp4,video/webm"
+                disabled={uploading}
+                onFiles={(files) => void handleCardVideoUpload(files?.[0])}
+                aria-label={t('project.uploadVideo')}
+                className="h-[44px] shrink-0 px-3 text-xs"
+              >
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {uploading ? `${t('common.uploading')} ${uploadProgress}%` : t('project.uploadVideo')}
+              </FileButton>
+              {uploadError && <p className="text-xs text-[var(--color-danger)]">{uploadError}</p>}
+              {projectContent(editingItem).videoUrl && (
+                <video src={projectContent(editingItem).videoUrl} controls preload="metadata" className="w-full max-h-40 rounded-md border border-[var(--color-border)] bg-black" />
+              )}
+              <div>
+                <label htmlFor="pmc-video-aspect" className="mb-1 block text-[11px] font-medium text-[var(--color-text-muted)]">{t('project.videoAspect')}</label>
+                <Select
+                  id="pmc-video-aspect"
+                  value={cardVideoAspect(editingItem)}
+                  onChange={setCardVideoAspect}
+                  options={PROJECT_MEDIA_ASPECTS.map((a) => ({ value: a, label: t(`aspect.${a}`) }))}
+                />
+              </div>
+            </div>
           )}
         </div>
 
@@ -1336,6 +1446,19 @@ export function ProjectManager({
 
           {(editingItem.linkType || 'none') === 'external' && (
             <>
+              <div className="flex items-center gap-2">
+                <FileButton
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.mp4,.webm,.mov"
+                  disabled={uploading}
+                  onFiles={(files) => void handleItemFileUpload(files?.[0], editingIndex!)}
+                  aria-label={t('common.uploadFile')}
+                  className="h-9 shrink-0 px-3 text-xs"
+                >
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {uploading ? t('common.uploading') : t('common.uploadFile')}
+                </FileButton>
+                <span className="text-xs text-[var(--color-text-muted)]">{t('common.orPasteUrlBelow')}</span>
+              </div>
               <div>
                 <label htmlFor="pmi-external" className="text-xs text-[var(--color-text-secondary)]">{t('project.externalUrl')}</label>
                 <Input

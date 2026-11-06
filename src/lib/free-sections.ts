@@ -1,11 +1,11 @@
-// Locked sections for FREE-plan users. These section types are Pro-only:
-// they must not appear in the public portfolio, the builder preview, or be
-// clickable in the builder sidebar for free accounts.
-export const FREE_LOCKED_SECTIONS = ['experience', 'skills', 'services', 'testimonials'] as const
+// FREE-plan allowlist. Everything else (including future/unknown section
+// types) is paid-only by default — a denylist would silently grant new
+// sections to Free users.
+export const FREE_ALLOWED_SECTIONS = ['hero', 'about', 'projects', 'footer'] as const
 
 export function isSectionLockedForFree(sectionType: string | null | undefined): boolean {
   if (!sectionType) return false
-  return (FREE_LOCKED_SECTIONS as readonly string[]).includes(sectionType.toLowerCase())
+  return !(FREE_ALLOWED_SECTIONS as readonly string[]).includes(sectionType.toLowerCase())
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

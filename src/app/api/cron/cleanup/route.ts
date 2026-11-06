@@ -1,5 +1,6 @@
 import { runSessionCleanup } from '@/lib/tasks/session-cleanup'
 import { cleanupVisitDedups } from '@/lib/visits'
+import { purgeExpiredReservations } from '@/lib/storage-quota'
 
 // Vercel Cron entry (see vercel.json, daily). Same Bearer protection
 // pattern as the other cron routes. Runs session cleanup first, then
@@ -26,7 +27,13 @@ export async function POST(req: Request) {
       // visit_dedups table missing pre-0006: sessions still cleaned.
       console.error('[cron/cleanup] visit-dedup cleanup skipped:', err)
     }
-    return Response.json({ ok: true, sessions: sessions.deleted, dedups: dedups.deleted })
+    let reservations = 0
+    try {
+      reservations = await purgeExpiredReservations()
+    } catch (err) {
+      console.error('[cron/cleanup] reservation cleanup skipped:', err)
+    }
+    return Response.json({ ok: true, sessions: sessions.deleted, dedups: dedups.deleted, reservations })
   } catch (err) {
     console.error('[cron/cleanup]', err)
     return Response.json({ code: 'INTERNAL_ERROR', message: 'Cleanup failed' }, { status: 500 })

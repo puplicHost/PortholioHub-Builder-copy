@@ -634,7 +634,12 @@ model MediaFile {
   storedName   String?  @map("stored_name") // sanitized filename used on disk
   path         String? // local filesystem path (documents); null for Cloudinary images
   publicUrl    String   @map("public_url")
-  cloudinaryId String?  @map("cloudinary_id") // Cloudinary public_id (images)
+  cloudinaryId     String?  @map("cloudinary_id") // Cloudinary public_id (images)
+  storageProvider  String   @default("cloudinary") @map("storage_provider") // cloudinary | r2
+  objectKey        String?  @unique @map("object_key") // R2 object key
+  bucket           String?  @map("bucket") // R2 bucket
+  visibility       String   @default("private") // public | private
+  uploadStatus     String   @default("complete") @map("upload_status") // pending | complete | failed
   size         Int      @default(0)
   purpose      String?  @default("document") // avatar | document | portfolio
   shareToken   String   @unique @default(cuid()) @map("share_token")

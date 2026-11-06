@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }))
 vi.mock('@/lib/auth', () => ({ getCurrentUser: vi.fn(async () => ({ id: 'user-1' })) }))
 vi.mock('@/lib/workspaces', () => ({ ensurePersonalWorkspace: vi.fn() }))
+vi.mock('@/lib/subscriptions', () => ({ getSubscriptionState: vi.fn(async () => ({ state: 'ACTIVE' })) }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('next/server', () => ({ after: (fn: () => void) => fn() }))
 

@@ -95,6 +95,11 @@ function itemHref(username: string, item: any): string {
     if (!/^[a-z0-9-]+$/i.test(raw)) return ''
     return `/u/${username}/projects/${encodeURIComponent(raw)}`
   }
+  // Uploaded R2 attachments open in the in-app viewer (not a raw download).
+  const r2Match = raw.match(/^\/api\/files\/r2\/([a-zA-Z0-9_-]+)$/)
+  if (r2Match) {
+    return `/portfolio/viewer/${encodeURIComponent(r2Match[1])}`
+  }
   return sanitizeUrl(raw)
 }
 
@@ -180,11 +185,12 @@ export function ProjectPageView({
   }
 
   const renderItemLinks = (item: any, meta: ProjectItemCardMeta) => {
-    const href = itemHref(profile.username, item)
+    const visual = normalizeProjectCardVisual(meta.cardVisual)
+    // Video cards play inline; never render an Explore/download link for them.
+    const href = visual === 'video' ? '' : itemHref(profile.username, item)
     const extras = extraLinks(meta)
     if (!href && extras.length === 0) return null
 
-    const visual = normalizeProjectCardVisual(meta.cardVisual)
     return (
       <>
         {href ? (
@@ -304,6 +310,8 @@ export function ProjectPageView({
                       fileType={normalizeProjectFileType(meta.fileType)}
                       imageUrl={item.imageUrl}
                       imageFit={normalizeProjectImageFit(meta.imageFit)}
+                      videoUrl={meta.videoUrl || (meta.videoType?.startsWith('video/') ? item.externalUrl : null)}
+                      aspect={visual === 'image' ? meta.imageAspect : visual === 'video' ? meta.videoAspect : undefined}
                       title={item.title}
                       variant="list"
                     />
@@ -340,6 +348,8 @@ export function ProjectPageView({
                       fileType={normalizeProjectFileType(meta.fileType)}
                       imageUrl={item.imageUrl}
                       imageFit={normalizeProjectImageFit(meta.imageFit)}
+                      videoUrl={meta.videoUrl || (meta.videoType?.startsWith('video/') ? item.externalUrl : null)}
+                      aspect={visual === 'image' ? meta.imageAspect : visual === 'video' ? meta.videoAspect : undefined}
                       title={item.title}
                       variant="grid"
                     />

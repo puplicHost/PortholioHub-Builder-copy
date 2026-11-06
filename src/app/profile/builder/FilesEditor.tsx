@@ -4,10 +4,11 @@
 import { useState } from 'react'
 import { ChevronUp, ChevronDown, Loader2, Plus, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
-import { uploadToCloudinary } from '@/lib/cloudinary'
+import { uploadToR2 } from '@/lib/r2-client'
 import { useBuilderI18n } from './i18n/BuilderI18nContext'
 import { useConfirm } from './ui/ConfirmModal'
 import { FileButton } from './ui/FileButton'
+import { StorageUsage } from './ui/StorageUsage'
 
 interface FilesEditorProps {
   sectionId: string
@@ -41,8 +42,10 @@ export function FilesEditor({
   const { t } = useBuilderI18n()
   const confirm = useConfirm()
   const c = content || {}
-  const items: any[] = c.items || []
+  const items: any[] = Array.isArray(c.items) ? c.items : []
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
+  const [storageRefresh, setStorageRefresh] = useState(0)
 
   const setItems = (next: any[]) => updateSectionContentRaw(sectionId, 'items', next)
 
@@ -72,17 +75,26 @@ export function FilesEditor({
     })
     if (!ok) return
     setItems(items.filter((_: any, i: number) => i !== idx))
+    setStorageRefresh((n) => n + 1)
   }
 
   const handleUpload = async (idx: number, file: File | undefined) => {
     if (!file) return
     setUploadingIdx(idx)
     try {
-      const result = await uploadToCloudinary(file)
+      const result = await uploadToR2(file, 'public', 'document', (p) => {
+        // progress is surfaced through the spinner; no extra state needed
+        void p
+      })
       updateItem(idx, {
         url: result.url,
         label: items[idx]?.label || file.name,
+        mimeType: result.mimeType,
+        size: result.size,
+        fileId: result.id,
+        storageProvider: 'r2',
       })
+      setStorageRefresh((n) => n + 1)
     } catch (err) {
       console.error(err)
     } finally {
@@ -92,6 +104,7 @@ export function FilesEditor({
 
   return (
     <div className="space-y-6">
+      <StorageUsage refreshKey={storageRefresh} />
       <FormCard title={t('form.sectionContent')} subtitle={t('form.subtitleFilesHeading')}>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -154,6 +167,13 @@ export function FilesEditor({
                   <label htmlFor={`${sectionId}-file-${idx}`} className="mb-2 block text-[13px] font-semibold text-[var(--color-text-primary)]">
                     {t('field.file')}
                   </label>
+                  <div
+                  onDragOver={(e) => { e.preventDefault(); setDragOverIdx(idx) }}
+                  onDragLeave={() => setDragOverIdx(null)}
+                  onDrop={(e) => { e.preventDefault(); setDragOverIdx(null); const f = e.dataTransfer.files?.[0]; if (f) void handleUpload(idx, f) }}
+                  className={`rounded-lg border-2 border-dashed p-3 transition-colors ${dragOverIdx === idx ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5' : 'border-[var(--color-border)]'}`}
+                >
+                  <p className="mb-2 text-xs text-[var(--color-text-muted)]">{t('common.dragAndDropFile')}</p>
                   <div className="flex items-center gap-3">
                     <Input
                       id={`${sectionId}-file-${idx}`}
@@ -163,10 +183,10 @@ export function FilesEditor({
                       className="h-[44px] min-h-[44px] flex-1 px-[12px] py-[10px] text-[15px]"
                     />
                     <FileButton
-                      accept=".pdf,.doc,.docx,.txt,.csv"
+                      accept=".pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.mp4,.webm,.mov"
                       disabled={uploadingIdx === idx}
                       onFiles={(files) => void handleUpload(idx, files?.[0])}
-                      aria-label={t('common.upload')}
+                      aria-label={t('common.uploadFile')}
                       className="h-[44px] shrink-0"
                     >
                       {uploadingIdx === idx ? (
@@ -174,10 +194,19 @@ export function FilesEditor({
                       ) : (
                         <Plus className="h-4 w-4" />
                       )}
-                      {uploadingIdx === idx ? t('common.uploading') : t('common.upload')}
+                      {uploadingIdx === idx ? t('common.uploading') : t('common.uploadFile')}
                     </FileButton>
                   </div>
                 </div>
+                </div>
+                {(item.mimeType?.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(item.url || '')) && item.url ? (
+                  <video
+                    src={item.url}
+                    controls
+                    preload="metadata"
+                    className="mt-2 w-full max-h-48 rounded-lg border border-[var(--color-border)] bg-black"
+                  />
+                ) : null}
                 <div className="flex items-center justify-between">
                   <button
                     type="button"

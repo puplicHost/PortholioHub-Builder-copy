@@ -1,12 +1,11 @@
 'use client'
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-import type { ReactNode } from 'react'
-import { Code, File, FileCode, FileText, FolderOpen, Image as ImageIcon, Presentation, Table2 } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { Code, File, FileCode, FileText, FolderOpen, Image as ImageIcon, Play, Presentation, Table2 } from 'lucide-react'
 import { portfolioImageUrl } from '@/lib/cloudinary'
 import { sanitizeUrl } from '@/lib/urls'
 import {
+  aspectRatioValue,
   getFileTypeStyle,
   normalizeProjectFileType,
   type ProjectCardVisual,
@@ -25,6 +24,53 @@ export function ProjectFileIcon({ fileType, className }: { fileType: string; cla
   return <File className={className} aria-hidden="true" />
 }
 
+/** Poster-first inline video: nothing downloads until the visitor presses Play. */
+function toVideoSrc(url: string): string {
+  // Legacy records stored the download route; use the inline range-capable route.
+  const m = url.match(/^\/api\/files\/r2\/([a-zA-Z0-9_-]+)$/)
+  return m ? `/api/files/r2/${m[1]}/content` : url
+}
+
+function VideoCardPreview({ src, title }: { src: string; title?: string | null }) {
+  const [playing, setPlaying] = useState(false)
+  if (!src) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-[color-mix(in_srgb,var(--color-primary)_8%,var(--color-bg))]">
+        <Play className="h-10 w-10 text-[var(--color-text-muted)]" aria-hidden="true" />
+      </div>
+    )
+  }
+  if (playing) {
+    return (
+      <video
+        src={src}
+        controls
+        autoPlay
+        playsInline
+        preload="metadata"
+        className="h-full w-full bg-black object-contain"
+      >
+        {title || 'Video'}
+      </video>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setPlaying(true)}
+      aria-label={title ? `Play ${title}` : 'Play video'}
+      className="group/video relative flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--color-primary)_22%,#0b1020),#0b1020)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+    >
+      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-[var(--color-primary)] shadow-lg transition-transform group-hover/video:scale-105">
+        <Play className="ms-0.5 h-6 w-6" aria-hidden="true" fill="currentColor" />
+      </span>
+      <span className="absolute bottom-2 start-3 end-3 truncate text-start text-xs font-medium text-white/80">
+        {title || 'Video'}
+      </span>
+    </button>
+  )
+}
+
 /**
  * Card media header shared by home project cards and project-page items.
  * `variant` mirrors the home grid/list layouts: compact file tiles, image with
@@ -35,6 +81,8 @@ export function ProjectCardMedia({
   fileType = 'generic',
   imageUrl,
   imageFit = 'cover',
+  videoUrl,
+  aspect,
   title,
   variant = 'grid',
 }: {
@@ -42,15 +90,20 @@ export function ProjectCardMedia({
   fileType?: ProjectFileType | string
   imageUrl?: string | null
   imageFit?: 'cover' | 'contain'
+  videoUrl?: string | null
+  aspect?: string | null
   title?: string | null
   variant?: 'grid' | 'list'
 }) {
   if (visual === 'none') return null
 
-  const wrapperClass =
-    variant === 'list'
+  const ratio = aspectRatioValue(aspect)
+  const wrapperClass = ratio
+    ? `w-full ${variant === 'list' ? 'cq-sm:w-[300px]' : ''} shrink-0 overflow-hidden bg-[color-mix(in_srgb,var(--color-card)_92%,var(--color-border))] border-b border-[var(--color-border)]`
+    : variant === 'list'
       ? 'w-full cq-sm:w-[300px] h-[200px] cq-sm:h-auto shrink-0 overflow-hidden bg-[var(--color-bg)] border-b cq-sm:border-b-0 cq-sm:border-e border-[var(--color-border)]'
       : 'h-[120px] cq-sm:h-[200px] w-full shrink-0 overflow-hidden bg-[var(--color-bg)] border-b border-[var(--color-border)]'
+  const ratioStyle = ratio ? { aspectRatio: ratio } : undefined
 
   if (visual === 'file-icon') {
     const style = getFileTypeStyle(fileType)
@@ -70,18 +123,29 @@ export function ProjectCardMedia({
     )
   }
 
+  if (visual === 'video') {
+    const src = toVideoSrc(sanitizeUrl(videoUrl))
+    // Only same-origin R2 content routes are eligible as video sources.
+    const safeSrc = src.startsWith('/api/files/r2/') || /^\/api\/files\/r2\//.test(src) ? src : ''
+    return (
+      <div className={wrapperClass} style={ratioStyle}>
+        <VideoCardPreview src={safeSrc} title={title} />
+      </div>
+    )
+  }
+
   if (imageUrl) {
     const src = portfolioImageUrl(sanitizeUrl(imageUrl), 600)
     if (src) {
       return (
-        <div className={wrapperClass}>
+        <div className={wrapperClass} style={ratioStyle}>
           <img
             src={src}
             alt={title || ''}
             loading="lazy"
             decoding="async"
             className={
-              imageFit === 'contain'
+              ratio || imageFit === 'contain'
                 ? 'w-full h-full object-contain p-2 bg-[color-mix(in_srgb,var(--color-card)_90%,var(--color-border))] hover:scale-105 transition-transform duration-500'
                 : 'w-full h-full object-cover group-hover:scale-105 transition-transform duration-500'
             }

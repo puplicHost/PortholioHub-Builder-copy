@@ -1479,6 +1479,8 @@ export function ClassicTemplate({
               fileType={projectFileType(project)}
               imageUrl={project.coverImage}
               imageFit={projectImageFit(project)}
+              videoUrl={project.content?.videoName ? project.content?.videoUrl : null}
+              aspect={projectCardVisual(project) === 'image' ? project.content?.imageAspect : projectCardVisual(project) === 'video' ? project.content?.videoAspect : undefined}
               title={project.title}
               variant="list"
             />
@@ -1503,6 +1505,8 @@ export function ClassicTemplate({
               fileType={projectFileType(project)}
               imageUrl={project.coverImage}
               imageFit={projectImageFit(project)}
+              videoUrl={project.content?.videoName ? project.content?.videoUrl : null}
+              aspect={projectCardVisual(project) === 'image' ? project.content?.imageAspect : projectCardVisual(project) === 'video' ? project.content?.videoAspect : undefined}
               title={project.title}
               variant="grid"
             />

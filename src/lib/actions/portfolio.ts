@@ -401,6 +401,33 @@ export async function updatePortfolio(data: {
     const user = await getCurrentUser()
     if (!user) throw new Error('Unauthorized')
 
+    // Subscription state must be resolved server-side; never trust the browser.
+    const { getEntitlements } = await import('@/lib/entitlements')
+    const ent = await getEntitlements(user.id)
+    const isFree = ent.isFree
+
+    // Hard server-side entitlement guard for Free users: drop any paid-only
+    // sections from the incoming payload and block new standalone project pages.
+    // Existing customer content already in the DB is preserved (we simply do
+    // not overwrite it from this request).
+    if (isFree) {
+      if (Array.isArray(data.sections)) {
+        const { isSectionLockedForFree } = await import('@/lib/free-sections')
+        data.sections = (data.sections as any[]).filter(
+          (s) => !(s && typeof s.sectionType === 'string' && isSectionLockedForFree(s.sectionType)),
+        )
+      }
+      if (Array.isArray(data.projects)) {
+        data.projects = (data.projects as any[]).filter((p) => {
+          const id = typeof p?.id === 'string' ? p.id : ''
+          // Free users may create new project CARDS (showInProjects !== false)
+          // but never new standalone content pages.
+          if (id.startsWith('new-') && p?.showInProjects === false) return false
+          return true
+        })
+      }
+    }
+
     // Ownership anchor: never trust the client-supplied `data.id`. Every
     // relation write is scoped to THIS user's own profile row.
     const own = await prisma.userProfile.findUnique({
@@ -565,15 +592,21 @@ export async function updatePortfolio(data: {
 
           const existingProjects = await tx.projectPage.findMany({
             where: { profileId: own.id },
-            select: { id: true },
+            select: { id: true, showInProjects: true },
           })
           const ownProjectIds = new Set(existingProjects.map((p) => p.id))
+          // Free users may edit cards but never standalone content pages.
+          const standaloneIds = new Set(
+            existingProjects.filter((p) => p.showInProjects === false).map((p) => p.id),
+          )
 
           const planned = data.projects
             .map((proj: any) => {
               const isTempId = typeof proj.id === 'string' && proj.id.startsWith('new-')
               // Foreign or stale id — never touch another profile's project row.
               if (proj.id && !isTempId && !ownProjectIds.has(proj.id)) return null
+              // Free users: ignore updates to existing standalone project pages.
+              if (isFree && !isTempId && standaloneIds.has(proj.id)) return null
               return { proj, isTempId }
             })
             .filter((p: { proj: any; isTempId: boolean } | null): p is { proj: any; isTempId: boolean } => !!p)
@@ -582,7 +615,10 @@ export async function updatePortfolio(data: {
           const keptRealIds = new Set(
             planned.filter((p) => !p.isTempId).map((p) => p.proj.id)
           )
-          const removedIds = [...ownProjectIds].filter((id) => !keptRealIds.has(id))
+          const removedIds = [...ownProjectIds].filter(
+            // Never delete a downgraded user's standalone page by omission.
+            (id) => !keptRealIds.has(id) && !(isFree && standaloneIds.has(id)),
+          )
           if (removedIds.length > 0) {
             await tx.projectPage.deleteMany({
               where: { profileId: own.id, id: { in: removedIds } },
@@ -634,7 +670,8 @@ export async function updatePortfolio(data: {
                 linkedPageSlug: proj.linkedPageSlug || null,
               } as Prisma.InputJsonValue,
               displayMode: proj.displayMode || 'grid',
-              showInProjects: proj.showInProjects !== false,
+              // Free users can only ever have project CARDS, never standalone pages.
+              showInProjects: isFree ? true : proj.showInProjects !== false,
               showBackButton: proj.showBackButton !== false,
               backButtonLabel: proj.backButtonLabel || 'Back to Portfolio',
               externalLink: sanitizeUrl(proj.externalLink) || null,
@@ -684,7 +721,7 @@ export async function updatePortfolio(data: {
                   ? (typeof item.linkedPageSlug === 'string' && item.linkedPageSlug.trim()
                       ? item.linkedPageSlug.trim()
                       : null)
-                  : (/^https?:\/\//i.test(sanitized) ? sanitized : null)
+                  : (sanitized && (/^https?:\/\//i.test(sanitized) || sanitized.startsWith('/')) ? sanitized : null)
                 const textContent = (item.iconType && ['generic', 'pdf', 'sheet', 'doc', 'folder'].includes(item.iconType))
                   ? item.iconType
                   : (item.textContent || null)
@@ -900,20 +937,28 @@ export async function publishProfile() {
 
     // Plan limits + global safety caps at publish (Phase 5 §18/§21).
     const { getEffectiveLimits } = await import('@/lib/subscriptions')
+    const { getEntitlements } = await import('@/lib/entitlements')
+    const ent = await getEntitlements(user.id)
     const profile = await prisma.userProfile.findUnique({
       where: { userId: user.id },
       select: {
         id: true,
         pages: { select: { sections: { select: { id: true } } } },
-        projectPages: { select: { id: true, gallery: true } },
+        projectPages: { select: { id: true, gallery: true, showInProjects: true } },
       },
     })
     if (!profile) {
       return { success: false, error: 'Profile not found' }
     }
     const sectionCount = profile.pages.reduce((n, p) => n + p.sections.length, 0)
-    const projectCount = profile.projectPages.length
-    const galleryCount = profile.projectPages.reduce((n, p) => n + (p.gallery?.length || 0), 0)
+    // Downgraded Free users keep their standalone pages in storage, but those
+    // pages are not part of the Free portfolio. Exclude them from Free plan
+    // counts so preserved paid content never blocks publishing allowed content.
+    const countablePages = ent.isFree
+      ? profile.projectPages.filter((p) => p.showInProjects !== false)
+      : profile.projectPages
+    const projectCount = countablePages.length
+    const galleryCount = countablePages.reduce((n, p) => n + (p.gallery?.length || 0), 0)
     if (sectionCount > 30 || projectCount > 50 || galleryCount > 60) {
       return { success: false, error: 'Content exceeds safety caps (30 sections / 50 projects / 60 gallery items)' }
     }
@@ -962,6 +1007,11 @@ export async function unpublishProfile() {
 export async function createProjectPage(titleOrProfileId?: string, maybeTitle?: string) {
   try {
     const user = await requireUserWithWorkspace()
+    const { getEntitlements, canCreateStandaloneProjectPage } = await import('@/lib/entitlements')
+    const ent = await getEntitlements(user.id)
+    if (!canCreateStandaloneProjectPage(ent)) {
+      return { success: false, error: 'Standalone project pages require a paid subscription', code: 'SUBSCRIPTION_REQUIRED' }
+    }
     const profile = await prisma.userProfile.findUnique({ where: { userId: user.id } })
     if (!profile) return { success: false, error: 'Profile not found' }
 
@@ -1041,10 +1091,17 @@ export async function updateProjectPage(id: string, data: any) {
     // Ownership check: only the caller's own project page is writable.
     const owned = await prisma.projectPage.findFirst({
       where: { id, profile: { userId: user.id } },
-      select: { id: true },
+      select: { id: true, showInProjects: true },
     })
     if (!owned) {
       return { success: false, error: 'Project page not found' }
+    }
+
+    // Standalone project pages are Pro-only; project cards remain editable.
+    const { getEntitlements, canManageStandaloneProjectPage } = await import('@/lib/entitlements')
+    const ent = await getEntitlements(user.id)
+    if (!canManageStandaloneProjectPage(ent, owned.showInProjects)) {
+      return { success: false, error: 'Standalone project pages require a paid subscription', code: 'SUBSCRIPTION_REQUIRED' }
     }
 
     const { items, ...pageData } = data
@@ -1065,7 +1122,7 @@ export async function updateProjectPage(id: string, data: any) {
             const sanitized = sanitizeUrl(rawUrl)
             const externalUrl = isPage
               ? (typeof item.linkedPageSlug === 'string' && item.linkedPageSlug.trim() ? item.linkedPageSlug.trim() : null)
-              : (/^https?:\/\//i.test(sanitized) ? sanitized : null)
+              : (sanitized && (/^https?:\/\//i.test(sanitized) || sanitized.startsWith('/')) ? sanitized : null)
             const textContent = (item.iconType && ['generic', 'pdf', 'sheet', 'doc', 'folder'].includes(item.iconType))
               ? item.iconType
               : (item.textContent || null)
@@ -1183,10 +1240,17 @@ export async function deleteProjectPage(id: string) {
     const user = await requireUserWithWorkspace()
     const target = await prisma.projectPage.findFirst({
       where: { id, profile: { userId: user.id } },
-      select: { id: true, slug: true, profileId: true },
+      select: { id: true, slug: true, profileId: true, showInProjects: true },
     })
     if (!target) {
       return { success: false, error: 'Project page not found' }
+    }
+
+    // Standalone project pages are Pro-only; project cards may be deleted by Free users.
+    const { getEntitlements, canManageStandaloneProjectPage } = await import('@/lib/entitlements')
+    const ent = await getEntitlements(user.id)
+    if (!canManageStandaloneProjectPage(ent, target.showInProjects)) {
+      return { success: false, error: 'Standalone project pages require a paid subscription', code: 'SUBSCRIPTION_REQUIRED' }
     }
 
     // Clear linkedPageSlug on any project cards referencing this page

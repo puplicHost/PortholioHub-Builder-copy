@@ -9,7 +9,23 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export type ProjectCardVisual = 'image' | 'file-icon' | 'none'
+export type ProjectCardVisual = 'image' | 'file-icon' | 'video' | 'none'
+
+export type ProjectMediaAspect = '16:9' | '4:3' | '1:1' | '3:4' | '9:16' | 'auto'
+
+export const PROJECT_MEDIA_ASPECTS: ProjectMediaAspect[] = ['16:9', '4:3', '1:1', '3:4', '9:16', 'auto']
+
+export function normalizeProjectMediaAspect(value: unknown): ProjectMediaAspect {
+  return typeof value === 'string' && (PROJECT_MEDIA_ASPECTS as string[]).includes(value)
+    ? (value as ProjectMediaAspect)
+    : 'auto'
+}
+
+/** CSS aspect-ratio value; null means "keep the existing card behavior". */
+export function aspectRatioValue(value: unknown): string | null {
+  const v = normalizeProjectMediaAspect(value)
+  return v === 'auto' ? null : v.replace(':', ' / ')
+}
 
 export type ProjectFileType =
   | 'pdf'
@@ -48,10 +64,21 @@ export type ProjectItemCardMeta = {
   imageFit?: 'cover' | 'contain'
   linkLabel?: string
   links?: ProjectItemCardLink[]
+  attachmentName?: string
+  attachmentType?: string
+  attachmentSize?: number
+  attachmentId?: string
+  videoName?: string
+  videoType?: string
+  videoSize?: number
+  videoId?: string
+  videoUrl?: string
+  imageAspect?: ProjectMediaAspect
+  videoAspect?: ProjectMediaAspect
 }
 
 export function normalizeProjectCardVisual(value: unknown): ProjectCardVisual {
-  return value === 'file-icon' || value === 'none' ? value : 'image'
+  return value === 'file-icon' || value === 'video' || value === 'none' ? value : 'image'
 }
 
 export function normalizeProjectFileType(value: unknown): ProjectFileType {
@@ -143,7 +170,7 @@ function sanitizeLink(value: unknown): ProjectItemCardLink | null {
 function sanitizeMeta(value: unknown): ProjectItemCardMeta {
   if (!isPlainObject(value)) return {}
   const meta: ProjectItemCardMeta = {}
-  if (value.cardVisual === 'image' || value.cardVisual === 'file-icon' || value.cardVisual === 'none') {
+  if (value.cardVisual === 'image' || value.cardVisual === 'file-icon' || value.cardVisual === 'video' || value.cardVisual === 'none') {
     meta.cardVisual = value.cardVisual
   }
   if (typeof value.fileType === 'string' && (PROJECT_FILE_TYPES as string[]).includes(value.fileType)) {
@@ -155,6 +182,46 @@ function sanitizeMeta(value: unknown): ProjectItemCardMeta {
   if (typeof value.linkLabel === 'string') {
     const label = value.linkLabel.trim().slice(0, 120)
     if (label) meta.linkLabel = label
+  }
+  if (typeof value.attachmentName === 'string') {
+    const name = value.attachmentName.trim().slice(0, 255)
+    if (name) meta.attachmentName = name
+  }
+  if (typeof value.attachmentType === 'string') {
+    const t = value.attachmentType.trim().slice(0, 120)
+    if (t) meta.attachmentType = t
+  }
+  if (typeof value.attachmentSize === 'number' && Number.isFinite(value.attachmentSize)) {
+    meta.attachmentSize = value.attachmentSize
+  }
+  if (typeof value.attachmentId === 'string') {
+    const id = value.attachmentId.trim().slice(0, 120)
+    if (id) meta.attachmentId = id
+  }
+  if (typeof value.videoName === 'string') {
+    const name = value.videoName.trim().slice(0, 255)
+    if (name) meta.videoName = name
+  }
+  if (typeof value.videoType === 'string') {
+    const t = value.videoType.trim().slice(0, 120)
+    if (t) meta.videoType = t
+  }
+  if (typeof value.videoSize === 'number' && Number.isFinite(value.videoSize)) {
+    meta.videoSize = value.videoSize
+  }
+  if (typeof value.videoId === 'string') {
+    const id = value.videoId.trim().slice(0, 120)
+    if (id) meta.videoId = id
+  }
+  if (typeof value.videoUrl === 'string') {
+    const url = value.videoUrl.trim().slice(0, 1000)
+    if (url) meta.videoUrl = url
+  }
+  if (typeof value.imageAspect === 'string' && (PROJECT_MEDIA_ASPECTS as string[]).includes(value.imageAspect)) {
+    meta.imageAspect = value.imageAspect as ProjectMediaAspect
+  }
+  if (typeof value.videoAspect === 'string' && (PROJECT_MEDIA_ASPECTS as string[]).includes(value.videoAspect)) {
+    meta.videoAspect = value.videoAspect as ProjectMediaAspect
   }
   if (Array.isArray(value.links)) {
     const links = value.links.map(sanitizeLink).filter((link): link is ProjectItemCardLink => link !== null).slice(0, 8)
