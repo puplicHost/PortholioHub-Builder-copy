@@ -64,7 +64,7 @@ export function PaymentActions({
             size="sm"
             title="Verify and confirm receipt of payment"
             onClick={() => setConfirmOpen(true)}
-            className="inline-flex items-center gap-1 !bg-emerald-600 hover:!bg-emerald-700 text-white"
+            className="inline-flex items-center gap-1 !bg-[var(--color-success)] text-[var(--on-success)] hover:!bg-[var(--color-success)] hover:opacity-90"
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
             <span>Confirm</span>
@@ -118,7 +118,7 @@ export function PaymentActions({
               variant="primary"
               size="sm"
               loading={loading}
-              className="!bg-emerald-600 hover:!bg-emerald-700 text-white"
+              className="!bg-[var(--color-success)] text-[var(--on-success)] hover:!bg-[var(--color-success)] hover:opacity-90"
             >
               Verify & Confirm Payment
             </Button>

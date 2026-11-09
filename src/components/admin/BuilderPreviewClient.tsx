@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, type ComponentType } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Monitor, Tablet, Smartphone, ExternalLink, ShieldAlert, Globe } from 'lucide-react'
 import { StatusBadge } from './StatusBadge'
 import { ClassicTemplate } from '@/components/portfolio/templates/ClassicTemplate'
 import { getPortfolioLang } from '@/lib/portfolio-language'
+import { resolveTemplateFromAppearance } from '@/lib/templates'
 
 interface BuilderPreviewClientProps {
   userId: string
@@ -23,7 +24,25 @@ export function BuilderPreviewClient({
 }: BuilderPreviewClientProps) {
   const [device, setDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop')
 
-  const isAr = getPortfolioLang(profile?.appearance) === 'ar'
+  const appearance = profile?.appearance || {}
+  const isAr = getPortfolioLang(appearance) === 'ar'
+  // Read-only support preview resolves the SAVED template with the same
+  // allow-listed resolver as the public route (classic on unknown/absent).
+  const templateId = resolveTemplateFromAppearance(appearance)
+
+  // Code-split: the editorial chunk loads only when the account actually
+  // selected the editorial template.
+  const [Editorial, setEditorial] = useState<ComponentType<{ profile: any }> | null>(null)
+  useEffect(() => {
+    if (templateId !== 'editorial-marketing') return
+    let cancelled = false
+    import('@/components/portfolio/templates/EditorialMarketingTemplate').then((mod) => {
+      if (!cancelled) setEditorial(() => mod.EditorialMarketingTemplate)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [templateId])
 
   return (
     <div className="flex flex-col min-h-screen bg-[var(--color-page)] text-[var(--color-text-primary)]">
@@ -107,7 +126,7 @@ export function BuilderPreviewClient({
             <Link
               href={`/u/${profile.username}`}
               target="_blank"
-              className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] transition-colors"
+              className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--on-primary)] hover:bg-[var(--color-primary-hover)] transition-colors"
             >
               <Globe className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Live site</span>
@@ -138,7 +157,11 @@ export function BuilderPreviewClient({
             }`}
           >
             <div dir={isAr ? 'rtl' : 'ltr'} className="w-full h-full min-h-[700px]">
-              <ClassicTemplate profile={profile} />
+              {templateId === 'editorial-marketing' && Editorial ? (
+                <Editorial profile={profile} />
+              ) : (
+                <ClassicTemplate profile={profile} />
+              )}
             </div>
           </div>
         )}

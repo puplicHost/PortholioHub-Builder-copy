@@ -150,7 +150,7 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
         cardBackgroundDark: '#374151',
         textColorLight: '#0F172A',
         textColorDark: '#E5E7EB',
-        mutedText: '#64748B',
+        mutedText: '#54647A',
         mutedTextDark: '#858688',
         borderColor: '#BAE6FD',
         borderColorDark: '#4B5563',
@@ -224,7 +224,7 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
               aria-pressed={defaultColorMode === 'light'}
               title={t('theme.lightOnly')}
             >
-              <Sun className="mr-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <Sun className="ms-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               {t('theme.light')}
             </button>
             <button
@@ -234,7 +234,7 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
               aria-pressed={defaultColorMode === 'dark'}
               title={t('theme.darkOnly')}
             >
-              <Moon className="mr-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <Moon className="ms-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               {t('theme.dark')}
             </button>
             <button
@@ -244,8 +244,8 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
               aria-pressed={defaultColorMode === 'light-with-toggle'}
               title={t('theme.lightToggle')}
             >
-              <Sun className="mr-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <Moon className="mr-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <Sun className="ms-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <Moon className="ms-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               {t('theme.lightToggle')}
             </button>
             <button
@@ -255,8 +255,8 @@ export function ThemeSettings({ profile, updateProfile }: { profile: any, update
               aria-pressed={defaultColorMode === 'dark-with-toggle'}
               title={t('theme.darkToggle')}
             >
-              <Moon className="mr-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <Sun className="mr-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <Moon className="ms-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <Sun className="ms-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               {t('theme.darkToggle')}
             </button>
           </div>

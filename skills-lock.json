@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "data-visualization": {
+      "source": "jpoindexter/design-and-ai-skills",
+      "sourceType": "github",
+      "skillPath": "design-system-skills/data-visualization/SKILL.md",
+      "computedHash": "597ba6e0fc8ae88e3a802916396ca1715ab7bb8b14af4dc6dc9de2c9f120536b"
+    },
     "find-skills": {
       "source": "vercel-labs/skills",
       "sourceType": "github",
@@ -12,6 +18,42 @@
       "sourceType": "github",
       "skillPath": "skills/frontend-design/SKILL.md",
       "computedHash": "89496d5dd00f4810205f351759594fc2742bf8eea85a2f2b2d1de59f4bd91576"
+    },
+    "geospatial-and-cartographic-visualization": {
+      "source": "openai/plugins",
+      "sourceType": "github",
+      "skillPath": "plugins/build-web-data-visualization/skills/geospatial-and-cartographic-visualization/SKILL.md",
+      "computedHash": "c4f3c4fa4381807c4bae55f5ccf159f3365e3696c9b5b3559406f1f15d12bd11"
+    },
+    "integrate-payment-gateway": {
+      "source": "vesviet/agent-skills",
+      "sourceType": "github",
+      "skillPath": "core/skills/commerce/integrate-payment-gateway/SKILL.md",
+      "computedHash": "b649eb357abadb79f113d2f6a9ad4132a4797df612253c5a9e155a6e1f4ebda6"
+    },
+    "nextjs": {
+      "source": "blakee-marcus/nextjs-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "9090828f1c1e81145914b1a8a351ebd434d57baeea33c1020b73e4ef0d66e9db"
+    },
+    "prisma-orm-setup": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-orm-setup/SKILL.md",
+      "computedHash": "08c8bc188c5a304f549aea607320905c9edc0485692182bf590a56dfc71617ca"
+    },
+    "security-audit": {
+      "source": "noorkhalel/saas-ai-skills",
+      "sourceType": "github",
+      "skillPath": "skills/security-audit/SKILL.md",
+      "computedHash": "780ac4038a7b00c6c06d451f59be6fc4911bf3413d19faae3d4299d7591595df"
+    },
+    "ui-design": {
+      "source": "pymodel/react-frontend-skills",
+      "sourceType": "github",
+      "skillPath": "skills/ui-design/SKILL.md",
+      "computedHash": "92c236db93808e48d8dd4a42366a4aba0e131fd32dca322726d8753933fd7921"
     },
     "web-design-guidelines": {
       "source": "vercel-labs/agent-skills",

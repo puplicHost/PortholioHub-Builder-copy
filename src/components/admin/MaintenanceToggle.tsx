@@ -82,8 +82,8 @@ export function MaintenanceToggle({ initialEnabled }: MaintenanceToggleProps) {
                 <span
                   className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${
                     enabled
-                      ? 'bg-[var(--color-danger)] text-white'
-                      : 'bg-emerald-500/10 text-emerald-600'
+                      ? 'bg-[var(--color-danger)] text-[var(--on-danger)]'
+                      : 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
                   }`}
                 >
                   {enabled ? (
@@ -113,7 +113,7 @@ export function MaintenanceToggle({ initialEnabled }: MaintenanceToggleProps) {
                 size="sm"
                 loading={busy}
                 onClick={() => handleToggle(false)}
-                className="!bg-emerald-600 hover:!bg-emerald-700 text-white"
+                className="!bg-[var(--color-success)] text-[var(--on-success)] hover:!bg-[var(--color-success)] hover:opacity-90"
               >
                 Disable Maintenance Mode
               </Button>

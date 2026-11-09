@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { trackPortfolioEvent } from '@/components/portfolio/TrackBeacon'
 import { normalizeWhatsappNumber } from '@/lib/whatsapp'
 import { sanitizeUrl } from '@/lib/urls'
+import { resolveProjectCardDestination } from '@/lib/project-card-links'
 import { portfolioImageUrl } from '@/lib/cloudinary'
 import { isSectionVisible } from '@/lib/section-visibility'
 import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
@@ -385,7 +386,7 @@ export function ClassicTemplate({
     : (appearance.textColorLight || '#0F172A')
   const currentMuted = isDark
     ? (appearance.mutedTextDark || '#858688')
-    : (appearance.mutedText || '#64748B')
+    : (appearance.mutedText || '#54647A')
   const currentCard = isDark
     ? (appearance.cardBackgroundDark || '#374151')
     : (appearance.cardBackground || '#FFFFFF')
@@ -1330,7 +1331,32 @@ export function ClassicTemplate({
                 )}
               </div>
               {testimonialItems.length > 0 ? (
-                <TestimonialsSlider items={testimonialItems} lang={lang} />
+                <>
+                  {testimonialItems.some((item: any) => typeof item?.photoUrl === 'string' && item.photoUrl.trim()) && (
+                    <TestimonialsSlider items={testimonialItems} lang={lang} />
+                  )}
+                  {testimonialItems.filter((item: any) => !(typeof item?.photoUrl === 'string' && item.photoUrl.trim())).length > 0 && (
+                    <div className="grid gap-4 cq-sm:grid-cols-2">
+                      {testimonialItems
+                        .filter((item: any) => !(typeof item?.photoUrl === 'string' && item.photoUrl.trim()))
+                        .map((item: any, i: number) => (
+                          <figure key={item.id || i} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-sm">
+                            {t(item.text) || item.body ? (
+                              <blockquote className="text-sm leading-relaxed text-[var(--color-text)]">
+                                {t(item.text) || item.body}
+                              </blockquote>
+                            ) : null}
+                            <figcaption className="mt-3 text-xs text-[var(--color-text-muted)]">
+                              <span className="font-semibold text-[var(--color-text)]">{t(item.name) || item.author || ''}</span>
+                              {(t(item.title) || item.role) ? (
+                                <span> · {t(item.title) || item.role}</span>
+                              ) : null}
+                            </figcaption>
+                          </figure>
+                        ))}
+                    </div>
+                  )}
+                </>
               ) : (
                 <p className="text-[var(--color-text-muted)] text-center font-medium">{lang === 'ar' ? 'سيتم إضافة آراء العملاء قريباً' : 'Client testimonials coming soon.'}</p>
               )}
@@ -1391,9 +1417,11 @@ export function ClassicTemplate({
         }
 
         const renderProjectLinks = (project: any) => {
-          const linkType = project.linkType || (project.content as any)?.linkType || 'none'
-          const linkedSlug = project.linkedPageSlug || (project.content as any)?.linkedPageSlug
-          const isTempSlug = !linkedSlug || String(linkedSlug).startsWith('new-') || String(linkedSlug).startsWith('project-new-')
+          const destination = resolveProjectCardDestination(project, {
+            username: profile.username,
+            isFree,
+            pages: profile.projectPages,
+          })
           const label = projectLinkLabel(project)
 
           // Extra link buttons from project.items
@@ -1406,25 +1434,27 @@ export function ClassicTemplate({
           return (
             <>
               {/* Main Button */}
-              {linkType === 'page' && !isTempSlug && !isFree ? (
+              {destination?.kind === 'page' ? (
                 <Link
-                  href={`/u/${profile.username}/projects/${linkedSlug}`}
+                  href={destination.href}
+                  onClick={(e) => { if (preview) e.preventDefault() }}
                   className="text-sm font-semibold flex items-center gap-1.5 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
                   title={label}
-                  aria-label={label}
+                  aria-label={`${label}: ${project.title}`}
                 >
                   {renderProjectLinkIcon(project)}
                   <span className="truncate max-w-[180px]">{label}</span>
                 </Link>
               ) : null}
-              {linkType === 'external' && project.externalLink ? (
+              {destination?.kind === 'external' ? (
                 <a
-                  href={sanitizeUrl(project.externalLink)}
+                  href={destination.href}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={(e) => { if (preview) e.preventDefault() }}
                   className="text-sm font-semibold flex items-center gap-1.5 text-[var(--color-primary)] hover:opacity-80 transition-opacity"
                   title={label}
-                  aria-label={label}
+                  aria-label={`${label}: ${project.title}`}
                 >
                   {renderProjectLinkIcon(project)}
                   <span className="truncate max-w-[180px]">{label}</span>
@@ -1442,6 +1472,7 @@ export function ClassicTemplate({
                     href={rawUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => { if (preview) e.preventDefault() }}
                     title={itemLabel}
                     aria-label={itemLabel}
                     className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border border-[var(--color-border)] text-[var(--color-text)] bg-[color-mix(in_srgb,var(--color-bg)_70%,transparent)] hover:bg-[var(--color-bg)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition-all max-w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] shadow-2xs"
@@ -1456,11 +1487,12 @@ export function ClassicTemplate({
         }
 
         const hasProjectLinks = (project: any) => {
-          const linkType = project.linkType || (project.content as any)?.linkType || 'none'
-          const linkedSlug = project.linkedPageSlug || (project.content as any)?.linkedPageSlug
-          const isTempSlug = !linkedSlug || String(linkedSlug).startsWith('new-') || String(linkedSlug).startsWith('project-new-')
-          const hasMainLink = (linkType === 'page' && !isTempSlug && !isFree) || (linkType === 'external' && Boolean(project.externalLink))
-          if (hasMainLink) return true
+          const destination = resolveProjectCardDestination(project, {
+            username: profile.username,
+            isFree,
+            pages: profile.projectPages,
+          })
+          if (destination) return true
 
           if (Array.isArray(project.items)) {
             return project.items.some((item: any) => {
@@ -1796,11 +1828,20 @@ export function ClassicTemplate({
                   const platform = link.platform || link.type || link.label || 'globe'
                   const rawUrl = link.url || link.value || ''
                   if (!rawUrl) return null
-                  const href = rawUrl.startsWith('http') || rawUrl.startsWith('mailto:') || rawUrl.startsWith('tel:')
-                    ? rawUrl
-                    : rawUrl.includes('@')
-                      ? `mailto:${rawUrl}`
-                      : `https://${rawUrl}`
+                  const linkType = String(link.type || link.platform || '').toLowerCase()
+                  const wa = linkType === 'whatsapp' ? normalizeWhatsappNumber(rawUrl) : ''
+                  const href = linkType === 'email'
+                    ? (rawUrl.startsWith('mailto:') ? rawUrl : `mailto:${rawUrl}`)
+                    : linkType === 'phone'
+                      ? (rawUrl.startsWith('tel:') ? rawUrl : `tel:${rawUrl.replace(/[^\d+]/g, '')}`)
+                      : wa
+                        ? `https://wa.me/${wa}`
+                        : rawUrl.startsWith('http') || rawUrl.startsWith('mailto:') || rawUrl.startsWith('tel:')
+                          ? rawUrl
+                          : rawUrl.includes('@')
+                            ? `mailto:${rawUrl}`
+                            : `https://${rawUrl}`
+                  const iconPlatform = linkType || String(platform || '').toLowerCase()
                   return (
                     <a
                       key={link.id || i}
@@ -1810,7 +1851,9 @@ export function ClassicTemplate({
                       className="flex items-center gap-4 rounded-[var(--border-radius-card)] border border-[var(--color-card-border)] bg-[var(--color-card)] px-5 py-4 shadow-sm hover:shadow-md transition-shadow"
                     >
                       <span className="h-10 w-10 shrink-0 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] flex items-center justify-center">
-                        {getSocialIcon(platform) || getContactIcon(platform)}
+                        {/^(email|phone|whatsapp|website)$/.test(iconPlatform)
+                          ? getContactIcon(iconPlatform)
+                          : getSocialIcon(iconPlatform)}
                       </span>
                       <span className="text-sm font-medium text-[var(--color-text)] break-words">
                         {t(link.label) || link.value || href}
@@ -2542,7 +2585,7 @@ export function ClassicTemplate({
                   © {new Date().getFullYear()} · {displayName}
                 </p>
                 <p className="text-xs" style={{ color: appearance.footerText || 'var(--color-muted)' }}>
-                  {lang === 'ar' ? 'بُني بواسطة' : 'Developed with'}{' '}
+                  {lang === 'ar' ? 'تم التطوير بواسطة' : 'Developed by'}{' '}
                   <a
                     href="https://portfolio-hub.online"
                     target="_blank"
@@ -2553,7 +2596,7 @@ export function ClassicTemplate({
                       textDecorationColor: 'color-mix(in srgb, var(--color-text) 40%, transparent)',
                     }}
                   >
-                    PortfolioHub
+                    Portfolio Hub
                   </a>
                 </p>
               </div>

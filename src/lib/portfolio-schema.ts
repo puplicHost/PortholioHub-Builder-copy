@@ -585,6 +585,16 @@ const safeFont = z
 
 const safeStr = (max: number) => z.string().max(max).optional().catch(undefined);
 
+// Template identifiers accepted by PortfolioHub. Unknown rows always resolve to
+// `classic` via the renderer, but the schema keeps a strict allow-list here so a
+// crafted string can never be persisted.
+const safeTemplate = z
+  .string()
+  .max(60)
+  .refine((s) => s === 'classic' || s === 'editorial-marketing')
+  .optional()
+  .catch(undefined);
+
 const safeUrl = z
   .string()
   .max(1000)
@@ -596,6 +606,7 @@ const appearanceSchema = z
   .object({
     colorMode: z.enum(['light', 'dark']).optional().catch(undefined),
     theme: safeStr(60),
+    template: safeTemplate,
     font: safeFont,
     primaryColor: safeColor,
     accentColor: safeColor.optional(),

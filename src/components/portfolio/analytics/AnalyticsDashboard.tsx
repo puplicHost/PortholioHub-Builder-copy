@@ -76,7 +76,7 @@ function DeltaPill({ current, previous, isHero = false }: { current: number; pre
     return (
       <span
         className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${
-          isHero ? 'bg-white/25 text-white' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400'
+          isHero ? 'bg-white/25 text-white' : 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
         }`}
       >
         ↑ new
@@ -91,8 +91,8 @@ function DeltaPill({ current, previous, isHero = false }: { current: number; pre
         isHero
           ? 'bg-white/20 text-white'
           : up
-            ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400'
-            : 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400'
+            ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+            : 'bg-[var(--color-danger)]/10 text-[var(--color-danger)]'
       }`}
     >
       {up ? '↑' : '↓'}{Math.abs(pct)}%
@@ -167,14 +167,14 @@ export function AnalyticsDashboard({ data }: { data: PortfolioAnalytics }) {
         <header className="flex min-w-0 max-w-full flex-col gap-4 overflow-x-hidden rounded-[28px] border border-slate-200/80 bg-white p-3 sm:px-6 sm:py-3.5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] dark:border-slate-800 dark:bg-[#161b26] md:flex-row md:items-center md:justify-between">
           {/* Brand Logo & Name */}
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2563eb] text-white shadow-md shadow-blue-500/20">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--on-primary)] shadow-md shadow-blue-500/20">
               <Zap className="h-5 w-5 fill-white text-white" />
             </div>
             <div>
               <span className="font-extrabold text-base tracking-tight text-[#0f172a] dark:text-white">
                 PortfolioHub
               </span>
-              <span className="ms-1.5 rounded-md bg-blue-50 px-1.5 py-0.5 font-mono text-[9px] font-bold text-[#2563eb] dark:bg-blue-950/60 dark:text-blue-400">
+              <span className="ms-1.5 rounded-md bg-[var(--color-primary)]/10 px-1.5 py-0.5 font-mono text-[9px] font-bold text-[var(--color-primary)]">
                 PRO
               </span>
             </div>
@@ -245,7 +245,7 @@ export function AnalyticsDashboard({ data }: { data: PortfolioAnalytics }) {
 
             {/* Profile Chip */}
             <div className="flex items-center gap-2.5 rounded-full border border-slate-200/80 bg-[#f8fafc] p-1 pr-3 dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#2563eb] text-[11px] font-bold text-white uppercase">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-primary)] text-[11px] font-bold text-[var(--on-primary)] uppercase">
                 {(data.username || 'U').charAt(0)}
               </div>
               <div className="hidden sm:block text-left text-xs leading-tight">
@@ -314,7 +314,7 @@ export function AnalyticsDashboard({ data }: { data: PortfolioAnalytics }) {
                 target="_blank"
                 rel="noreferrer"
                 aria-label={t('View live')}
-                className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full bg-[#2563eb] px-5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-[#1d4ed8] transition-all md:w-auto"
+                className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full bg-[var(--color-primary)] px-5 text-xs font-semibold text-[var(--on-primary)] shadow-md shadow-blue-500/20 hover:bg-[var(--color-primary-hover)] transition-all md:w-auto"
               >
                 <span>{t('View live')}</span>
                 <ExternalLink className="h-3.5 w-3.5 shrink-0" />
@@ -323,7 +323,7 @@ export function AnalyticsDashboard({ data }: { data: PortfolioAnalytics }) {
               <button
                 type="button"
                 aria-label={t('View live')}
-                className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full bg-[#2563eb] px-5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-[#1d4ed8] transition-all md:w-auto"
+                className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full bg-[var(--color-primary)] px-5 text-xs font-semibold text-[var(--on-primary)] shadow-md shadow-blue-500/20 hover:bg-[var(--color-primary-hover)] transition-all md:w-auto"
               >
                 <span>{t('View live')}</span>
                 <ExternalLink className="h-3.5 w-3.5 shrink-0" />
@@ -336,13 +336,13 @@ export function AnalyticsDashboard({ data }: { data: PortfolioAnalytics }) {
         {/* On < md (768px): stacks vertically in 1 column */}
         <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           {/* Card 1 — The Hero Blue Card (Total Views) */}
-          <div className="flex min-h-[80px] min-w-0 flex-col justify-between rounded-[24px] bg-[#2563eb] p-5 sm:p-6 text-white shadow-lg shadow-blue-500/20">
+          <div className="flex min-h-[80px] min-w-0 flex-col justify-between rounded-[24px] bg-[var(--color-primary)] p-5 sm:p-6 text-[var(--on-primary)] shadow-lg shadow-blue-500/20">
             {/* Icon + label on same row */}
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#2563eb] shadow-sm">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[var(--color-primary)] shadow-sm">
                 <Eye className="h-4 w-4" />
               </div>
-              <span className="min-w-0 truncate text-xs font-semibold text-blue-100">{t('Total Views')}</span>
+              <span className="min-w-0 truncate text-xs font-semibold opacity-80">{t('Total Views')}</span>
             </div>
 
             {/* Value below */}
@@ -353,7 +353,7 @@ export function AnalyticsDashboard({ data }: { data: PortfolioAnalytics }) {
               <DeltaPill current={data.total30d} previous={data.prev30d} isHero={true} />
             </div>
 
-            <p className="text-xs text-blue-200">
+            <p className="text-xs opacity-75">
               {t('Last 30 days')}: {data.total30d.toLocaleString()}
             </p>
           </div>
@@ -385,7 +385,7 @@ export function AnalyticsDashboard({ data }: { data: PortfolioAnalytics }) {
           <div className="flex min-h-[80px] min-w-0 flex-col justify-between rounded-[24px] border border-slate-200/80 bg-white p-5 sm:p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] dark:border-slate-800 dark:bg-[#161b26]">
             {/* Icon + label on same row */}
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#3b82f6] text-white shadow-sm">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--on-primary)] shadow-sm">
                 <FolderOpen className="h-4 w-4" />
               </div>
               <span className="min-w-0 truncate text-xs font-semibold text-[#64748b] dark:text-slate-400">{t('Project Views')}</span>
@@ -431,7 +431,7 @@ export function AnalyticsDashboard({ data }: { data: PortfolioAnalytics }) {
         {/* ── Empty State Banner (shown when total views is 0) ───────── */}
         {data.totalAllTime === 0 && (
           <div className="flex min-h-[220px] flex-col items-center justify-center rounded-[28px] border border-dashed border-slate-200/90 bg-white p-6 text-center shadow-xs dark:border-slate-800 dark:bg-[#161b26]">
-            <div className="mx-auto mb-3 flex h-14 w-14 max-w-[200px] items-center justify-center rounded-full bg-blue-50 text-[#2563eb] dark:bg-blue-950/60 dark:text-blue-400">
+            <div className="mx-auto mb-3 flex h-14 w-14 max-w-[200px] items-center justify-center rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
               <BarChart3 className="h-7 w-7 max-w-[200px]" />
             </div>
             <h3 className="text-base font-bold tracking-tight text-[#0f172a] dark:text-white">
@@ -444,7 +444,7 @@ export function AnalyticsDashboard({ data }: { data: PortfolioAnalytics }) {
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full bg-[#2563eb] px-5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-[#1d4ed8] transition-all sm:w-auto cursor-pointer"
+                className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full bg-[var(--color-primary)] px-5 text-xs font-semibold text-[var(--on-primary)] shadow-md shadow-blue-500/20 hover:bg-[var(--color-primary-hover)] transition-all sm:w-auto cursor-pointer"
               >
                 <Share2 className="h-3.5 w-3.5" />
                 <span>{copied ? t('Link copied!') : t('Copy Portfolio Link')}</span>

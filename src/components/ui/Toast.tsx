@@ -53,30 +53,34 @@ const iconMap = {
   warning: AlertTriangle,
 }
 
-const toastStyles: Record<ToastType, { container: string; icon: string; text: string; close: string }> = {
+const toastStyles: Record<ToastType, { container: string; icon: string; text: string; close: string; action: string }> = {
   success: {
-    container: 'bg-[#16a34a] border-[#16a34a] dark:border-[rgba(255,255,255,0.1)] shadow-[var(--shadow-md)]',
-    icon: 'text-white',
-    text: 'text-white',
-    close: 'text-white/80 hover:text-white',
+    container: 'bg-[var(--color-toast-success-bg)] border-[var(--color-toast-success-bg)] dark:border-[rgba(255,255,255,0.1)] shadow-[var(--shadow-md)]',
+    icon: 'text-[var(--color-toast-success-text)]',
+    text: 'text-[var(--color-toast-success-text)]',
+    close: 'text-[var(--color-toast-success-text)]',
+    action: 'text-[var(--color-toast-success-text)]',
   },
   error: {
-    container: 'bg-[#dc2626] border-[#dc2626] dark:border-[rgba(255,255,255,0.1)] shadow-[var(--shadow-md)]',
-    icon: 'text-white',
-    text: 'text-white',
-    close: 'text-white/80 hover:text-white',
+    container: 'bg-[var(--color-toast-error-bg)] border-[var(--color-toast-error-bg)] dark:border-[rgba(255,255,255,0.1)] shadow-[var(--shadow-md)]',
+    icon: 'text-[var(--color-toast-error-text)]',
+    text: 'text-[var(--color-toast-error-text)]',
+    close: 'text-[var(--color-toast-error-text)]',
+    action: 'text-[var(--color-toast-error-text)]',
   },
   info: {
     container: 'bg-[var(--color-surface)] border-[var(--color-border)] dark:border-[rgba(255,255,255,0.1)] shadow-[var(--shadow-md)]',
     icon: 'text-[var(--color-info)]',
     text: 'text-[var(--color-text-primary)]',
     close: 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]',
+    action: 'text-[var(--color-primary)]',
   },
   warning: {
-    container: 'bg-[#d97706] border-[#d97706] dark:border-[rgba(255,255,255,0.1)] shadow-[var(--shadow-md)]',
-    icon: 'text-white',
-    text: 'text-white',
-    close: 'text-white/80 hover:text-white',
+    container: 'bg-[var(--color-toast-warning-bg)] border-[var(--color-toast-warning-bg)] dark:border-[rgba(255,255,255,0.1)] shadow-[var(--shadow-md)]',
+    icon: 'text-[var(--color-toast-warning-text)]',
+    text: 'text-[var(--color-toast-warning-text)]',
+    close: 'text-[var(--color-toast-warning-text)]',
+    action: 'text-[var(--color-toast-warning-text)]',
   },
 }
 
@@ -171,9 +175,12 @@ export function ToastProvider({
               key={t.id}
               role={t.type === 'error' ? 'alert' : 'status'}
               className={`pointer-events-auto flex items-start gap-3 rounded-[var(--radius-md)] border border-solid p-4 w-full ${s.container}`}
-              style={{ backgroundColor: t.type === 'success' ? '#16a34a' : t.type === 'error' ? '#dc2626' : t.type === 'warning' ? '#d97706' : undefined }}
             >
-              <Icon className={`h-5 w-5 mt-0.5 shrink-0 ${s.icon}`} aria-hidden="true" />
+              <Icon
+                className={`h-5 w-5 mt-0.5 shrink-0 ${s.icon}`}
+                aria-hidden="true"
+                style={isSolid ? { opacity: 0.9 } : undefined}
+              />
               <div className="flex-1 min-w-0 text-start">
                 <p className={`text-sm font-medium ${s.text}`}>
                   {t.message}
@@ -184,7 +191,7 @@ export function ToastProvider({
                       t.action!.onClick()
                       removeToast(t.id)
                     }}
-                    className={`mt-1.5 min-h-[44px] text-xs font-medium hover:underline cursor-pointer ${isSolid ? 'text-white underline-offset-2' : 'text-[var(--color-primary)]'}`}
+                    className={`mt-1.5 min-h-[44px] text-xs font-medium hover:underline cursor-pointer ${isSolid ? `${s.action} inline-flex items-center opacity-90 hover:opacity-100` : 'text-[var(--color-primary)]'} underline-offset-2`}
                   >
                     {t.action.label}
                   </button>

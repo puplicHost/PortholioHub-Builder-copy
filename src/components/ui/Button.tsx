@@ -13,7 +13,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50',
+    'bg-[var(--color-primary)] text-[var(--on-primary)] hover:bg-[var(--color-primary-hover)] disabled:opacity-50',
   secondary:
     'bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50',
   ghost:
@@ -21,7 +21,7 @@ const variantStyles: Record<ButtonVariant, string> = {
   danger:
     'bg-[var(--color-danger)]/10 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/20 disabled:opacity-50',
   success:
-    'bg-[var(--color-success)] text-white hover:bg-[var(--color-success)]/90 disabled:opacity-50',
+    'bg-[var(--color-success)] text-[var(--on-success)] hover:opacity-90 disabled:opacity-50',
 }
 
 const sizeStyles: Record<ButtonSize, string> = {

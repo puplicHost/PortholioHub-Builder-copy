@@ -1,0 +1,4 @@
+interface:
+  display_name: "Integrate Payment Gateway"
+  short_description: "Integrate or extend a payment gateway (Stripe, VNPay, PayPal, Momo, etc.) int..."
+  default_prompt: "Use $integrate-payment-gateway to execute integrate payment gateway tasks in this codebase."

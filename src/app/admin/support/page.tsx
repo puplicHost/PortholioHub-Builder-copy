@@ -311,7 +311,7 @@ export default async function AdminSupportPage({ searchParams }: SupportPageProp
                     <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--color-border)]">
                       <Link
                         href={`/admin/users/${u.id}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-semibold hover:bg-[var(--color-primary-hover)] transition-colors shadow-xs"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--on-primary)] text-xs font-semibold hover:bg-[var(--color-primary-hover)] transition-colors shadow-xs"
                       >
                         <User className="h-3.5 w-3.5" />
                         <span>Manage User Account</span>
@@ -401,7 +401,7 @@ export default async function AdminSupportPage({ searchParams }: SupportPageProp
                   className="flex items-center justify-between p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-secondary)]/80 transition-colors text-xs"
                 >
                   <span className="font-medium text-[var(--color-text-primary)]">Pending Payments</span>
-                  <span className="px-2 py-0.5 rounded-full font-bold bg-amber-500/10 text-amber-600 text-[11px]">
+                  <span className="px-2 py-0.5 rounded-full font-bold bg-[var(--color-warning)]/10 text-[var(--color-warning)] text-[11px]">
                     {pendingPaymentsCount}
                   </span>
                 </Link>
@@ -410,7 +410,7 @@ export default async function AdminSupportPage({ searchParams }: SupportPageProp
                   className="flex items-center justify-between p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-secondary)]/80 transition-colors text-xs"
                 >
                   <span className="font-medium text-[var(--color-text-primary)]">Suspended Users</span>
-                  <span className="px-2 py-0.5 rounded-full font-bold bg-rose-500/10 text-rose-600 text-[11px]">
+                  <span className="px-2 py-0.5 rounded-full font-bold bg-[var(--color-danger)]/10 text-[var(--color-danger)] text-[11px]">
                     {suspendedCount}
                   </span>
                 </Link>

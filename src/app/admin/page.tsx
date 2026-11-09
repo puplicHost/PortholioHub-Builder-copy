@@ -169,7 +169,7 @@ export default async function AdminDashboardPage() {
           </Link>
           <Link
             href="/admin/announcements"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-semibold hover:bg-[var(--color-primary-hover)] transition-colors shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--on-primary)] text-xs font-semibold hover:bg-[var(--color-primary-hover)] transition-colors shadow-xs"
           >
             <Megaphone className="h-3.5 w-3.5" />
             <span>Announcements</span>
@@ -183,7 +183,7 @@ export default async function AdminDashboardPage() {
         {isMaintenance && (
           <div className="rounded-2xl border-2 border-[var(--color-danger)] bg-[var(--color-danger)]/15 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
             <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-danger)] text-white font-bold">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-danger)] text-[var(--on-danger)] font-bold">
                 <Wrench className="h-5 w-5 animate-pulse" />
               </span>
               <div>
@@ -197,7 +197,7 @@ export default async function AdminDashboardPage() {
             </div>
             <Link
               href="/admin/settings"
-              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[var(--color-danger)] text-white hover:opacity-90 transition-opacity text-xs font-semibold shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[var(--color-danger)] text-[var(--on-danger)] hover:opacity-90 transition-opacity text-xs font-semibold shrink-0"
             >
               Manage in Settings
               <ArrowRight className="h-4 w-4 rtl:rotate-180" />
@@ -217,7 +217,7 @@ export default async function AdminDashboardPage() {
                   <span className="text-xs font-bold text-[var(--color-warning)]">
                     Action required
                   </span>
-                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-[var(--color-warning)] text-white">
+                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-[var(--color-warning)] text-[var(--on-warning)]">
                     {pendingRequests}
                   </span>
                 </div>
@@ -231,7 +231,7 @@ export default async function AdminDashboardPage() {
             </div>
             <Link
               href="/admin/requests?status=PENDING"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-warning)] text-white hover:opacity-90 transition-opacity text-xs font-semibold shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-warning)] text-[var(--on-warning)] hover:opacity-90 transition-opacity text-xs font-semibold shrink-0"
             >
               Review Requests
               <ArrowRight className="h-4 w-4 rtl:rotate-180" />
@@ -241,17 +241,17 @@ export default async function AdminDashboardPage() {
 
         {/* Unconfirmed Payments Alert */}
         {pendingPaymentsCount > 0 && (
-          <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="rounded-2xl border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
             <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-warning)]/20 text-[var(--color-warning)]">
                 <Receipt className="h-5 w-5" />
               </span>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-amber-600">
+                  <span className="text-xs font-bold text-[var(--color-warning)]">
                     Payment verification
                   </span>
-                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-amber-600 text-white">
+                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-[var(--color-warning)] text-[var(--on-warning)]">
                     {pendingPaymentsCount}
                   </span>
                 </div>
@@ -265,7 +265,7 @@ export default async function AdminDashboardPage() {
             </div>
             <Link
               href="/admin/payments"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-amber-600 text-white hover:opacity-90 transition-opacity text-xs font-semibold shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-warning)] text-[var(--on-warning)] hover:opacity-90 transition-opacity text-xs font-semibold shrink-0"
             >
               Review Payments
               <ArrowRight className="h-4 w-4 rtl:rotate-180" />
@@ -314,7 +314,7 @@ export default async function AdminDashboardPage() {
                 <span className="text-xs font-semibold text-[var(--color-text-muted)]">
                   Total Revenue
                 </span>
-                <span className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
+                <span className="p-2 rounded-lg bg-[var(--color-success)]/10 text-[var(--color-success)]">
                   <Banknote className="h-4 w-4" />
                 </span>
               </div>
@@ -358,8 +358,8 @@ export default async function AdminDashboardPage() {
               <span
                 className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${
                   momPercent >= 0
-                    ? 'bg-emerald-500/10 text-emerald-600'
-                    : 'bg-rose-500/10 text-rose-600'
+                    ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+                    : 'bg-[var(--color-danger)]/10 text-[var(--color-danger)]'
                 }`}
               >
                 {momPercent >= 0 ? (

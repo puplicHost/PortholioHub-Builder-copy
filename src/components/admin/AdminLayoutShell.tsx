@@ -115,7 +115,7 @@ export function AdminLayoutShell({
         }`}
       >
         <div className="flex items-center gap-2.5 p-3.5 border-b border-[var(--color-border)]">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary)] text-white shadow-xs">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary)] text-[var(--on-primary)] shadow-xs">
             <Hammer className="h-4 w-4" />
           </span>
           {!collapsed && (
@@ -154,7 +154,7 @@ export function AdminLayoutShell({
                   <>
                     <span className="truncate flex-1">{item.label}</span>
                     {badgeCount > 0 && (
-                      <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-warning)] text-white shrink-0">
+                      <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-warning)] text-[var(--on-warning)] shrink-0">
                         {badgeCount}
                       </span>
                     )}
@@ -196,7 +196,7 @@ export function AdminLayoutShell({
       >
         <div className="flex items-center justify-between p-4 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-primary)] text-white">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-primary)] text-[var(--on-primary)]">
               <Hammer className="h-4 w-4" />
             </span>
             <span className="text-sm font-bold">Admin Panel</span>
@@ -230,7 +230,7 @@ export function AdminLayoutShell({
                 <Icon className="h-4 w-4 shrink-0" />
                 <span className="flex-1">{item.label}</span>
                 {badgeCount > 0 && (
-                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-warning)] text-white">
+                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-warning)] text-[var(--on-warning)]">
                     {badgeCount}
                   </span>
                 )}
@@ -254,7 +254,7 @@ export function AdminLayoutShell({
             </Link>
             <Link
               href="/profile/builder"
-              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2 px-2.5 rounded-lg bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]"
+              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2 px-2.5 rounded-lg bg-[var(--color-primary)] text-[var(--on-primary)] hover:bg-[var(--color-primary-hover)]"
             >
               Builder
             </Link>

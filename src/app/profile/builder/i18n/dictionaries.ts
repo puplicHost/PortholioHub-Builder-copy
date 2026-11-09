@@ -79,6 +79,7 @@ const en: BuilderDictionary = {
   'common.uploading': 'Uploading...',
   'common.uploadFile': 'Upload File',
   'common.explore': 'Explore',
+  'common.viewPage': 'View page',
   'storage.title': 'Storage',
   'storage.remaining': 'Remaining',
   'storage.reserved': 'Reserved',
@@ -459,6 +460,29 @@ const en: BuilderDictionary = {
   'locked.feature': '🔒 This feature is available to subscribers only · Contact us to upgrade',
   'locked.whatsappAction': 'Contact on WhatsApp',
 
+  'templates.open': 'Templates',
+  'templates.title': 'Portfolio template',
+  'templates.subtitle':
+    'Preview a template, then apply it. Applying saves the template choice together with any unsaved Builder changes.',
+  'templates.close': 'Close templates',
+  'templates.classic': 'Classic',
+  'templates.classicDesc': 'The default PortfolioHub template. Always available on every plan.',
+  'templates.editorial': 'Editorial Marketing',
+  'templates.editorialDesc':
+    'Magazine-style marketing layout with serif headlines and a warm burgundy palette.',
+  'templates.proBadge': 'Pro',
+  'templates.currentBadge': 'Active',
+  'templates.previewBadge': 'Preview',
+  'templates.preview': 'Preview',
+  'templates.exitPreview': 'Exit preview',
+  'templates.apply': 'Apply template',
+  'templates.applyAgain': 'Redo apply',
+  'templates.applying': 'Applying…',
+  'templates.upgradeCta': 'Upgrade to Pro',
+  'templates.previewOnlyFree': 'Free preview — applying requires a Pro subscription.',
+  'templates.previewBanner': 'Preview mode — nothing is saved or published until you press “Apply template”.',
+  'templates.done': 'Done',
+
   'toasts.draftRestored': 'Your unsaved draft was restored. Press "Save Changes" to keep it.',
   'toasts.saved': 'Changes saved successfully!',
   'toasts.unpublished': 'Unpublished. Your public page is now hidden.',
@@ -490,6 +514,9 @@ const en: BuilderDictionary = {
   'misc.showAsCard': 'Show as project card',
   'misc.showAsCardHint':
     'When off, this page is reachable by its link but does not appear in the Projects section.',
+  'misc.publishPage': 'Publish page',
+  'misc.publishPageHint':
+    'When off, the page and any cards linking to it are hidden from the public site.',
   'misc.linkHint':
     'Pages with no linked project are hidden from public navigation until linked.',
   'projectManager.cardBadge': 'Card',
@@ -781,6 +808,7 @@ const ar: BuilderDictionary = {
   'common.uploading': 'جارٍ الرفع...',
   'common.uploadFile': 'رفع ملف',
   'common.explore': 'استكشاف',
+  'common.viewPage': 'عرض الصفحة',
   'storage.title': 'المساحة التخزينية',
   'storage.remaining': 'المتبقي',
   'storage.reserved': 'محجوز',
@@ -1161,6 +1189,28 @@ const ar: BuilderDictionary = {
   'locked.feature': '🔒 هذه الميزة متاحة للمشتركين فقط · تواصل معنا للترقية',
   'locked.whatsappAction': 'تواصل واتساب',
 
+  'templates.open': 'القوالب',
+  'templates.title': 'قالب البورتفوليو',
+  'templates.subtitle':
+    'جرّب عرض القالب أولاً ثم اضغط «تطبيق القالب». التطبيق يحفظ اختيار القالب مع أي تغييرات غير محفوظة في المنشئ.',
+  'templates.close': 'إغلاق القوالب',
+  'templates.classic': 'الكلاسيك',
+  'templates.classicDesc': 'القالب الافتراضي لـ PortfolioHub. متاح في كل الخطط.',
+  'templates.editorial': 'إيديتوريال ماركتنج',
+  'templates.editorialDesc': 'تصميم على طراز المجلات بعناوين سيريف ولوحة ألوان عنابية دافئة.',
+  'templates.proBadge': 'برو',
+  'templates.currentBadge': 'الحالي',
+  'templates.previewBadge': 'معاينة',
+  'templates.preview': 'معاينة',
+  'templates.exitPreview': 'إلغاء المعاينة',
+  'templates.apply': 'تطبيق القالب',
+  'templates.applyAgain': 'إعادة التطبيق',
+  'templates.applying': 'جارٍ التطبيق…',
+  'templates.upgradeCta': 'الترقية إلى برو',
+  'templates.previewOnlyFree': 'معاينة مجانية — التطبيق يتطلب اشتراك برو.',
+  'templates.previewBanner': 'وضع المعاينة — لا يُحفظ أو يُنشر أي شيء حتى تضغط «تطبيق القالب».',
+  'templates.done': 'تم',
+
   'toasts.draftRestored': 'تم استرجاع مسودتك غير المحفوظة. اضغط «حفظ التغييرات» لتثبيتها.',
   'toasts.saved': 'تم حفظ التغييرات بنجاح!',
   'toasts.unpublished': 'تم إلغاء النشر. صفحتك العامة مخفية الآن.',
@@ -1192,6 +1242,9 @@ const ar: BuilderDictionary = {
   'misc.showAsCard': 'إظهار كبطاقة مشروع',
   'misc.showAsCardHint':
     'عند الإيقاف، يمكن الوصول للصفحة عبر رابطها لكنها لا تظهر في قسم المشاريع.',
+  'misc.publishPage': 'نشر الصفحة',
+  'misc.publishPageHint':
+    'عند الإيقاف، تختفي الصفحة وأي كروت مرتبطة بها من الموقع العام.',
   'misc.linkHint':
     'الصفحات غير المرتبطة بمشروع مخفية من التنقل العام حتى يتم ربطها.',
   'projectManager.cardBadge': 'بطاقة',

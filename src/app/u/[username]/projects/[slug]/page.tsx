@@ -23,6 +23,9 @@ const getPublicProject = cache(async (username: string, slug: string) => {
             include: { sections: { orderBy: { sectionOrder: 'asc' } } },
             orderBy: { pageOrder: 'asc' },
           },
+          // Item CTAs need the persisted page slugs so a real page named
+          // `new-project-page` is not mistaken for a temporary client id.
+          projectPages: { select: { slug: true, isPublished: true } },
         },
       },
       items: { orderBy: { sortOrder: 'asc' } },
@@ -36,10 +39,9 @@ const getPublicProject = cache(async (username: string, slug: string) => {
   if (!canViewLockedSections(sub.state)) return null
   // Unlinked pages (no project card points at this slug) are not public.
   // Links live on cards: page-level content.linkedPageSlug (linkType 'page')
-  // or page_link items whose externalUrl is the slug. Temp slugs can never
-  // resolve publicly, so they never count as links.
-  const isRealSlug = (s: unknown) =>
-    typeof s === 'string' && s !== '' && !s.startsWith('new-') && !s.startsWith('project-new-')
+  // or page_link items whose externalUrl is the slug. This row is already a
+  // persisted page, so its slug is valid regardless of prefix (a real page can
+  // legitimately be named `new-project-page`).
   const siblings = await prisma.projectPage.findMany({
     where: { profile: { username } },
     select: {
@@ -51,7 +53,7 @@ const getPublicProject = cache(async (username: string, slug: string) => {
     const content = (pg.content && typeof pg.content === 'object' && !Array.isArray(pg.content)
       ? pg.content
       : {}) as Record<string, unknown>
-    if (content.linkType === 'page' && content.linkedPageSlug === slug && isRealSlug(slug)) return true
+    if (content.linkType === 'page' && content.linkedPageSlug === slug) return true
     return (pg.items || []).some((item) => item.type === 'page_link' && item.externalUrl === slug)
   })
   if (!referenced) return null

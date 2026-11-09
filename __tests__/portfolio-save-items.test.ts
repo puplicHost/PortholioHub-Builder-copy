@@ -7,9 +7,9 @@ interface CreateManyArgs {
 const mocks = vi.hoisted(() => {
   const tx = {
     projectPage: {
-      findMany: vi.fn<(args: unknown) => Promise<{ id: string }[]>>(),
+      findMany: vi.fn<(args: unknown) => Promise<Array<{ id: string; slug?: string; showInProjects?: boolean }>>>(),
       create: vi.fn<(args: unknown) => Promise<{ id: string }>>(),
-      update: vi.fn<(args: { where: { id: string } }) => Promise<{ id: string }>>(),
+      update: vi.fn<(args: any) => Promise<{ id: string }>>(),
       deleteMany: vi.fn<(args: unknown) => Promise<{ count: number }>>(),
     },
     projectItem: {
@@ -183,5 +183,112 @@ describe('updatePortfolio project items persistence', () => {
       title: 'Card item',
     })
     expect(rows[0].projectId).not.toBe('card-1')
+  })
+})
+
+describe('updatePortfolio project deletion reference cleanup', () => {
+  it('clears page links to a project row deleted in the same save', async () => {
+    mocks.tx.projectPage.findMany.mockResolvedValue([
+      { id: 'keep-card', slug: 'keep-card', showInProjects: true },
+      { id: 'gone-page', slug: 'gone-page', showInProjects: false },
+    ])
+
+    const result = await updatePortfolio({
+      id: 'profile-1',
+      projects: [
+        project({
+          id: 'keep-card',
+          title: 'Keep',
+          slug: 'keep-card',
+          showInProjects: true,
+          linkType: 'page',
+          linkedPageSlug: 'gone-page',
+          content: { linkType: 'page', linkedPageSlug: 'gone-page' },
+          items: [
+            { title: 'Deleted page link', type: 'page_link', externalUrl: 'gone-page' },
+            { title: 'External', type: 'external_link', externalUrl: 'https://example.test/x' },
+          ],
+        }),
+      ],
+    })
+
+    expect(result.success).toBe(true)
+    expect(mocks.tx.projectPage.deleteMany).toHaveBeenCalledWith({
+      where: { profileId: 'profile-1', id: { in: ['gone-page'] } },
+    })
+    const updateCall = mocks.tx.projectPage.update.mock.calls[0][0] as unknown as {
+      data: { content: Record<string, unknown> }
+    }
+    expect(updateCall.data.content).toMatchObject({ linkType: 'none', linkedPageSlug: null })
+    const rows = savedRows()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ title: 'External', externalUrl: 'https://example.test/x' })
+  })
+})
+
+describe('project card internal page normalization', () => {
+  it('persists the canonical slug when the card references a page id', async () => {
+    mocks.tx.projectPage.findMany.mockResolvedValue([
+      { id: 'card-1', slug: 'card-one', showInProjects: true },
+      { id: 'page-id-1', slug: 'case-study', showInProjects: false },
+    ])
+
+    const result = await updatePortfolio({
+      id: 'profile-1',
+      projects: [
+        project({ id: 'card-1', title: 'Card', slug: 'card-one', showInProjects: true, linkType: 'page', linkedPageSlug: 'page-id-1' }),
+        project({ id: 'page-id-1', title: 'Case Study', slug: 'case-study', showInProjects: false }),
+      ],
+    })
+
+    expect(result.success).toBe(true)
+    const cardUpdate = mocks.tx.projectPage.update.mock.calls.find(
+      (call) => (call[0] as { where: { id: string } }).where.id === 'card-1',
+    )?.[0] as { data: { content: Record<string, unknown> } } | undefined
+    expect(cardUpdate?.data.content.linkedPageSlug).toBe('case-study')
+  })
+
+  it('keeps a persisted slug beginning with new- when the title changes', async () => {
+    mocks.tx.projectPage.findMany.mockResolvedValue([
+      { id: 'page-new', slug: 'new-project-page', showInProjects: false },
+    ])
+
+    const result = await updatePortfolio({
+      id: 'profile-1',
+      projects: [
+        project({
+          id: 'page-new',
+          title: 'Renamed Page',
+          slug: 'new-project-page',
+          showInProjects: false,
+        }),
+      ],
+    })
+
+    expect(result.success).toBe(true)
+    const updateCall = mocks.tx.projectPage.update.mock.calls[0]?.[0] as unknown as {
+      data: { slug: string }
+    }
+    expect(updateCall.data.slug).toBe('new-project-page')
+  })
+
+  it('still derives a fresh slug for a temporary row', async () => {
+    const result = await updatePortfolio({
+      id: 'profile-1',
+      projects: [
+        project({
+          id: 'new-temp-page',
+          title: 'Brand New Page',
+          slug: '',
+          showInProjects: false,
+        }),
+      ],
+    })
+
+    expect(result.success).toBe(true)
+    const createCall = mocks.tx.projectPage.create.mock.calls[0]?.[0] as unknown as {
+      data: { slug: string }
+    }
+    expect(createCall.data.slug).toBe('brand-new-page')
   })
 })

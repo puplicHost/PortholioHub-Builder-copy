@@ -199,7 +199,7 @@ function ConfirmDialog({
             ref={confirmRef}
             type="button"
             onClick={onConfirm}
-            className={`inline-flex h-[42px] items-center justify-center rounded-[var(--radius-md)] px-4 text-sm font-medium text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] cursor-pointer ${
+            className={`inline-flex h-[42px] items-center justify-center rounded-[var(--radius-md)] px-4 text-sm font-medium text-[var(--on-primary)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] cursor-pointer ${
               destructive
                 ? 'bg-[var(--color-danger)] hover:bg-[var(--color-danger)]/90 focus-visible:ring-[var(--color-danger)]'
                 : 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] focus-visible:ring-[var(--color-primary)]'

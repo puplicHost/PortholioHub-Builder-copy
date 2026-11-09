@@ -57,14 +57,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       list.push(project)
       byProfile.set(project.profile.username, list)
     }
-    const isRealSlug = (s: unknown) =>
-      typeof s === 'string' && s !== '' && !s.startsWith('new-') && !s.startsWith('project-new-')
     const isReferenced = (pages: typeof projects, slug: string) =>
       pages.some((pg) => {
         const content = (pg.content && typeof pg.content === 'object' && !Array.isArray(pg.content)
           ? pg.content
           : {}) as Record<string, unknown>
-        if (content.linkType === 'page' && content.linkedPageSlug === slug && isRealSlug(slug)) return true
+        if (content.linkType === 'page' && content.linkedPageSlug === slug) return true
         return (pg.items || []).some((item) => item.type === 'page_link' && item.externalUrl === slug)
       })
 

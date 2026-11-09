@@ -370,7 +370,7 @@ export function PortfolioFooter({
               </p>
               <div className="flex flex-col items-center gap-2 cq-sm:flex-row cq-sm:gap-5">
                 <p className="text-xs" style={{ color: footerMuted }}>
-                  {lang === 'ar' ? 'بُني بواسطة' : 'Developed with'}{' '}
+                  {lang === 'ar' ? 'تم التطوير بواسطة' : 'Developed by'}{' '}
                   <a
                     href="https://portfolio-hub.online"
                     target="_blank"
@@ -379,7 +379,7 @@ export function PortfolioFooter({
                     className="font-semibold underline underline-offset-2 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-[var(--color-text)]"
                     style={{ color: footerText, textDecorationColor: footerSocialBorder }}
                   >
-                    PortfolioHub
+                    Portfolio Hub
                   </a>
                 </p>
                 {showScrollToTop && onScrollToTop && (

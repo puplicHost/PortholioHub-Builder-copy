@@ -348,7 +348,7 @@ export function UserTableClient({ users, meta, basePath, params }: UserTableClie
           className="sticky bottom-4 z-40 flex items-center justify-between gap-3 p-3.5 rounded-2xl border-2 border-[var(--color-primary)] bg-[var(--color-surface)]/95 backdrop-blur-md shadow-2xl animate-in slide-in-from-bottom duration-200"
         >
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--color-primary)] text-white text-xs font-bold">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--color-primary)] text-[var(--on-primary)] text-xs font-bold">
               {selectedIds.length}
             </span>
             <span className="text-xs font-semibold text-[var(--color-text-primary)]">
@@ -401,7 +401,7 @@ export function UserTableClient({ users, meta, basePath, params }: UserTableClie
                 setDeleteConfirmText('')
                 setDeleteModalOpen(true)
               }}
-              className="inline-flex items-center gap-1 !bg-rose-700 hover:!bg-rose-800 text-white"
+              className="inline-flex items-center gap-1 !bg-[var(--color-danger)] text-[var(--on-danger)] hover:!bg-[var(--color-danger)] hover:opacity-90"
               title="Permanently hard-delete selected accounts"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -545,7 +545,7 @@ export function UserTableClient({ users, meta, basePath, params }: UserTableClie
               disabled={deleteConfirmText.trim() !== 'DELETE' || busy}
               loading={busy}
               onClick={handleBulkDelete}
-              className="!bg-rose-700 hover:!bg-rose-800 text-white"
+              className="!bg-[var(--color-danger)] text-[var(--on-danger)] hover:!bg-[var(--color-danger)] hover:opacity-90"
             >
               Delete {selectedIds.length} Accounts Permanently
             </Button>

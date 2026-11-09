@@ -61,7 +61,7 @@ export function AdminSidebar() {
       }`}
     >
       <div className="flex items-center gap-2.5 p-3.5 border-b border-[var(--color-border)]">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary)] text-white shadow-xs">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary)] text-[var(--on-primary)] shadow-xs">
           <Hammer className="h-4 w-4" />
         </span>
         {!collapsed && <span className="text-sm font-bold truncate">Admin</span>}

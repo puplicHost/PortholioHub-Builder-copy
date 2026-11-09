@@ -148,3 +148,42 @@ describe('deleteProjectPage authorization', () => {
     expect(mocks.prisma.projectPage.delete).not.toHaveBeenCalled()
   })
 })
+describe('updateProjectPage Phase 1 hardening', () => {
+  it('rejects forged ownership fields without updating', async () => {
+    mocks.entitlements.getEntitlements.mockResolvedValue({ state: 'ACTIVE', isFree: false })
+    mocks.prisma.projectPage.findFirst.mockResolvedValue({ id: 'page-1', showInProjects: false })
+    const res = await updateProjectPage('page-1', { title: 'x', profileId: 'victim-profile', id: 'other', version: 99 })
+    expect(res.success).toBe(false)
+    expect((res as { code?: string }).code).toBe('INVALID_PROJECT_PAGE_FIELD')
+    expect(mocks.prisma.projectPage.update).not.toHaveBeenCalled()
+  })
+
+  it('allows an allow-listed field update', async () => {
+    mocks.entitlements.getEntitlements.mockResolvedValue({ state: 'ACTIVE', isFree: false })
+    mocks.prisma.projectPage.findFirst.mockResolvedValue({ id: 'page-1', showInProjects: false })
+    const res = await updateProjectPage('page-1', { title: 'Paid edit', slug: 'paid-edit' })
+    expect(res.success).toBe(true)
+    expect(mocks.prisma.projectPage.update).toHaveBeenCalledWith({
+      where: { id: 'page-1' },
+      data: { title: 'Paid edit', slug: 'paid-edit' },
+    })
+  })
+
+  it('rejects Free users converting a card into a standalone page', async () => {
+    mocks.entitlements.getEntitlements.mockResolvedValue({ state: 'NONE', isFree: true })
+    mocks.prisma.projectPage.findFirst.mockResolvedValue({ id: 'card-1', showInProjects: true })
+    const res = await updateProjectPage('card-1', { title: 'Card', showInProjects: false })
+    expect(res.success).toBe(false)
+    expect((res as { code?: string }).code).toBe('SUBSCRIPTION_REQUIRED')
+    expect(mocks.prisma.projectPage.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects Free users editing an existing standalone page', async () => {
+    mocks.entitlements.getEntitlements.mockResolvedValue({ state: 'NONE', isFree: true })
+    mocks.prisma.projectPage.findFirst.mockResolvedValue({ id: 'page-1', showInProjects: false })
+    const res = await updateProjectPage('page-1', { title: 'x' })
+    expect(res.success).toBe(false)
+    expect((res as { code?: string }).code).toBe('SUBSCRIPTION_REQUIRED')
+    expect(mocks.prisma.projectPage.update).not.toHaveBeenCalled()
+  })
+})

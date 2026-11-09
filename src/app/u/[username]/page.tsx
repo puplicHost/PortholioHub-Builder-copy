@@ -2,8 +2,10 @@ import { notFound } from 'next/navigation'
 import { cache } from 'react'
 import { prisma } from '@/lib/prisma'
 import { ClassicTemplate } from '@/components/portfolio/templates/ClassicTemplate'
+import { resolveTemplateFromAppearance } from '@/lib/templates'
 import { TrackBeacon } from '@/components/portfolio/TrackBeacon'
 import { getSubscriptionState } from '@/lib/subscriptions'
+import { isPortfolioHomeVisible } from '@/lib/visibility'
 import { stripLockedSectionsForFree } from '@/lib/free-sections'
 import { toPublicProfile } from '@/lib/public-profile'
 import { getAppUrl } from '@/lib/urls'
@@ -34,7 +36,7 @@ const getPublicProfile = cache(async (username: string) => {
   if (!row) return null
   const sub = await getSubscriptionState(row.userId)
   // Only valid 404 reasons: unknown username, never published, or hidden by admin.
-  if (row.status !== 'PUBLISHED' || row.adminHidden) return null
+  if (!isPortfolioHomeVisible(row)) return null
   const profile = toPublicProfile(row)
   if (!profile || !profile.pages || profile.pages.length === 0) return null
   // FREE users never see internal links: external URLs only.
@@ -102,6 +104,15 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
     notFound()
   }
   const { profile, isFree } = data
+  // Template resolution: allow-listed ids only (`profile.appearance.template`),
+  // with Classic as the default for missing/invalid/unknown values. The
+  // editorial implementation is imported lazily (`await import`) so its client
+  // chunk only loads on routes that actually render it.
+  const templateId = resolveTemplateFromAppearance(profile.appearance)
+  const EditorialMarketingTemplate = templateId === 'editorial-marketing'
+    ? (await import('@/components/portfolio/templates/EditorialMarketingTemplate')).EditorialMarketingTemplate
+    : null
+
   const personLd = JSON.stringify({
     '@context': 'https://schema.org',
     '@type': 'Person',
@@ -119,7 +130,11 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
           to viewport media queries. Scrolling and `position: fixed` stay
           exactly as the browser handles a normal document. */}
       <div className="no-cq">
-        <ClassicTemplate profile={profile} isFree={isFree} />
+        {templateId === 'editorial-marketing' && EditorialMarketingTemplate ? (
+          <EditorialMarketingTemplate profile={profile} isFree={isFree} />
+        ) : (
+          <ClassicTemplate profile={profile} isFree={isFree} />
+        )}
       </div>
     </>
   )

@@ -9,9 +9,20 @@ export interface VisibilityInput {
   adminHidden?: boolean | null
 }
 
-export function isPortfolioVisible(input: VisibilityInput, subState: SubscriptionState): boolean {
+/**
+ * The public home portfolio is publish-gated but not subscription-gated:
+ * publishing is available on every plan, while project detail pages remain
+ * Pro-only (see `isPortfolioVisible`). Keeping the two rules separate avoids a
+ * published Free portfolio disappearing from `/u/{username}`.
+ */
+export function isPortfolioHomeVisible(input: VisibilityInput): boolean {
   if (input.status !== 'PUBLISHED') return false
   if (input.adminHidden) return false
+  return true
+}
+
+export function isPortfolioVisible(input: VisibilityInput, subState: SubscriptionState): boolean {
+  if (!isPortfolioHomeVisible(input)) return false
   if (subState !== 'ACTIVE' && subState !== 'GRACE') return false
   return true
 }

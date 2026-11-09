@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, Trash2, Edit, Link as LinkIcon, Loader2, Upload, ChevronUp, ChevronDown, FolderOpen, FileText, Table2, Image as ImageIcon, File as FileIcon, GripVertical } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -15,6 +15,7 @@ import { FileButton } from './ui/FileButton'
 import { ImageDeleteButton } from './ui/ImageDeleteButton'
 import { StorageUsage } from './ui/StorageUsage'
 import { PROJECT_MEDIA_ASPECTS, normalizeProjectMediaAspect } from '@/lib/project-card-visuals'
+import { resolveProjectId, type ProjectIdAliases } from '@/lib/project-id-aliases'
 import type { Prisma } from '@prisma/client'
 import {
   DndContext,
@@ -310,21 +311,26 @@ export function ProjectManager({
   updateProfile,
   isCardMode = false,
   allProjectPages = [],
+  projectIdAliases = {},
   isFree = false,
   groups = [],
   onGroupsChange,
   showEn = true,
   showAr = true,
+  onEditingCardChange,
 }: {
   profile: any
   updateProfile: any
   isCardMode?: boolean
   allProjectPages?: ProjectPageWithItems[]
+  projectIdAliases?: ProjectIdAliases
   isFree?: boolean
   groups?: ProjectGroup[]
   onGroupsChange?: (groups: ProjectGroup[]) => void
   showEn?: boolean
   showAr?: boolean
+  /** Development-only mirror of the card editor state for runtime diagnostics. */
+  onEditingCardChange?: (card: any | null) => void
 }) {
   const { t, locale } = useBuilderI18n()
   const confirm = useConfirm()
@@ -343,6 +349,22 @@ export function ProjectManager({
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+
+  // Mirrors the exact editor state to the Builder's development-only
+  // diagnostic panel. No data leaves the browser and no production code path
+  // passes this callback.
+  useEffect(() => {
+    onEditingCardChange?.(editingItem)
+  }, [editingItem, onEditingCardChange])
+
+  // Clear the diagnostic mirror when the editor unmounts (e.g. the user
+  // switches sections) so the panel cannot display a stale card.
+  useEffect(() => {
+    return () => {
+      onEditingCardChange?.(null)
+    }
+  }, [onEditingCardChange])
+
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [storageRefresh, setStorageRefresh] = useState(0)
@@ -576,9 +598,37 @@ export function ProjectManager({
       destructive: true,
     })
     if (!ok) return
+    const deleted = (profile.projectPages || []).find((proj: any) => proj.id === id)
+    const deletedSlug = typeof deleted?.slug === 'string' ? deleted.slug : ''
     updateProfile((p: any) => ({
       ...p,
-      projectPages: p.projectPages.filter((proj: any) => proj.id !== id)
+      projectPages: (p.projectPages || [])
+        .filter((proj: any) => proj.id !== id)
+        .map((proj: any) => {
+          if (!deletedSlug) return proj
+          const content = (proj.content && typeof proj.content === 'object') ? { ...proj.content } : {}
+          const linked = proj.linkedPageSlug || content.linkedPageSlug
+          const sourceItems = Array.isArray(proj.items) ? proj.items : []
+          let itemsChanged = false
+          const nextItems = sourceItems.map((item: any) => {
+            if (
+              item && item.type === 'page_link' &&
+              (item.externalUrl === deletedSlug || item.linkedPageSlug === deletedSlug)
+            ) {
+              itemsChanged = true
+              return { ...item, externalUrl: '', linkedPageSlug: '', linkType: 'none' }
+            }
+            return item
+          })
+          if (linked !== deletedSlug && !itemsChanged) return proj
+          return {
+            ...proj,
+            ...(linked === deletedSlug
+              ? { linkedPageSlug: '', content: { ...content, linkType: 'none', linkedPageSlug: '' } }
+              : { content }),
+            items: itemsChanged ? nextItems : proj.items,
+          }
+        }),
     }))
     if (editingItem?.id === id) {
       setEditingItem(null)
@@ -587,11 +637,12 @@ export function ProjectManager({
   }
 
   const updateEditingCard = (field: string, value: any) => {
+    const targetId = resolveProjectId(editingItem.id, projectIdAliases)
     setEditingItem((prev: any) => ({ ...prev, [field]: value }))
     updateProfile((p: any) => ({
       ...p,
       projectPages: p.projectPages.map((proj: any) =>
-        proj.id === editingItem.id ? { ...proj, [field]: value } : proj
+        proj.id === targetId ? { ...proj, [field]: value } : proj
       )
     }))
   }
@@ -1074,7 +1125,13 @@ export function ProjectManager({
                     id="pmc-page"
                     className="mt-1"
                     value={editingItem.linkedPageSlug || ''}
-                    onChange={(value) => updateEditingCard('linkedPageSlug', value)}
+                    onChange={(value) => {
+                      // Selecting a destination must also assert the page link
+                      // type; do not leave a previously-external card in a
+                      // half-selected state.
+                      updateEditingCard('linkType', 'page')
+                      updateEditingCard('linkedPageSlug', value)
+                    }}
                     placeholder={t('project.selectPage')}
                     options={[
                       { value: '', label: t('project.selectPage') },

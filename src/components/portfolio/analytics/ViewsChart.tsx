@@ -83,7 +83,7 @@ export function ViewsChart({ daily }: { daily: PortfolioAnalyticsDay[] }) {
                   onMouseLeave={() => setHoveredIdx(null)}
                   onFocus={() => setHoveredIdx(i)}
                   onBlur={() => setHoveredIdx(null)}
-                  className="group relative flex h-full min-w-0 flex-1 cursor-pointer flex-col justify-end items-center focus-visible:outline-2 focus-visible:outline-[#2563eb]"
+                  className="group relative flex h-full min-w-0 flex-1 cursor-pointer flex-col justify-end items-center focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
                 >
                   {/* Outer capsule track (Boltshift signature pill track) — reduced bar width on mobile */}
                   <div className="relative flex h-full w-full max-w-[18px] sm:max-w-[28px] md:max-w-[44px] flex-col justify-end overflow-hidden rounded-xl bg-[#f1f5f9]/70 p-0.5 md:rounded-2xl md:p-1 dark:bg-slate-800/50">
@@ -91,7 +91,7 @@ export function ViewsChart({ daily }: { daily: PortfolioAnalyticsDay[] }) {
                     <div
                       className={`relative w-full rounded-lg md:rounded-xl md:transition-all md:duration-300 ${
                         isActive
-                          ? 'bg-[#2563eb] shadow-md shadow-blue-500/20'
+                          ? 'bg-[var(--color-primary)] shadow-md shadow-blue-500/20'
                           : 'bg-[#cbd5e1]/80 dark:bg-slate-700/80 group-hover:bg-[#94a3b8]'
                       }`}
                       style={{ height: `${heightPct}%` }}
@@ -109,14 +109,14 @@ export function ViewsChart({ daily }: { daily: PortfolioAnalyticsDay[] }) {
 
                       {/* Top circular indicator dot on active bar */}
                       {isActive && (
-                        <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-white ring-2 ring-[#2563eb] shadow-sm z-10" />
+                        <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-white ring-2 ring-[var(--color-primary)] shadow-sm z-10" />
                       )}
                     </div>
                   </div>
 
                   {/* Boltshift-style Floating Tooltip Card */}
                   {isActive && (
-                    <div className="pointer-events-none absolute -top-4 left-1/2 z-30 max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-full min-w-[140px] rounded-2xl border border-slate-100 bg-white p-3 text-left shadow-2xl md:animate-in md:fade-in md:zoom-in-95 md:duration-150 dark:border-slate-800 dark:bg-slate-900">
+                    <div className="pointer-events-none absolute -top-4 left-1/2 z-30 max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-full min-w-[140px] rounded-2xl border border-slate-100 bg-white p-3 text-start shadow-2xl md:animate-in md:fade-in md:zoom-in-95 md:duration-150 dark:border-slate-800 dark:bg-slate-900">
                       <p className="font-semibold text-xs text-[#0f172a] dark:text-white">
                         {d.date}
                       </p>
@@ -132,10 +132,10 @@ export function ViewsChart({ daily }: { daily: PortfolioAnalyticsDay[] }) {
                         </div>
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="flex items-center gap-1.5 text-slate-500">
-                            <span className="h-2 w-2 rounded-full bg-[#2563eb]" />
+                            <span className="h-2 w-2 rounded-full bg-[var(--color-primary)]" />
                             Peak Ratio
                           </span>
-                          <span className="font-mono font-bold text-[#2563eb]">
+                          <span className="font-mono font-bold text-[var(--color-primary)]">
                             {Math.round((d.views / max) * 100)}%
                           </span>
                         </div>
@@ -150,7 +150,7 @@ export function ViewsChart({ daily }: { daily: PortfolioAnalyticsDay[] }) {
       </div>
 
       {/* X-Axis Month / Day Labels — sparse on mobile, smaller font */}
-      <div className="flex min-w-0 justify-between overflow-x-hidden pl-10 pr-2 text-[10px] font-medium text-slate-400 select-none md:pl-12 md:pr-4 md:text-[11px]">
+      <div className="flex min-w-0 justify-between overflow-x-hidden ps-10 pe-2 text-[10px] font-medium text-slate-400 select-none md:ps-12 md:pe-4 md:text-[11px]">
         {daily.map((d, i) => {
           // Show every 3rd or 4th label on dense ranges, or all if <= 10.
           // On mobile show only first/last to avoid crowding.
@@ -165,7 +165,7 @@ export function ViewsChart({ daily }: { daily: PortfolioAnalyticsDay[] }) {
             <span
               key={d.date}
               className={`transition-colors ${
-                i === activeIdx ? 'font-bold text-[#2563eb]' : 'text-slate-400'
+                i === activeIdx ? 'font-bold text-[var(--color-primary)]' : 'text-slate-400'
               }`}
             >
               {shouldShow ? d.date.slice(5) : ''}

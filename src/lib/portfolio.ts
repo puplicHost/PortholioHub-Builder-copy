@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import type { User } from '@prisma/client'
 import { normalizeContactUrl } from '@/lib/contact'
+import type { TemplateId } from '@/lib/templates'
 
 export const FREE_PORTFOLIO_ITEM_LIMIT = 999
 export const FREE_CONTACT_LINK_LIMIT = 99
@@ -108,7 +109,7 @@ export interface ProjectItem {
 
 export interface Appearance {
   theme?: 'minimal' | 'dark' | 'warm' | 'bold' | 'soft' | 'glass'
-  template?: 'classic-dark' | 'minimal-light' | 'arabic-pro'
+  template?: TemplateId
   accent?: string
   accentColor?: string
   colorMode?: 'light' | 'dark'

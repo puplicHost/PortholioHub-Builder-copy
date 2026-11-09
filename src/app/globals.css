@@ -52,7 +52,9 @@
   --ph-white: #FFFFFF;
   --ph-gray-light: #f5f5f7;
   --ph-gray-mid: #e0e0e0;
-  --ph-gray-text: #7a7a7a;
+  /* Muted/secondary text. #7a7a7a failed WCAG AA on white (4.29) and on the
+     page background (3.94); #6b6b70 passes both (5.30 / 4.87). */
+  --ph-gray-text: #6b6b70;
   --ph-navy-overlay-10: rgba(39, 39, 41, 0.10);
   --ph-navy-overlay-20: rgba(39, 39, 41, 0.20);
   --ph-gold-overlay-10: rgba(0, 102, 204, 0.10);
@@ -62,12 +64,24 @@
   --popover: #FFFFFF;
   --dropdown: #FFFFFF;
 
-  /* Toast surface tokens — always solid, never transparent */
+  /* On-color tokens: the label/icon color to place on top of the matching
+     fill. Uses the `--on-*` prefix on purpose so it can never collide with
+     the customer-portfolio token family (`--color-on-primary` etc.), which
+     is defined per-template inline in ClassicTemplate / ProjectPageView. */
+  --on-primary: #ffffff;
+  --on-success: #ffffff;
+  --on-warning: #ffffff;
+  --on-danger: #ffffff;
+
+  /* Toast surface tokens — always solid, never transparent.
+     Success/amber fills chosen for ≥4.5:1 with their text in both modes. */
   --color-toast-bg: #FFFFFF;
   --color-toast-text: #272729;
   --color-toast-border: #e0e0e0;
-  --color-toast-success-bg: #16a34a;
+  --color-toast-success-bg: #15803d;
   --color-toast-success-text: #ffffff;
+  --color-toast-warning-bg: #b45309;
+  --color-toast-warning-text: #ffffff;
   --color-toast-error-bg: #dc2626;
   --color-toast-error-text: #ffffff;
   --color-toast-info-bg: #FFFFFF;
@@ -88,9 +102,9 @@
   --color-accent: var(--ph-navy-deep);
   --color-text-primary: var(--ph-navy-deep);
   --color-text-secondary: var(--ph-gray-text);
-  --color-text-muted: #7a7a7a;
-  --color-success: #16A34A;
-  --color-warning: var(--ph-gold);
+  --color-text-muted: #6b6b70;
+  --color-success: #15803D;
+  --color-warning: #b45309;
   --color-danger: #DC2626;
   --color-info: var(--ph-navy-mid);
 
@@ -153,6 +167,13 @@ html[data-theme="dark"],
   --color-danger: #F87171;
   --color-info: #2997ff;
 
+  /* Bright dark-mode fills keep their identity; the label color must be the
+     near-black ink instead of white (white failed at 1.74–2.77:1 on these). */
+  --on-primary: #0e0e10;
+  --on-success: #052e16;
+  --on-warning: #1f1f23;
+  --on-danger: #1f1f23;
+
   --card: #18181b;
   --popover: #18181b;
   --dropdown: #18181b;
@@ -169,8 +190,10 @@ html[data-theme="dark"],
   --color-toast-bg: #18181b;
   --color-toast-text: #f5f5f7;
   --color-toast-border: rgba(255, 255, 255, 0.1);
-  --color-toast-success-bg: #16a34a;
+  --color-toast-success-bg: #15803d;
   --color-toast-success-text: #ffffff;
+  --color-toast-warning-bg: #b45309;
+  --color-toast-warning-text: #ffffff;
   --color-toast-error-bg: #dc2626;
   --color-toast-error-text: #ffffff;
   --color-toast-info-bg: #18181b;
@@ -381,10 +404,9 @@ body {
   --accent-focus: #0071e3;
   --accent-on-dark: #2997ff;
   --ink: #1d1d1f;
-  --ink-muted: #7a7a7a;
+  --ink-muted: #6b6b70;
   --canvas: #ffffff;
-  --canvas-alt: #f5f5f7;
-  --tile-1: #272729;
+  --canvas-alt: #f5f5f7;  --tile-1: #272729;
   --tile-2: #2a2a2c;
   --hairline: #e0e0e0;
   --divider: #f0f0f0;
@@ -426,6 +448,9 @@ body {
   --glass-bottom: rgba(22, 22, 24, 0.92);
   --card-hover: #232326;
   --tile-hover: #28282b;
+  /* Bright dark accent (#2997ff) keeps white CTAs at only 3.02:1 — the label
+     becomes the near-black ink instead (6.40:1). Matches the app shell. */
+  --on-primary: #0e0e10;
 }
 
 .landing-page[lang='ar'],

@@ -573,7 +573,7 @@ const CSS = `
   --ph-gold-overlay-15:rgba(0,102,204,.1);
   --ph-gray-light:#f5f5f7;
   --ph-gray-mid:#e0e0e0;
-  --ph-gray-text:#7a7a7a;
+  --ph-gray-text:#6b6b70;
   --ph-navy-deep:#272729;
   --ph-navy-mid:#2a2a2c;
   --ph-white:#fff;
@@ -584,11 +584,11 @@ const CSS = `
   --card-hover:#f0f0f2;
   --border:#e0e0e0;
   --text-primary:#18181b;
+  --text-muted:#6b6b70;
   --text-secondary:#4a4a4a;
-  --text-muted:#7a7a7a;
   --danger:#dc2626;
   --success:#16a34a;
-  --warning:#d97706;
+  --warning:#b45309;
   --font-display:'Space Grotesk','Cairo',sans-serif;
   --font-arabic:'Cairo','Tajawal','Noto Sans Arabic',sans-serif;
   --font-sans:'Inter','Cairo',sans-serif;

@@ -1,5 +1,4 @@
 import { getPortfolioAnalytics } from '@/lib/actions/portfolio'
-import { requireUser } from '@/lib/guards'
 import { AnalyticsDashboard } from '@/components/portfolio/analytics/AnalyticsDashboard'
 
 export const metadata = {
@@ -7,8 +6,6 @@ export const metadata = {
 }
 
 export default async function PortfolioAnalyticsPage() {
-  await requireUser()
-
   const data = await getPortfolioAnalytics()
 
   return <AnalyticsDashboard data={data} />

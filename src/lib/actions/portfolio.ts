@@ -9,6 +9,7 @@ import { ensurePersonalWorkspace } from '@/lib/workspaces'
 import { validateUsername } from '@/lib/portfolio'
 import { validateSections, validateProjects, validateProfileExtras } from '@/lib/portfolio-schema'
 import { sanitizeUrl } from '@/lib/urls'
+import { resolveTemplateId } from '@/lib/templates'
 import { Prisma } from '@prisma/client'
 
 async function requireUserWithWorkspace() {
@@ -39,235 +40,9 @@ export async function getOrCreateProfile() {
     },
   })
 
-  // Ensure default sections exist for existing profiles (single pass).
-  // Mutations run against the DB in order; a local mirror keeps later blocks
-  // consistent, and the profile is re-fetched at most ONCE at the end
-  // (zero extra fetches when nothing needs migrating).
-  if (profile?.pages?.[0]) {
-    const pageId = profile.pages[0].id
-    let sections: any[] = [...(profile.pages[0].sections || [])]
-    let migrated = false
-
-    // — Experience: deduplicate, or insert after About —
-    const experienceSections = sections.filter((s: any) => s.sectionType === 'experience')
-
-    if (experienceSections.length > 1) {
-      // Remove duplicate experience sections
-      const toDelete = experienceSections.slice(1)
-      for (const dup of toDelete) {
-        await prisma.pageSection.delete({ where: { id: dup.id } })
-      }
-      const deletedIds = new Set(toDelete.map((d: any) => d.id))
-      sections = sections.filter((s: any) => !deletedIds.has(s.id))
-      migrated = true
-    } else if (experienceSections.length === 0 && sections.length > 0) {
-      // Add the experience section
-      const aboutSection = sections.find((s: any) => s.sectionType === 'about')
-      const insertOrder = aboutSection ? aboutSection.sectionOrder + 1 : 3
-
-      // Shift sections after the insertion point
-      for (const sec of sections) {
-        if (sec.sectionOrder >= insertOrder) {
-          await prisma.pageSection.update({
-            where: { id: sec.id },
-            data: { sectionOrder: sec.sectionOrder + 1 },
-          })
-          sec.sectionOrder = sec.sectionOrder + 1
-        }
-      }
-
-      const created = await prisma.pageSection.create({
-        data: {
-          pageId,
-          sectionType: 'experience',
-          sectionOrder: insertOrder,
-          content: {
-            heading: { en: 'Work Experience', ar: 'الخبرات العملية' },
-            description: { en: 'A journey through my professional career', ar: 'رحلتي في مسيرتي المهنية' },
-            items: [],
-          } as Prisma.InputJsonValue,
-          settings: { isVisible: true } as Prisma.InputJsonValue,
-        },
-      })
-      sections.push(created)
-      migrated = true
-    }
-
-    // — Education: ensure one exists directly after Experience. It is a
-    // first-class base section (never converted to/from custom). An empty
-    // section is omitted by the template, so an existing published page is
-    // unchanged until its owner adds an item.
-    const educationSec = sections.find((s: any) => s.sectionType === 'education')
-
-    if (!educationSec && sections.length > 0) {
-      const experienceSec = sections.find((s: any) => s.sectionType === 'experience')
-      const aboutSec = sections.find((s: any) => s.sectionType === 'about')
-      const insertOrder = experienceSec
-        ? experienceSec.sectionOrder + 1
-        : aboutSec
-          ? aboutSec.sectionOrder + 1
-          : 3
-
-      for (const sec of sections) {
-        if (sec.sectionOrder >= insertOrder) {
-          await prisma.pageSection.update({
-            where: { id: sec.id },
-            data: { sectionOrder: sec.sectionOrder + 1 },
-          })
-          sec.sectionOrder = sec.sectionOrder + 1
-        }
-      }
-
-      const created = await prisma.pageSection.create({
-        data: {
-          pageId,
-          sectionType: 'education',
-          sectionOrder: insertOrder,
-          content: {
-            title: { en: 'Education', ar: 'التعليم' },
-            description: { en: '', ar: '' },
-            items: [],
-          } as Prisma.InputJsonValue,
-          settings: { isVisible: true } as Prisma.InputJsonValue,
-        },
-      })
-      sections.push(created)
-      migrated = true
-    }
-
-    // — Footer: ensure one exists (contact is a first-class section type
-    // since Sprint F3 and is never converted or deleted here) —
-    const footerSec = sections.find((s: any) => s.sectionType === 'footer')
-
-    if (!footerSec && sections.length > 0) {
-      const maxOrder = sections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0)
-      const created = await prisma.pageSection.create({
-        data: {
-          pageId,
-          sectionType: 'footer',
-          sectionOrder: maxOrder + 1,
-          content: {
-            headline: { en: 'Work with me', ar: 'تواصل معي' },
-            subheading: { en: "Let's build something great together.", ar: 'دعنا نبني شيئاً رائعاً معاً.' },
-            links: (profile.contactLinks as any) || [],
-          } as Prisma.InputJsonValue,
-          settings: { isVisible: true } as Prisma.InputJsonValue,
-        },
-      })
-      sections.push(created)
-      migrated = true
-    }
-
-    // — Testimonials: insert before footer (or append) —
-    const testimonialsSec = sections.find((s: any) => s.sectionType === 'testimonials')
-
-    if (!testimonialsSec && sections.length > 0) {
-      const footerSection = sections.find((s: any) => s.sectionType === 'footer')
-      const insertOrder = footerSection
-        ? footerSection.sectionOrder
-        : sections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0) + 1
-
-      for (const sec of sections) {
-        if (sec.sectionOrder >= insertOrder) {
-          await prisma.pageSection.update({
-            where: { id: sec.id },
-            data: { sectionOrder: sec.sectionOrder + 1 },
-          })
-          sec.sectionOrder = sec.sectionOrder + 1
-        }
-      }
-
-      const created = await prisma.pageSection.create({
-        data: {
-          pageId,
-          sectionType: 'testimonials',
-          sectionOrder: insertOrder,
-          content: {
-            title: { en: 'Testimonials', ar: 'آراء العملاء' },
-            subtitle: { en: 'What clients say', ar: 'ماذا يقول العملاء' },
-            icon: 'message',
-            items: [],
-          } as Prisma.InputJsonValue,
-          settings: { isVisible: true } as Prisma.InputJsonValue,
-        },
-      })
-      sections.push(created)
-      migrated = true
-    }
-
-    // — Clients: deduplicate if multiple, or insert after projects (before testimonials if present) —
-    const clientSections = sections.filter((s: any) => s.sectionType === 'clients')
-
-    if (clientSections.length > 1 && user.email !== 'bousla421@gmail.com') {
-      const toDelete = clientSections.slice(1)
-      for (const dup of toDelete) {
-        await prisma.pageSection.delete({ where: { id: dup.id } })
-      }
-      const deletedIds = new Set(toDelete.map((d: any) => d.id))
-      sections = sections.filter((s: any) => !deletedIds.has(s.id))
-      migrated = true
-    } else if (clientSections.length === 0 && sections.length > 0 && user.email !== 'bousla421@gmail.com') {
-      const projectsSection = sections.find((s: any) => s.sectionType === 'projects')
-      const testimonialsSection = sections.find((s: any) => s.sectionType === 'testimonials')
-      const footerSection = sections.find((s: any) => s.sectionType === 'footer')
-      const insertOrder = projectsSection
-        ? projectsSection.sectionOrder + 1
-        : testimonialsSection
-          ? testimonialsSection.sectionOrder
-          : footerSection
-            ? footerSection.sectionOrder
-            : sections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0) + 1
-
-      for (const sec of sections) {
-        if (sec.sectionOrder >= insertOrder) {
-          await prisma.pageSection.update({
-            where: { id: sec.id },
-            data: { sectionOrder: sec.sectionOrder + 1 },
-          })
-          sec.sectionOrder = sec.sectionOrder + 1
-        }
-      }
-
-      const created = await prisma.pageSection.create({
-        data: {
-          pageId,
-          sectionType: 'clients',
-          sectionOrder: insertOrder,
-          content: {
-            title: { en: 'Clients', ar: 'العملاء' },
-            description: { en: '', ar: '' },
-            showTitleUnderline: true,
-            logoShape: 'circle',
-            logoSize: 'md',
-            grayscale: false,
-            items: [],
-          } as Prisma.InputJsonValue,
-          settings: { isVisible: false } as Prisma.InputJsonValue,
-        },
-      })
-      sections.push(created)
-      migrated = true
-    }
-
-    // Single re-fetch so the returned profile reflects the migration
-    // (skipped entirely when nothing changed).
-    if (migrated) {
-      profile = await prisma.userProfile.findUnique({
-        where: { userId: user.id },
-        include: {
-          pages: {
-            include: { sections: { orderBy: { sectionOrder: 'asc' } } },
-            orderBy: { pageOrder: 'asc' },
-          },
-          projectPages: {
-            include: { items: { orderBy: { sortOrder: 'asc' } } },
-            orderBy: { sortOrder: 'asc' }
-          }
-        },
-      })
-    }
-  }
-
+  // Profile retrieval is intentionally read-only: existing customer profiles
+  // are returned exactly as stored. Legacy section initialization/cleanup is
+  // not performed during a read request.
   // Transform items to include linkType/linkedPageSlug from DB fields
   if (profile?.projectPages) {
     for (const pp of profile.projectPages) {
@@ -310,8 +85,8 @@ export async function getOrCreateProfile() {
         displayName: user.displayName || '',
         appearance: {
           colorMode: 'dark',
-          theme: 'classic-dark',
-          font: 'cairo',
+          theme: 'minimal',
+          font: 'Cairo',
           primaryColor: '#38BDF8',
           accentColor: '#818CF8',
           bgColorLight: '#F0F9FF',
@@ -320,7 +95,7 @@ export async function getOrCreateProfile() {
           cardBackgroundDark: '#374151',
           textColorLight: '#0F172A',
           textColorDark: '#E5E7EB',
-          mutedText: '#64748B',
+          mutedText: '#54647A',
           mutedTextDark: '#858688',
           borderColor: '#BAE6FD',
           borderColorDark: '#4B5563',
@@ -432,7 +207,7 @@ export async function updatePortfolio(data: {
     // relation write is scoped to THIS user's own profile row.
     const own = await prisma.userProfile.findUnique({
       where: { userId: user.id },
-      select: { id: true, username: true, version: true },
+      select: { id: true, username: true, version: true, appearance: true },
     })
     if (!own) {
       return { success: false, error: 'Profile not found' }
@@ -444,6 +219,31 @@ export async function updatePortfolio(data: {
       localized: data.localized,
       contactLinks: data.contactLinks,
     })
+
+    // Pro-only template guard (server-side entitlement enforcement). The
+    // template key rides inside `appearance`, so this is the ONLY choke point
+    // between any save path and the stored value: bulk saves, crafted direct
+    // requests and generic JSON updates all flow through here and are rejected
+    // as a WHOLE (no partial failure) when a Free plan requests a Pro
+    // template. Classic + unknown values always pass; nothing else is touched,
+    // so a rejection can never destroy or overwrite existing appearance data.
+    if (data.appearance && typeof data.appearance === 'object' && 'template' in data.appearance) {
+      const { canUseTemplate } = await import('@/lib/entitlements')
+      const requestedTemplate = resolveTemplateId((data.appearance as Record<string, unknown>).template)
+      const storedTemplate = resolveTemplateId((own.appearance as Record<string, unknown> | null)?.template)
+      // A downgraded owner may keep saving non-template edits while their
+      // existing Pro template remains selected. Activation or switching to a
+      // Pro template still requires a paid entitlement.
+      const keepsExistingProTemplate =
+        requestedTemplate === 'editorial-marketing' && storedTemplate === 'editorial-marketing'
+      if (!canUseTemplate(ent, requestedTemplate) && !keepsExistingProTemplate) {
+        return {
+          success: false,
+          error: 'The Editorial Marketing template requires a Pro subscription',
+          code: 'PRO_TEMPLATE_REQUIRED',
+        }
+      }
+    }
 
     // Content validation (Sprint F1): per-type schemas with field paths;
     // rejects bad URLs, oversize text and overfull arrays while tolerating
@@ -592,7 +392,7 @@ export async function updatePortfolio(data: {
 
           const existingProjects = await tx.projectPage.findMany({
             where: { profileId: own.id },
-            select: { id: true, showInProjects: true },
+            select: { id: true, slug: true, showInProjects: true },
           })
           const ownProjectIds = new Set(existingProjects.map((p) => p.id))
           // Free users may edit cards but never standalone content pages.
@@ -618,6 +418,12 @@ export async function updatePortfolio(data: {
           const removedIds = [...ownProjectIds].filter(
             // Never delete a downgraded user's standalone page by omission.
             (id) => !keptRealIds.has(id) && !(isFree && standaloneIds.has(id)),
+          )
+          const removedSlugs = new Set(
+            existingProjects
+              .filter((p) => removedIds.includes(p.id))
+              .map((p) => p.slug)
+              .filter((slug): slug is string => typeof slug === 'string' && slug.length > 0),
           )
           if (removedIds.length > 0) {
             await tx.projectPage.deleteMany({
@@ -646,7 +452,11 @@ export async function updatePortfolio(data: {
                 : (proj.slug || `project-${Date.now()}`)
             ).replace(/^-|-$/g, '') || 'project'
 
-            let slug = proj.slug && !proj.slug.startsWith('project-new-') && !proj.slug.startsWith('new-')
+            // Row identity decides whether the slug is a temporary client
+            // value, not the slug text itself: a persisted page can legitimately
+            // be named `new-project-page`. Trust the stored slug for existing
+            // rows; derive it only for rows created in this save.
+            let slug = proj.slug && !isTempId
               ? proj.slug.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
               : baseSlug
 
@@ -657,6 +467,18 @@ export async function updatePortfolio(data: {
             }
             usedSlugs.add(slug)
 
+            const requestedLinkType = proj.linkType || existingContent.linkType || 'none'
+            const rawLinkedSlug = proj.linkedPageSlug || existingContent.linkedPageSlug || null
+            // Normalize a legacy page id (or a /projects/slug value) to the
+            // canonical slug before persisting. The public templates and both
+            // Builder previews then resolve the same destination.
+            const linkedTarget = requestedLinkType === 'page' && typeof rawLinkedSlug === 'string'
+              ? existingProjects.find((p) => p.id === rawLinkedSlug || p.slug === rawLinkedSlug)
+              : undefined
+            const requestedLinkedSlug = linkedTarget?.slug || rawLinkedSlug
+            const targetWasDeleted =
+              typeof requestedLinkedSlug === 'string' && removedSlugs.has(requestedLinkedSlug)
+
             const projectData = {
               title: proj.title || 'Untitled',
               slug,
@@ -666,8 +488,8 @@ export async function updatePortfolio(data: {
               sortOrder: proj.sortOrder || 0,
               content: {
                 ...existingContent,
-                linkType: proj.linkType || 'none',
-                linkedPageSlug: proj.linkedPageSlug || null,
+                linkType: targetWasDeleted ? 'none' : requestedLinkType,
+                linkedPageSlug: targetWasDeleted ? null : requestedLinkedSlug,
               } as Prisma.InputJsonValue,
               displayMode: proj.displayMode || 'grid',
               // Free users can only ever have project CARDS, never standalone pages.
@@ -711,17 +533,24 @@ export async function updatePortfolio(data: {
             if (proj.items && proj.items.length > 0) {
               for (let idx = 0; idx < proj.items.length; idx++) {
                 const item = proj.items[idx]
+                const isPage = item.linkType === 'page' || item.type === 'page_link'
                 const itemType =
-                  item.type && VALID_TYPES.includes(item.type) ? item.type : 'external_link'
-
-                const isPage = item.linkType === 'page'
+                  isPage
+                    ? 'page_link'
+                    : (item.type && VALID_TYPES.includes(item.type) ? item.type : 'external_link')
                 const rawUrl = item.externalUrl || item.url
                 const sanitized = sanitizeUrl(rawUrl)
-                const externalUrl = isPage
+                const linkedPageSlug = isPage
                   ? (typeof item.linkedPageSlug === 'string' && item.linkedPageSlug.trim()
                       ? item.linkedPageSlug.trim()
-                      : null)
+                      : (typeof item.externalUrl === 'string' ? item.externalUrl.trim() : ''))
+                  : ''
+                const externalUrl = isPage
+                  ? (linkedPageSlug || null)
                   : (sanitized && (/^https?:\/\//i.test(sanitized) || sanitized.startsWith('/')) ? sanitized : null)
+                // Never persist a newly-submitted page link to a row deleted
+                // in this same save.
+                if (isPage && externalUrl && removedSlugs.has(externalUrl)) continue
                 const textContent = (item.iconType && ['generic', 'pdf', 'sheet', 'doc', 'folder'].includes(item.iconType))
                   ? item.iconType
                   : (item.textContent || null)
@@ -846,6 +675,8 @@ export async function updatePortfolio(data: {
         revalidatePath('/profile/builder')
         if (username) revalidatePath(`/u/${username}`)
         if (own.username && own.username !== username) revalidatePath(`/u/${own.username}`)
+        // Support-mode preview reads the same profile; keep it fresh after a save.
+        revalidatePath(`/admin/users/${user.id}/preview`)
       } catch (err) {
         // Revalidation is best-effort; the save itself already committed.
         console.error('updatePortfolio revalidate error:', err)
@@ -1100,16 +931,74 @@ export async function updateProjectPage(id: string, data: any) {
     // Standalone project pages are Pro-only; project cards remain editable.
     const { getEntitlements, canManageStandaloneProjectPage } = await import('@/lib/entitlements')
     const ent = await getEntitlements(user.id)
-    if (!canManageStandaloneProjectPage(ent, owned.showInProjects)) {
-      return { success: false, error: 'Standalone project pages require a paid subscription', code: 'SUBSCRIPTION_REQUIRED' }
+
+    const requestedStandalone = data?.showInProjects === false
+    if (
+      !canManageStandaloneProjectPage(ent, owned.showInProjects) ||
+      (ent.isFree && (owned.showInProjects === false || requestedStandalone))
+    ) {
+      return {
+        success: false,
+        error: 'Standalone project pages require a paid subscription',
+        code: 'SUBSCRIPTION_REQUIRED',
+      }
     }
 
-    const { items, ...pageData } = data
+    const ALLOWED_PROJECT_PAGE_FIELDS = new Set([
+      'title',
+      'slug',
+      'description',
+      'coverImage',
+      'cover_image',
+      'projectUrl',
+      'project_url',
+      'externalLink',
+      'external_link',
+      'linkLabel',
+      'link_label',
+      'tags',
+      'gallery',
+      'content',
+      'sortOrder',
+      'sort_order',
+      'displayMode',
+      'display_mode',
+      'showInProjects',
+      'show_in_projects',
+      'showBackButton',
+      'show_back_button',
+      'backButtonLabel',
+      'back_button_label',
+      'isPublished',
+      'is_published',
+    ])
 
-    await prisma.projectPage.update({
-      where: { id: owned.id },
-      data: pageData,
-    })
+    const { items, ...pageDataRaw } = data ?? {}
+    const pageData: Record<string, unknown> = {}
+    for (const key of Object.keys(pageDataRaw ?? {})) {
+      if (!ALLOWED_PROJECT_PAGE_FIELDS.has(key)) {
+        return {
+          success: false,
+          error: `Invalid project-page field: ${key}`,
+          code: 'INVALID_PROJECT_PAGE_FIELD',
+        }
+      }
+      pageData[key] = pageDataRaw[key]
+    }
+
+    if (Object.keys(pageData).length > 0) {
+      try {
+        await prisma.projectPage.update({
+          where: { id: owned.id },
+          data: pageData as any,
+        })
+      } catch (err: any) {
+        if (err?.code === 'P2002') {
+          return { success: false, error: 'Slug is already in use' }
+        }
+        throw err
+      }
+    }
 
     // Handle items: delete all existing and re-insert
     if (items !== undefined) {
@@ -1375,7 +1264,11 @@ export interface PortfolioAnalytics {
 // Read-only portfolio analytics for the current user's own profile.
 // All counts are anonymous aggregates from PortfolioViewEvent rows.
 export async function getPortfolioAnalytics(): Promise<PortfolioAnalytics> {
-  const user = await requireUserWithWorkspace()
+  // Analytics is read-only and does not need a workspace bootstrap. Using the
+  // authenticated user directly avoids the extra workspace lookup/write that
+  // made opening the page unnecessarily slow.
+  const user = await getCurrentUser()
+  if (!user) throw new Error('Unauthorized')
 
   const profile = await prisma.userProfile.findUnique({
     where: { userId: user.id },
@@ -1407,10 +1300,20 @@ export async function getPortfolioAnalytics(): Promise<PortfolioAnalytics> {
   const countAll = (rows: TypeCount[], type?: string) =>
     rows.filter((r) => !type || r.eventType === type).reduce((n, r) => n + r._count._all, 0)
 
-  // Two grouped queries replace eleven COUNTs. The 30-day windows are
-  // derived from the events30 rows below (same predicates, exact counts);
-  // the [60d,30d) windows are 60d-grouped minus 30d-derived.
-  const [byTypeAllTime, byType60d, events30] = await Promise.all([
+  // Aggregate in the database instead of loading every 30-day event row.
+  // Daily trend still needs timestamps, but only for page/project views and
+  // only the createdAt column; totals/projects/countries use grouped counts.
+  const [
+    byTypeAllTime,
+    byType30d,
+    byType60d,
+    total7d,
+    prev7d,
+    prev30d,
+    dailyEvents,
+    projectGroups,
+    countryGroups,
+  ] = await Promise.all([
     prisma.portfolioViewEvent.groupBy({
       by: ['eventType'],
       where: { profileId: profile.id },
@@ -1418,12 +1321,40 @@ export async function getPortfolioAnalytics(): Promise<PortfolioAnalytics> {
     }),
     prisma.portfolioViewEvent.groupBy({
       by: ['eventType'],
-      where: { profileId: profile.id, createdAt: { gte: since60 } },
+      where: { profileId: profile.id, createdAt: { gte: since30 } },
       _count: { _all: true },
     }),
+    prisma.portfolioViewEvent.groupBy({
+      by: ['eventType'],
+      where: { profileId: profile.id, createdAt: { gte: since60, lt: since30 } },
+      _count: { _all: true },
+    }),
+    prisma.portfolioViewEvent.count({
+      where: { profileId: profile.id, createdAt: { gte: since7 } },
+    }),
+    prisma.portfolioViewEvent.count({
+      where: { profileId: profile.id, createdAt: { gte: since14, lt: since7 } },
+    }),
+    prisma.portfolioViewEvent.count({
+      where: { profileId: profile.id, createdAt: { gte: since60, lt: since30 } },
+    }),
     prisma.portfolioViewEvent.findMany({
+      where: {
+        profileId: profile.id,
+        createdAt: { gte: since30 },
+        eventType: { in: ['page_view', 'project_view'] },
+      },
+      select: { createdAt: true },
+    }),
+    prisma.portfolioViewEvent.groupBy({
+      by: ['projectPageId'],
+      where: { profileId: profile.id, eventType: 'project_view', createdAt: { gte: since30 } },
+      _count: { _all: true },
+    }),
+    prisma.portfolioViewEvent.groupBy({
+      by: ['country'],
       where: { profileId: profile.id, createdAt: { gte: since30 } },
-      select: { eventType: true, projectPageId: true, country: true, createdAt: true },
+      _count: { _all: true },
     }),
   ])
 
@@ -1431,15 +1362,12 @@ export async function getPortfolioAnalytics(): Promise<PortfolioAnalytics> {
   const projectViews = countAll(byTypeAllTime, 'project_view')
   const whatsappClicks = countAll(byTypeAllTime, 'whatsapp_click')
 
-  const total30d = events30.length
-  const projectViews30d = events30.filter((e) => e.eventType === 'project_view').length
-  const whatsapp30d = events30.filter((e) => e.eventType === 'whatsapp_click').length
-  const total7d = events30.filter((e) => e.createdAt >= since7).length
-  const prev7d = events30.filter((e) => e.createdAt >= since14 && e.createdAt < since7).length
+  const total30d = countAll(byType30d)
+  const projectViews30d = countAll(byType30d, 'project_view')
+  const whatsapp30d = countAll(byType30d, 'whatsapp_click')
 
-  const prev30d = countAll(byType60d) - total30d
-  const projectViewsPrev30d = countAll(byType60d, 'project_view') - projectViews30d
-  const whatsappPrev30d = countAll(byType60d, 'whatsapp_click') - whatsapp30d
+  const projectViewsPrev30d = countAll(byType60d, 'project_view')
+  const whatsappPrev30d = countAll(byType60d, 'whatsapp_click')
 
   // Daily series (last 30 days, page_view + project_view only)
   const buckets = new Map<string, number>()
@@ -1449,16 +1377,16 @@ export async function getPortfolioAnalytics(): Promise<PortfolioAnalytics> {
   }
   const projectCounts = new Map<string, number>()
   const countryCounts = new Map<string, number>()
-  for (const e of events30) {
-    if (e.eventType === 'page_view' || e.eventType === 'project_view') {
-      const key = e.createdAt.toISOString().slice(0, 10)
-      if (buckets.has(key)) buckets.set(key, (buckets.get(key) || 0) + 1)
-    }
-    if (e.eventType === 'project_view' && e.projectPageId) {
-      projectCounts.set(e.projectPageId, (projectCounts.get(e.projectPageId) || 0) + 1)
-    }
-    const c = (e.country || 'unknown').toUpperCase()
-    countryCounts.set(c, (countryCounts.get(c) || 0) + 1)
+  for (const e of dailyEvents) {
+    const key = e.createdAt.toISOString().slice(0, 10)
+    if (buckets.has(key)) buckets.set(key, (buckets.get(key) || 0) + 1)
+  }
+  for (const row of projectGroups) {
+    if (row.projectPageId) projectCounts.set(row.projectPageId, row._count._all)
+  }
+  for (const row of countryGroups) {
+    const country = String(row.country || 'unknown').toUpperCase()
+    countryCounts.set(country, (countryCounts.get(country) || 0) + row._count._all)
   }
 
   // Full project list (LEFT-JOIN equivalent): every project for this

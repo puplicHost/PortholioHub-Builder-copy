@@ -2,6 +2,7 @@
 'use client'
 
 import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } from 'react'
+import { flushSync } from 'react-dom'
 import {
   ArrowLeft, Monitor, Smartphone, ExternalLink, Globe,
   Undo2, Redo2, CheckCircle, Check, Loader2, AlertCircle,
@@ -10,7 +11,7 @@ import {
   Trophy, Star, Users, Briefcase, Heart, Zap, Target, Award,
   Clock, TrendingUp, Code, Layers, Rocket, PenTool, Sun, Moon,
   ArrowUp, BarChart3, LogOut, Languages, User, AlertTriangle, Lock, Save,
-  Copy
+  Copy, LayoutTemplate
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -58,6 +59,8 @@ import {
 } from '@/lib/experience-dates'
 import { ReorderButtons, sortableRowHandleClass } from './ui/ReorderButtons'
 import { LivePreview } from './LivePreview'
+import { TemplatePickerModal } from './TemplatePickerModal'
+import { resolveTemplateId, type TemplateId } from '@/lib/templates'
 import { ProjectPageView } from '@/app/u/[username]/projects/[slug]/ProjectPageView'
 import {
   PROJECT_FILE_TYPES,
@@ -75,6 +78,7 @@ import {
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { ThemeSettings } from './ThemeSettings'
 import { ProjectManager } from './ProjectManager'
+import { ProjectCardDiagnostics } from './ProjectCardDiagnostics'
 import { TestimonialsEditor } from './TestimonialsEditor'
 import { GalleryEditor } from './GalleryEditor'
 import { FilesEditor } from './FilesEditor'
@@ -700,6 +704,13 @@ const BUILDER_DARK_KEY = 'portfoliohub-builder-dark'
 // on refresh/close. Per-profile, stored in localStorage, never sent to server.
 const BUILDER_DRAFT_PREFIX = 'portfoliohub-builder-draft:'
 
+// Runtime project-card diagnostics are a local-development tool only. The
+// production bundle never mounts the panel nor forwards editor state to it.
+const CARD_DIAGNOSTICS_ENABLED = process.env.NODE_ENV !== 'production'
+// Keep the diagnostic effects/logs available in development, but do not render
+// the floating "Card diagnostics · dev only" panel in the Builder UI.
+const CARD_DIAGNOSTICS_PANEL_VISIBLE = false
+
 // Shown when the mobile "Go Live" button is tapped before publishing.
 function ensureValidProjectItemTypes(projectPages: any[]) {
   if (!projectPages) return []
@@ -754,6 +765,7 @@ type BuilderProjectPageRow = {
   showInProjects?: boolean
   linkedPageSlug?: string | null
   content?: unknown
+  isPublished?: boolean | null
 }
 
 /** Cards are home-page entries; pages are the detail pages that hold content. */
@@ -1125,7 +1137,21 @@ export function BuilderClient({
   // Version conflict (another tab saved first): blocks saves until the
   // user picks Reload or Overwrite in the modal (Sprint F4).
   const [conflict, setConflict] = useState<{ serverVersion: number } | null>(null)
+  // Template picker (Pro feature): open/close + preview-only override. The
+  // override state never persists anything by itself; Apply runs the save.
+  const [templateModalOpen, setTemplateModalOpen] = useState(false)
+  const [previewTemplateId, setPreviewTemplateId] = useState<TemplateId | null>(null)
+  const [applyingTemplate, setApplyingTemplate] = useState(false)
+  // Development-only mirror of ProjectManager's selected card. Never populated
+  // in production (see CARD_DIAGNOSTICS_ENABLED).
+  const [diagnosticCard, setDiagnosticCard] = useState<any | null>(null)
+  // Server-created project rows replace their temporary client ids on save.
+  // Keep the mapping so an open card editor can follow the real row.
+  const [projectIdAliases, setProjectIdAliases] = useState<Record<string, string>>({})
   const backoffRef = useRef(0)
+  // Local Builder history (undo/redo). Bounded to keep memory predictable.
+  const historyRef = useRef<any[]>([])
+  const futureRef = useRef<any[]>([])
 
   // Builder dark mode is scoped to the builder wrapper (`dark` class +
   // `[data-theme]` on `.builder-root`, which sets all CSS vars and enables the
@@ -1251,13 +1277,19 @@ export function BuilderClient({
     return () => clearTimeout(t)
   }, [currentSnapshot, isDirty, draftKey])
 
-  const handleSaveChanges = async (forceVersion?: number): Promise<boolean> => {
+  const handleSaveChanges = async (forceVersion?: number, stateOverride?: any): Promise<boolean> => {
     if (saveStatus === 'saving') return false
+
+    // Optional snapshot override: the template Apply flow must save a state
+    // that already carries the new template key (a bare setProfile would
+    // still be the previous closure value here). The override contains the
+    // caller's current profile state — no server behavior changes either way.
+    const src = stateOverride ?? profile
 
     // Inline editor validation: a save is blocked (with the same message the
     // item shows inline) while any experience range is inverted or an
     // education card has no title.
-    for (const section of profile.pages?.[0]?.sections || []) {
+    for (const section of src.pages?.[0]?.sections || []) {
       if (section.sectionType === 'experience') {
         for (const item of section.content?.items || []) {
           const problem = experienceDateError(item, locale)
@@ -1280,63 +1312,85 @@ export function BuilderClient({
     setSaveStatus('saving')
     try {
       const res = await updatePortfolio({
-        id: profile.id,
-        username: profile.username,
-        avatarUrl: profile.avatarUrl,
-        appearance: profile.appearance,
-        localized: profile.localized,
-        contactLinks: profile.contactLinks,
-        sections: profile.pages[0]?.sections,
-        projects: ensureValidProjectItemTypes(profile.projectPages),
-        expectedVersion: forceVersion ?? profile.version,
+        id: src.id,
+        username: src.username,
+        avatarUrl: src.avatarUrl,
+        appearance: src.appearance,
+        localized: src.localized,
+        contactLinks: src.contactLinks,
+        sections: src.pages[0]?.sections,
+        projects: ensureValidProjectItemTypes(src.projectPages),
+        expectedVersion: forceVersion ?? src.version,
       })
       if (res.success) {
-        // Server state is now authoritative — drop the local draft.
-        if (draftKey) {
+        // Capture the latest client state without changing it before merging
+        // server-owned metadata, so edits typed while the request was in
+        // flight cannot be clobbered by the snapshot sent.
+        let latestProfile = src
+        flushSync(() => {
+          setProfile((prev: any) => {
+            latestProfile = prev
+            return prev
+          })
+        })
+        const hadConcurrentEdits = latestProfile !== src
+
+        // Server state authority applies to the snapshot we sent. Only clear
+        // the local draft when no client edits arrived during the request;
+        // otherwise keep the backup for the user's still-unsaved changes.
+        if (draftKey && !hadConcurrentEdits) {
           try {
             window.localStorage.removeItem(draftKey)
           } catch {
-            /* ignore */
+            /* storage full/unavailable — ignore */
           }
         }
         setDraftSavedAt(null)
-        let nextProfile = profile
+        let nextProfile = latestProfile
+        let savedProfile = src
         if (typeof (res as any).version === 'number') {
           nextProfile = { ...nextProfile, version: (res as any).version }
+          savedProfile = { ...savedProfile, version: (res as any).version }
           setProfile(nextProfile)
         }
         if ((res as any).savedProjects && (res as any).savedProjects.length > 0) {
-          let updatedPages = [...(profile.projectPages || [])]
-          for (const sp of (res as any).savedProjects) {
-            updatedPages = updatedPages.map((page: any) => {
-              if (page.id === sp.tempId || page.id === sp.id) {
-                return {
-                  ...page,
-                  id: sp.id,
-                  slug: sp.slug,
-                  title: sp.title || page.title,
-                }
-              }
-              return page
-            })
+          const applyProjectRemaps = (pages: any[]) =>
+            (res as any).savedProjects.reduce(
+              (list: any[], sp: any) =>
+                list.map((page: any) =>
+                  page.id === sp.tempId || page.id === sp.id
+                    ? {
+                        ...page,
+                        id: sp.id,
+                        slug: sp.slug,
+                        title: sp.title || page.title,
+                      }
+                    : (sp.tempId &&
+                      (page.linkedPageSlug === sp.tempId ||
+                        page.linkedPageSlug === `project-${sp.tempId}`))
+                    ? { ...page, linkedPageSlug: sp.slug }
+                    : page,
+                ),
+              [...(pages || [])],
+            )
 
-            if (sp.tempId) {
-              updatedPages = updatedPages.map((page: any) => {
-                if (page.linkedPageSlug === sp.tempId || page.linkedPageSlug === `project-${sp.tempId}`) {
-                  return {
-                    ...page,
-                    linkedPageSlug: sp.slug,
-                  }
-                }
-                return page
-              })
-            }
-          }
           nextProfile = {
             ...nextProfile,
-            projectPages: updatedPages,
+            projectPages: applyProjectRemaps(latestProfile.projectPages),
+          }
+          savedProfile = {
+            ...savedProfile,
+            projectPages: applyProjectRemaps(src.projectPages),
           }
           setProfile(nextProfile)
+
+          setProjectIdAliases((prev) => {
+            const next = { ...prev }
+            for (const sp of (res as any).savedProjects as any[]) {
+              if (sp?.tempId && sp?.id) next[sp.tempId] = sp.id
+            }
+            return next
+          })
 
           setActivePage((curr) => {
             const matched = (res as any).savedProjects.find((sp: any) => sp.tempId === curr)
@@ -1355,6 +1409,12 @@ export function BuilderClient({
               i === 0 ? { ...pg, sections: remap(pg.sections) } : pg,
             ),
           }
+          savedProfile = {
+            ...savedProfile,
+            pages: (savedProfile.pages || []).map((pg: any, i: number) =>
+              i === 0 ? { ...pg, sections: remap(pg.sections) } : pg,
+            ),
+          }
           // Keep the editor open on a section that was just created server-side
           // (its temp `new-…` id was replaced with the real row id).
           setSelectedSectionId((curr) =>
@@ -1362,14 +1422,17 @@ export function BuilderClient({
           )
           setProfile(nextProfile)
         }
-        setSavedSnapshot(getProfileSnapshot(nextProfile))
+        // Track the snapshot that actually committed to the database. If the
+        // user edited during the request, `savedProfile` does not include those
+        // edits, so isDirty remains true and the draft is preserved above.
+        setSavedSnapshot(getProfileSnapshot(savedProfile))
         setSaveStatus('saved')
         backoffRef.current = 0
         toast('success', t('toasts.saved'))
         return true
       } else if ((res as any).conflict) {
         setSaveStatus('error')
-        setConflict({ serverVersion: (res as any).currentVersion ?? profile.version })
+        setConflict({ serverVersion: (res as any).currentVersion ?? src.version })
         return false
       } else {
         setSaveStatus('error')
@@ -1381,6 +1444,37 @@ export function BuilderClient({
       setSaveStatus('error')
       toast('error', getFriendlyErrorMessage('NETWORK_ERROR', locale))
       return false
+    }
+  }
+
+  // Apply a template (Pro feature). Saves ONLY the `appearance.template` key:
+  // the payload above is the caller's own current state, so sections,
+  // projects, appearance colors and typography all travel unchanged. The
+  // server-side entitlement guard in updatePortfolio is authoritative — if a
+  // Free plan sneaks past the UI, this returns PRO_TEMPLATE_REQUIRED and no
+  // write happens (the previous template and every other field stay intact).
+  const handleApplyTemplate = async (templateId: TemplateId): Promise<boolean> => {
+    if (applyingTemplate || saveStatus === 'saving') return false
+    setApplyingTemplate(true)
+    try {
+      const updated = { ...profile, appearance: { ...(profile.appearance || {}), template: templateId } }
+      const ok = await handleSaveChanges(profile.version, updated)
+      if (ok) {
+        // `handleSaveChanges` reconciles against the latest state (which may
+        // still carry the old template). Apply the chosen template locally so
+        // the embedded preview switches immediately after Apply.
+        setProfile((p: any) => ({
+          ...p,
+          appearance: { ...(p.appearance || {}), template: templateId },
+        }))
+        // The saved snapshot now includes the template key — clear the
+        // preview-only override so the preview reflects the SAVED state.
+        setPreviewTemplateId(null)
+        setTemplateModalOpen(false)
+      }
+      return ok
+    } finally {
+      setApplyingTemplate(false)
     }
   }
 
@@ -1493,9 +1587,32 @@ export function BuilderClient({
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [isDirty])
 
-  // State updater
+  // State updater with a bounded local undo/redo history. Network responses
+  // and conflict reloads set profile directly and intentionally do not become
+  // undo steps.
   const updateProfile = (updater: (prev: any) => any) => {
-    setProfile(updater)
+    setProfile((prev: any) => {
+      const next = updater(prev)
+      if (next !== prev) {
+        historyRef.current = [...historyRef.current.slice(-49), prev]
+        futureRef.current = []
+      }
+      return next
+    })
+  }
+
+  const handleUndo = () => {
+    const previous = historyRef.current.pop()
+    if (previous === undefined) return
+    futureRef.current = [...futureRef.current.slice(-49), profile]
+    setProfile(previous)
+  }
+
+  const handleRedo = () => {
+    const next = futureRef.current.pop()
+    if (next === undefined) return
+    historyRef.current = [...historyRef.current.slice(-49), profile]
+    setProfile(next)
   }
 
   // Shared image upload: one keyed progress value drives the button spinner,
@@ -1750,6 +1867,52 @@ export function BuilderClient({
     })
   }
 
+  const addBaseSection = (sectionType: 'contact' | 'gallery' | 'files') => {
+    if (isFreePlan) {
+      showLockedToast()
+      return
+    }
+    const newId = randomBuilderId(sectionType)
+    const labels: Record<typeof sectionType, { en: string; ar: string }> = {
+      contact: { en: 'Contact', ar: 'تواصل' },
+      gallery: { en: 'Gallery', ar: 'معرض الصور' },
+      files: { en: 'Files', ar: 'ملفات' },
+    }
+    const insertOrder = (() => {
+      const footer = sections.find((s: any) => s.sectionType === 'footer')
+      if (footer) return footer.sectionOrder || 0
+      return sections.reduce((max: number, s: any) => Math.max(max, s.sectionOrder || 0), 0) + 1
+    })()
+    const content = {
+      title: { en: labels[sectionType].en, ar: labels[sectionType].ar },
+      ...(sectionType === 'contact' ? { links: [] } : { items: [] }),
+    }
+    updateProfile((p: any) => {
+      const pages = [...(p.pages || [])]
+      const page = pages[0]
+      if (!page) return p
+      const shifted = (page.sections || []).map((s: any) =>
+        (s.sectionOrder || 0) >= insertOrder ? { ...s, sectionOrder: (s.sectionOrder || 0) + 1 } : s,
+      )
+      pages[0] = {
+        ...page,
+        sections: [
+          ...shifted,
+          {
+            id: newId,
+            sectionType,
+            sectionOrder: insertOrder,
+            content,
+            settings: { isVisible: true },
+          },
+        ],
+      }
+      return { ...p, pages }
+    })
+    setSelectedSectionId(newId)
+    setSelectedSectionType(sectionType)
+  }
+
   // "+ Add Section" creates a Custom Section only. Base sections such as
   // Education are seeded automatically and cannot be added here.
   const addCustomSection = () => {
@@ -1945,8 +2108,25 @@ export function BuilderClient({
   // Slugs referenced by some project card (page-level linkType='page' or a
   // page_link item). A page no card points at is "unlinked": it stays
   // editable here but is hidden from public navigation until linked.
-  const isRealSlug = (s: any) =>
-    typeof s === 'string' && s !== '' && !s.startsWith('new-') && !s.startsWith('project-new-')
+  // A real persisted page may legitimately have a slug beginning with `new-`
+  // (the server creates `new-project-page` from the default title), so prefer
+  // the actual page list before applying the temporary-id prefix guard.
+  const knownProjectSlugs = useMemo(
+    () =>
+      new Set(
+        (profile.projectPages || [])
+          .map((page: any) => (typeof page?.slug === 'string' ? page.slug : ''))
+          .filter(Boolean),
+      ),
+    [profile.projectPages],
+  )
+  const isRealSlug = useCallback(
+    (s: any) =>
+      typeof s === 'string' &&
+      s !== '' &&
+      (knownProjectSlugs.has(s) || (!s.startsWith('new-') && !s.startsWith('project-new-'))),
+    [knownProjectSlugs],
+  )
   const linkedPageSlugs = useMemo(() => {
     const refs = new Set<string>()
     for (const pg of profile.projectPages || []) {
@@ -1962,7 +2142,7 @@ export function BuilderClient({
       }
     }
     return refs
-  }, [profile.projectPages])
+  }, [profile.projectPages, isRealSlug])
 
   // Resolve a card's linked content page (same profile, real slug).
   const findLinkedPage = (row: BuilderProjectPageRow | null): BuilderProjectPageRow | null => {
@@ -1976,11 +2156,12 @@ export function BuilderClient({
 
   const editingProjectCard = editingProjectPage ? isProjectCard(editingProjectPage) : false
   const editingLinkedSlug = editingProjectPage ? linkedPageSlugOf(editingProjectPage) : ''
-  // Cards open their linked page; pages open their own slug. A card that has
-  // no link yet keeps its legacy behaviour (own slug).
+  // Cards open their linked page; pages open their own slug. An unlinked card
+  // has no public page of its own, so the live action is disabled instead of
+  // guessing a slug that the public route would reject.
   const liveProjectSlug = editingProjectPage
     ? (editingProjectCard
-        ? (editingLinkedSlug || editingProjectPage.slug || '')
+        ? (editingLinkedSlug || '')
         : (editingProjectPage.slug || ''))
     : ''
   const liveHref = profile.username
@@ -1989,9 +2170,10 @@ export function BuilderClient({
       : `/u/${profile.username}`
     : '#'
   const liveDisabled =
-    activePage !== 'home' &&
-    !!editingProjectPage &&
-    (!isRealSlug(liveProjectSlug) || String(editingProjectPage.id || '').startsWith('new-'))
+    profile.status !== 'PUBLISHED' ||
+    (activePage !== 'home' &&
+      !!editingProjectPage &&
+      (!isRealSlug(liveProjectSlug) || String(editingProjectPage.id || '').startsWith('new-')))
 
   const focusLinkControl = (pageId: string) => {
     const el = document.getElementById(`pp-link-${pageId}`)
@@ -2027,18 +2209,28 @@ export function BuilderClient({
             updatedPages.push({ ...realPage, items: realPage.items || [] })
           }
 
-          // b. If any project card has linkType="page" and linkedPageSlug = old temp ID, update it to the real slug
+          // b. If any project card has linkType="page" and linkedPageSlug = old temp ID, update it to the real slug.
+          // A slug that belongs to an existing page (including a legitimate
+          // `new-project-page`) is not a temporary ID and must be left alone.
+          const knownSlugs = new Set(
+            updatedPages
+              .map((page: any) => (typeof page?.slug === 'string' ? page.slug : ''))
+              .filter(Boolean),
+          )
+          const isTempTarget = (value: any) => {
+            if (typeof value !== 'string' || !value) return false
+            if (tempPageIds.has(value)) return true
+            return (
+              (value.startsWith('new-') || value.startsWith('project-new-')) &&
+              !knownSlugs.has(value)
+            )
+          }
           const finalPages = updatedPages.map((proj: any) => {
             const updatedProj = { ...proj }
             const cardLinkType = proj.linkType || proj.content?.linkType
             const cardLinkedSlug = proj.linkedPageSlug || proj.content?.linkedPageSlug
 
-            if (
-              cardLinkType === 'page' &&
-              (tempPageIds.has(cardLinkedSlug) ||
-                (typeof cardLinkedSlug === 'string' && cardLinkedSlug.startsWith('new-')) ||
-                (typeof cardLinkedSlug === 'string' && cardLinkedSlug.startsWith('project-new-')))
-            ) {
+            if (cardLinkType === 'page' && isTempTarget(cardLinkedSlug)) {
               updatedProj.linkedPageSlug = realPage.slug
               if (updatedProj.content) {
                 updatedProj.content = {
@@ -2052,12 +2244,7 @@ export function BuilderClient({
               updatedProj.items = proj.items.map((item: any) => {
                 const itemLinkType = item.linkType || (item.type === 'page_link' ? 'page' : 'none')
                 const itemLinkedSlug = item.linkedPageSlug || (item.type === 'page_link' ? item.externalUrl : null)
-                if (
-                  itemLinkType === 'page' &&
-                  (tempPageIds.has(itemLinkedSlug) ||
-                    (typeof itemLinkedSlug === 'string' && itemLinkedSlug.startsWith('new-')) ||
-                    (typeof itemLinkedSlug === 'string' && itemLinkedSlug.startsWith('project-new-')))
-                ) {
+                if (itemLinkType === 'page' && isTempTarget(itemLinkedSlug)) {
                   return {
                     ...item,
                     linkedPageSlug: realPage.slug,
@@ -2180,12 +2367,40 @@ export function BuilderClient({
   }, [profile.id])
 
   const updateProjectPageField = (pageId: string, field: string, value: any) => {
-    updateProfile((p: any) => ({
-      ...p,
-      projectPages: p.projectPages.map((pp: any) =>
-        pp.id === pageId ? { ...pp, [field]: value } : pp
-      )
-    }))
+    updateProfile((p: any) => {
+      const pages = p.projectPages || []
+      const target = pages.find((pp: any) => pp.id === pageId)
+      const oldSlug = typeof target?.slug === 'string' ? target.slug : ''
+      const slugChanged = field === 'slug' && oldSlug !== '' && oldSlug !== value
+
+      return {
+        ...p,
+        projectPages: pages.map((pp: any) => {
+          if (pp.id === pageId) return { ...pp, [field]: value }
+          if (!slugChanged) return pp
+
+          const content = (pp.content && typeof pp.content === 'object') ? { ...pp.content } : {}
+          const linked = pp.linkedPageSlug || content.linkedPageSlug
+          const sourceItems = Array.isArray(pp.items) ? pp.items : []
+          let itemsChanged = false
+          const items = sourceItems.map((item: any) => {
+            if (item && item.type === 'page_link' && (item.externalUrl === oldSlug || item.linkedPageSlug === oldSlug)) {
+              itemsChanged = true
+              return { ...item, externalUrl: value, linkedPageSlug: value }
+            }
+            return item
+          })
+          if (linked !== oldSlug && !itemsChanged) return pp
+          return {
+            ...pp,
+            ...(linked === oldSlug
+              ? { linkedPageSlug: value, content: { ...content, linkedPageSlug: value } }
+              : { content }),
+            items: itemsChanged ? items : pp.items,
+          }
+        }),
+      }
+    })
   }
 
   // Point a project card at a page (card → page by slug). Client state only
@@ -2347,6 +2562,23 @@ export function BuilderClient({
                 </p>
               </div>
               <div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id={`pp-published-${pp.id}`}
+                    type="checkbox"
+                    checked={pp.isPublished !== false}
+                    onChange={(e) => updateProjectPageField(pp.id, 'isPublished', e.target.checked)}
+                    className="w-4 h-4 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] bg-[var(--color-surface)]"
+                  />
+                  <label htmlFor={`pp-published-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] cursor-pointer">
+                    {t('misc.publishPage')}
+                  </label>
+                </div>
+                <p className="text-[11px] text-[var(--color-text-muted)] mt-1.5">
+                  {t('misc.publishPageHint')}
+                </p>
+              </div>
+              <div>
                 <label htmlFor={`pp-back-${pp.id}`} className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2 block">{t('field.backButtonLabel')}</label>
                 <Input
                   id={`pp-back-${pp.id}`}
@@ -2380,15 +2612,27 @@ export function BuilderClient({
                     title: ppLinkedPage.title || ppLinkedPage.slug || '',
                   })}
                 </p>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="self-start"
-                  onClick={() => handleSelectProjectPage(ppLinkedPage)}
-                >
-                  <ExternalLink className="h-4 w-4 me-1.5" />
-                  {t('projectManager.editLinkedPage')}
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handleSelectProjectPage(ppLinkedPage)}
+                  >
+                    <ExternalLink className="h-4 w-4 me-1.5" />
+                    {t('projectManager.editLinkedPage')}
+                  </Button>
+                  {!isFreePlan && profile.status === 'PUBLISHED' && isRealSlug(ppLinkedPage.slug) && ppLinkedPage.isPublished !== false && (
+                    <a
+                      href={`/u/${profile.username}/projects/${ppLinkedPage.slug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex min-h-[36px] items-center gap-1.5 rounded-md border border-[var(--color-border)] px-3 text-xs font-semibold text-[var(--color-text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      {t('common.viewPage')}
+                    </a>
+                  )}
+                </div>
               </div>
             </FormCard>
           ) : (
@@ -4082,18 +4326,22 @@ case 'skills':
                 updateProfile={updateProfile}
                 isCardMode={true}
                 allProjectPages={projectPages}
+                projectIdAliases={projectIdAliases}
                 isFree={isFreePlan}
                 groups={Array.isArray(c.groups) ? c.groups : []}
                 onGroupsChange={(next) => updateSectionContentRaw(selectedSection.id, 'groups', next)}
                 showEn={showEn}
                 showAr={showAr}
+                onEditingCardChange={CARD_DIAGNOSTICS_ENABLED ? setDiagnosticCard : undefined}
               />
             </FormCard>
           </div>
         )
 
       case 'footer':
-        const footerLinks = profile.contactLinks || c.links || []
+        const footerLinks = (Array.isArray(profile.contactLinks) && profile.contactLinks.length > 0)
+          ? profile.contactLinks
+          : (Array.isArray(c.links) ? c.links : [])
         return (
           <div className="space-y-6">
             <FormCard title={t('form.footerContent')} subtitle={t('form.subtitleFooterContent')}>
@@ -4381,6 +4629,32 @@ case 'skills':
           </div>
         </div>
       )}
+      <TemplatePickerModal
+        open={templateModalOpen}
+        onClose={() => setTemplateModalOpen(false)}
+        currentTemplate={resolveTemplateId(profile?.appearance?.template)}
+        previewTemplateId={previewTemplateId}
+        onPreview={setPreviewTemplateId}
+        onApply={handleApplyTemplate}
+        isFreePlan={isFreePlan}
+        applying={applyingTemplate}
+        upgradeHref={upgradeHref}
+      />
+      {previewTemplateId && !templateModalOpen && (
+        <div className="fixed bottom-4 left-1/2 z-40 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-medium text-[var(--color-text-primary)] shadow-lg">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
+          <span className="truncate">
+            {t('templates.previewBadge')} · {t(previewTemplateId === 'editorial-marketing' ? 'templates.editorial' : 'templates.classic')}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPreviewTemplateId(null)}
+            className="shrink-0 rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-semibold hover:bg-[var(--color-surface-secondary)]"
+          >
+            {t('templates.exitPreview')}
+          </button>
+        </div>
+      )}
       {/* ─────────────────────────────────────────────────────────────
           1. TOP BAR (Height: 52px, border-b, bg white / dark card)
       ────────────────────────────────────────────────────────────── */}
@@ -4405,14 +4679,16 @@ case 'skills':
             <button
               type="button"
               title={t('topbar.undo')}
-              className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer"
+              onClick={handleUndo}
+              className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Undo2 className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
               title={t('topbar.redo')}
-              className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer"
+              onClick={handleRedo}
+              className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Redo2 className="h-3.5 w-3.5" />
             </button>
@@ -4445,6 +4721,16 @@ case 'skills':
 
         {/* Right: device switcher + account + actions */}
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+          <button
+            onClick={() => setTemplateModalOpen(true)}
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-md border border-[var(--color-border)] bg-transparent px-2.5 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
+            aria-label={t('templates.open')}
+            title={t('templates.open')}
+          >
+            <LayoutTemplate className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t('templates.open')}</span>
+          </button>
+
           <div className="hidden md:flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5" aria-label={t('topbar.previewMode')}>
             <button
               onClick={() => setPreviewMode('desktop')}
@@ -4564,7 +4850,7 @@ case 'skills':
         <main className="flex-1 min-h-0 min-w-0 max-w-[100vw] bg-[var(--color-page)] relative overflow-hidden overflow-x-hidden flex items-center justify-center p-2 md:p-4">
           {isFreePlan && (
             <div className="pointer-events-none absolute inset-x-3 top-2 z-10 flex justify-center">
-              <p className="rounded-full bg-amber-500/95 px-3 py-1 text-center text-[11px] font-semibold text-white shadow-md">
+              <p className="rounded-full bg-[var(--color-warning)] px-3 py-1 text-center text-[11px] font-semibold text-[var(--on-warning)] shadow-md">
                 {t('preview.freeNotice')}
               </p>
             </div>
@@ -4590,6 +4876,7 @@ case 'skills':
                     profile={deferredPreviewProfile}
                     isFree={isFreePlan}
                     onThemeChange={handlePreviewThemeChange}
+                    templateOverride={previewTemplateId}
                   />
                 </div>
               </div>
@@ -4602,6 +4889,7 @@ case 'skills':
                     profile={deferredPreviewProfile}
                     isFree={isFreePlan}
                     onThemeChange={handlePreviewThemeChange}
+                    templateOverride={previewTemplateId}
                   />
                 )}
               </div>
@@ -4718,6 +5006,19 @@ case 'skills':
           </button>
         </div>
       </nav>
+
+      {CARD_DIAGNOSTICS_ENABLED ? (
+        <ProjectCardDiagnostics
+          card={diagnosticCard}
+          profile={profile}
+          isFree={isFreePlan}
+          previewTemplateId={previewTemplateId}
+          previewProfile={deferredPreviewProfile}
+          isDirty={isDirty}
+          saveStatus={saveStatus}
+          showPanel={CARD_DIAGNOSTICS_PANEL_VISIBLE}
+        />
+      ) : null}
     </div>
   )
 
@@ -4874,6 +5175,18 @@ case 'skills':
                   <Plus className="h-3.5 w-3.5" />
                   {t('actions.addSection')}
                 </button>
+                <div className="mt-2 grid grid-cols-3 gap-1">
+                  {(['contact', 'gallery', 'files'] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => addBaseSection(type)}
+                      className="rounded-md border border-[var(--color-border)] px-1.5 py-1.5 text-[10px] font-semibold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-primary)]/50 hover:text-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                    >
+                      {t(`section.${type}`)}
+                    </button>
+                  ))}
+                </div>
               </div>
               )}
             </>
@@ -4969,6 +5282,19 @@ case 'skills':
                           {t('sections.notLinked')}
                         </span>
                       )}
+                      {!isFreePlan && profile.status === 'PUBLISHED' && isRealSlug(pp.slug) && pp.isPublished !== false && (
+                        <a
+                          href={`/u/${profile.username}/projects/${pp.slug}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
+                          title={t('common.viewPage')}
+                          aria-label={t('common.viewPage')}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -5053,7 +5379,7 @@ case 'skills':
               }}
               className={`w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 selectedSectionId === null
-                  ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                  ? 'bg-[var(--color-primary)] text-[var(--on-primary)] shadow-sm'
                   : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-primary)]'
               }`}
             >

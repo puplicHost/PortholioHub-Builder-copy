@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import Link from 'next/link'
@@ -6,6 +7,8 @@ import type { Prisma } from '@prisma/client'
 import { ArrowLeft, ExternalLink } from 'lucide-react'
 import { sanitizeUrl } from '@/lib/urls'
 import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
+import { resolveTemplateFromAppearance } from '@/lib/templates'
+import { EditorialProjectDetail } from '@/components/portfolio/templates/EditorialProjectDetail'
 import { isSectionVisible } from '@/lib/section-visibility'
 import { PortfolioFooter } from '@/components/portfolio/PortfolioFooter'
 import { ProjectCardBody, ProjectCardMedia, ProjectFileIcon } from '@/components/portfolio/ProjectCard'
@@ -35,6 +38,10 @@ export type ProjectPageProfile = {
   pages?: Array<{
     slug?: string | null
     sections?: any[] | null
+  }> | null
+  projectPages?: Array<{
+    slug?: string | null
+    isPublished?: boolean | null
   }> | null
   appearance?: {
     colorMode?: 'light' | 'dark' | null
@@ -86,13 +93,22 @@ function isLightColor(colorStr?: string): boolean {
   return false
 }
 
-function itemHref(username: string, item: any): string {
+function itemHref(
+  username: string,
+  item: any,
+  persistedPageSlugs: ReadonlySet<string>,
+): string {
   const raw = typeof item.externalUrl === 'string' ? item.externalUrl.trim() : ''
   if (!raw) return ''
   if (item.type === 'page_link') {
-    // Page links store the target slug, not a URL.
-    if (raw.startsWith('new-') || raw.startsWith('project-new-')) return ''
+    // Page links store the target slug, not a URL. A persisted page can
+    // legitimately have a `new-` slug; only reject a temp-looking value when
+    // no such page exists in the loaded profile.
     if (!/^[a-z0-9-]+$/i.test(raw)) return ''
+    if (
+      (raw.startsWith('new-') || raw.startsWith('project-new-')) &&
+      !persistedPageSlugs.has(raw)
+    ) return ''
     return `/u/${username}/projects/${encodeURIComponent(raw)}`
   }
   // Uploaded R2 attachments open in the in-app viewer (not a raw download).
@@ -124,29 +140,46 @@ export function ProjectPageView({
   preview?: boolean
 }) {
   const appearance = profile.appearance || {}
+  const persistedPageSlugs = new Set<string>(
+    (profile.projectPages || [])
+      .map((page) => (typeof page?.slug === 'string' ? page.slug : ''))
+      .filter((slug): slug is string => Boolean(slug)),
+  )
+  const editorialTemplate = resolveTemplateFromAppearance(appearance) === 'editorial-marketing'
+  if (editorialTemplate) {
+    return <EditorialProjectDetail profile={profile} projectPage={projectPage} preview={preview} />
+  }
   const lang = getPortfolioLang(appearance) === 'ar' ? 'ar' : 'en'
   const defaultColorMode = appearance.defaultColorMode || appearance.colorMode || 'light'
   const theme = defaultColorMode.startsWith('dark') ? 'dark' : 'light'
 
-  const primary = appearance.primaryColor || '#38BDF8'
-  const primaryLight = adjustColor(primary, 40)
-  const bgLight = appearance.bgColorLight || '#F0F9FF'
-  const bgDark = appearance.bgColorDark || '#111827'
+  const primary = editorialTemplate ? '#6e1e35' : (appearance.primaryColor || '#38BDF8')
+  const primaryLight = editorialTemplate ? '#8b2b47' : adjustColor(primary, 40)
+  const bgLight = editorialTemplate ? '#fbf7ee' : (appearance.bgColorLight || '#F0F9FF')
+  const bgDark = editorialTemplate ? '#221b17' : (appearance.bgColorDark || '#111827')
   const currentBg = theme === 'dark' ? bgDark : bgLight
-  const currentText = theme === 'dark'
-    ? (appearance.textColorDark || '#E5E7EB')
-    : (appearance.textColorLight || '#0F172A')
-  const currentMuted = theme === 'dark'
-    ? (appearance.mutedTextDark || '#858688')
-    : (appearance.mutedText || '#64748B')
-  const currentCard = theme === 'dark'
-    ? (appearance.cardBackgroundDark || '#374151')
-    : (appearance.cardBackground || '#FFFFFF')
-  const currentBorder = theme === 'dark'
-    ? (appearance.borderColorDark || '#4B5563')
-    : (appearance.borderColor || '#BAE6FD')
-  const currentOutline = appearance.outlineColor || primary
-  const fontFam = appearance.font || 'Inter'
+  const currentText = editorialTemplate
+    ? (theme === 'dark' ? '#fbf7ee' : '#2a2622')
+    : theme === 'dark'
+      ? (appearance.textColorDark || '#E5E7EB')
+      : (appearance.textColorLight || '#0F172A')
+  const currentMuted = editorialTemplate
+    ? (theme === 'dark' ? '#c9bfae' : '#6f6759')
+    : theme === 'dark'
+      ? (appearance.mutedTextDark || '#858688')
+      : (appearance.mutedText || '#54647A')
+  const currentCard = editorialTemplate
+    ? (theme === 'dark' ? '#2a2622' : '#FFFFFF')
+    : theme === 'dark'
+      ? (appearance.cardBackgroundDark || '#374151')
+      : (appearance.cardBackground || '#FFFFFF')
+  const currentBorder = editorialTemplate
+    ? (theme === 'dark' ? '#4a4038' : '#e7ddc9')
+    : theme === 'dark'
+      ? (appearance.borderColorDark || '#4B5563')
+      : (appearance.borderColor || '#BAE6FD')
+  const currentOutline = editorialTemplate ? '#6e1e35' : (appearance.outlineColor || primary)
+  const fontFam = editorialTemplate ? 'Inter' : (appearance.font || 'Inter')
   const displayName = pickLang(profile.localized?.displayName, lang) || profile.displayName || profile.username
   const role = pickLang(profile.localized?.professionalTitle, lang)
   const bio = pickLang(profile.localized?.bio, lang)
@@ -187,7 +220,9 @@ export function ProjectPageView({
   const renderItemLinks = (item: any, meta: ProjectItemCardMeta) => {
     const visual = normalizeProjectCardVisual(meta.cardVisual)
     // Video cards play inline; never render an Explore/download link for them.
-    const href = visual === 'video' ? '' : itemHref(profile.username, item)
+    const href = visual === 'video'
+      ? ''
+      : itemHref(profile.username, item, persistedPageSlugs)
     const extras = extraLinks(meta)
     if (!href && extras.length === 0) return null
 

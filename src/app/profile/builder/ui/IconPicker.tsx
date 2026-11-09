@@ -195,7 +195,7 @@ export function IconPicker({ value, onChange, className = '' }: IconPickerProps)
                       aria-pressed={isSelected}
                       className={`group flex h-9 w-9 items-center justify-center rounded-lg border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
                         isSelected
-                          ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white shadow-sm'
+                          ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--on-primary)] shadow-sm'
                           : 'border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-text-primary)]'
                       }`}
                     >

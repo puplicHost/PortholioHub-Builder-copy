@@ -129,7 +129,7 @@ export function FileViewer(props: Props) {
           <button type="button" onClick={() => void toggleFullscreen()} aria-label={fullscreen ? t.exitFullscreen : t.fullscreen} title={fullscreen ? t.exitFullscreen : t.fullscreen} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg hover:bg-[var(--color-surface-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
             {fullscreen ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
           </button>
-          <a href={downloadUrl} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 text-sm font-semibold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+          <a href={downloadUrl} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 text-sm font-semibold text-[var(--on-primary)] hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
             <Download className="h-4 w-4" aria-hidden="true" />
             {t.download}
           </a>
@@ -304,7 +304,7 @@ function SpreadsheetViewer({ contentUrl, lang }: { contentUrl: string; lang: 'ar
               role="tab"
               aria-selected={active === i}
               onClick={() => setActive(i)}
-              className={`min-h-[36px] rounded-md px-3 text-xs font-semibold ${active === i ? 'bg-[var(--color-primary)] text-white' : 'border border-[var(--color-border)] text-[var(--color-text-secondary)]'}`}
+              className={`min-h-[36px] rounded-md px-3 text-xs font-semibold ${active === i ? 'bg-[var(--color-primary)] text-[var(--on-primary)]' : 'border border-[var(--color-border)] text-[var(--color-text-secondary)]'}`}
             >
               {name}
             </button>
