@@ -11,7 +11,7 @@ import {
   Trophy, Star, Users, Briefcase, Heart, Zap, Target, Award,
   Clock, TrendingUp, Code, Layers, Rocket, PenTool, Sun, Moon,
   ArrowUp, BarChart3, LogOut, Languages, User, AlertTriangle, Lock, Save,
-  Copy, LayoutTemplate
+  Copy, LayoutTemplate, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -255,13 +255,26 @@ function ImagePositionControl({
   )
 }
 
-function ProjectPagePreview({ profile, projectPage }: { profile: any; projectPage: any }) {
+function ProjectPagePreview({
+  profile,
+  projectPage,
+  templateOverride,
+}: {
+  profile: any
+  projectPage: any
+  templateOverride?: TemplateId | null
+}) {
   // The public page and the builder preview intentionally render the exact
   // same component. The preview only disables navigation and lets the shared
   // page fill the preview container (sticky footer included).
   return (
     <div className="relative h-full w-full overflow-y-auto @container">
-      <ProjectPageView profile={profile} projectPage={projectPage} preview />
+      <ProjectPageView
+        profile={profile}
+        projectPage={projectPage}
+        preview
+        templateOverride={templateOverride}
+      />
     </div>
   )
 }
@@ -1105,6 +1118,10 @@ export function BuilderClient({
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop')
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false)
   const [rightSheetOpen, setRightSheetOpen] = useState(false)
+  // Desktop side panels collapse independently. Mobile continues to use the
+  // existing slide-over drawer / bottom sheet controls.
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false)
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false)
   const [builderDarkMode, setBuilderDarkMode] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     try {
@@ -4671,6 +4688,42 @@ case 'skills':
           <h1 className="truncate text-xs sm:text-sm font-semibold tracking-tight text-[var(--color-text-primary)]">
             {L.builderTitle}
           </h1>
+          <div
+            className="hidden md:flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-0.5"
+            role="group"
+            aria-label={t('labels.navigation')}
+          >
+            <button
+              type="button"
+              onClick={() => setLeftPanelCollapsed((v) => !v)}
+              aria-expanded={!leftPanelCollapsed}
+              aria-controls="builder-left-panel"
+              aria-label={leftPanelCollapsed ? t('labels.openSections') : t('labels.closeSections')}
+              title={leftPanelCollapsed ? t('labels.openSections') : t('labels.closeSections')}
+              className="flex h-9 w-9 min-h-[36px] min-w-[36px] items-center justify-center rounded-md text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
+            >
+              {leftPanelCollapsed ? (
+                <PanelLeftOpen className="h-4 w-4 rtl:-scale-x-100" aria-hidden="true" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4 rtl:-scale-x-100" aria-hidden="true" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setRightPanelCollapsed((v) => !v)}
+              aria-expanded={!rightPanelCollapsed}
+              aria-controls="builder-right-panel"
+              aria-label={rightPanelCollapsed ? t('labels.openEditor') : t('labels.closeEditor')}
+              title={rightPanelCollapsed ? t('labels.openEditor') : t('labels.closeEditor')}
+              className="flex h-9 w-9 min-h-[36px] min-w-[36px] items-center justify-center rounded-md text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
+            >
+              {rightPanelCollapsed ? (
+                <PanelRightOpen className="h-4 w-4 rtl:-scale-x-100" aria-hidden="true" />
+              ) : (
+                <PanelRightClose className="h-4 w-4 rtl:-scale-x-100" aria-hidden="true" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Center (md+): undo/redo + save status */}
@@ -4822,9 +4875,14 @@ case 'skills':
             Desktop on md+ (≥768px). Slide-over drawer on mobile.
         ────────────────────────────────────────────────────────────── */}
         {/* Desktop sidebar */}
-        <aside className="hidden md:flex w-[200px] shrink-0 flex-col border-e border-[var(--color-border)] bg-[var(--color-surface-secondary)] overflow-hidden">
-          {renderLeftPanelContent()}
-        </aside>
+        {!leftPanelCollapsed && (
+          <aside
+            id="builder-left-panel"
+            className="hidden md:flex w-[200px] shrink-0 flex-col border-e border-[var(--color-border)] bg-[var(--color-surface-secondary)] overflow-hidden"
+          >
+            {renderLeftPanelContent()}
+          </aside>
+        )}
 
         {/* Mobile slide-over drawer */}
         {leftDrawerOpen && (
@@ -4883,7 +4941,11 @@ case 'skills':
             ) : (
               <div className="flex-1 w-full min-h-0 overflow-hidden relative">
                 {activePage !== 'home' && editingProjectPage && !selectedSection ? (
-                  <ProjectPagePreview profile={profile} projectPage={editingProjectPage} />
+                  <ProjectPagePreview
+                    profile={profile}
+                    projectPage={editingProjectPage}
+                    templateOverride={previewTemplateId}
+                  />
                 ) : (
                   <LivePreview
                     profile={deferredPreviewProfile}
@@ -4901,12 +4963,17 @@ case 'skills':
             4. RIGHT PANEL (~470px on md+, bottom sheet on mobile)
         ────────────────────────────────────────────────────────────── */}
         {/* Desktop sidebar */}
-        <aside className="hidden md:flex w-[320px] lg:w-[470px] lg:min-w-[470px] min-w-0 shrink-0 flex-col border-s border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
-          {/* Only mount the desktop panel while the mobile sheet is closed:
-              the sheet renders the same form, so mounting both at once would
-              duplicate every field id in the document. */}
-          {!rightSheetOpen && renderRightPanelWrapper()}
-        </aside>
+        {!rightPanelCollapsed && (
+          <aside
+            id="builder-right-panel"
+            className="hidden md:flex w-[320px] lg:w-[470px] lg:min-w-[470px] min-w-0 shrink-0 flex-col border-s border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden"
+          >
+            {/* Only mount the desktop panel while the mobile sheet is closed:
+                the sheet renders the same form, so mounting both at once would
+                duplicate every field id in the document. */}
+            {!rightSheetOpen && renderRightPanelWrapper()}
+          </aside>
+        )}
 
         {/* Mobile bottom sheet */}
         {rightSheetOpen && (

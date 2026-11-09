@@ -7,7 +7,7 @@ import type { Prisma } from '@prisma/client'
 import { ArrowLeft, ExternalLink } from 'lucide-react'
 import { sanitizeUrl } from '@/lib/urls'
 import { getPortfolioLang, pickLang } from '@/lib/portfolio-language'
-import { resolveTemplateFromAppearance } from '@/lib/templates'
+import { resolvePreviewTemplateId, type TemplateId } from '@/lib/templates'
 import { EditorialProjectDetail } from '@/components/portfolio/templates/EditorialProjectDetail'
 import { isSectionVisible } from '@/lib/section-visibility'
 import { PortfolioFooter } from '@/components/portfolio/PortfolioFooter'
@@ -134,10 +134,13 @@ export function ProjectPageView({
   profile,
   projectPage,
   preview = false,
+  templateOverride,
 }: {
   profile: ProjectPageProfile
   projectPage: ProjectPageWithItems
   preview?: boolean
+  /** Builder-only preview selection; never used by the public route. */
+  templateOverride?: TemplateId | null
 }) {
   const appearance = profile.appearance || {}
   const persistedPageSlugs = new Set<string>(
@@ -145,7 +148,8 @@ export function ProjectPageView({
       .map((page) => (typeof page?.slug === 'string' ? page.slug : ''))
       .filter((slug): slug is string => Boolean(slug)),
   )
-  const editorialTemplate = resolveTemplateFromAppearance(appearance) === 'editorial-marketing'
+  const editorialTemplate =
+    resolvePreviewTemplateId(appearance, templateOverride) === 'editorial-marketing'
   if (editorialTemplate) {
     return <EditorialProjectDetail profile={profile} projectPage={projectPage} preview={preview} />
   }

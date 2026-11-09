@@ -169,6 +169,27 @@ function createDetailPage(targetSlug: string) {
   } as any
 }
 
+describe('project detail template selection', () => {
+  const renderDetail = (saved: 'classic' | 'editorial-marketing', override?: 'classic' | 'editorial-marketing') =>
+    renderToStaticMarkup(
+      React.createElement(ProjectPageView, {
+        profile: createDetailProfile(saved),
+        projectPage: createDetailPage('new-project-page'),
+        templateOverride: override,
+      }),
+    )
+
+  it('follows the saved template when no preview override is active', () => {
+    expect(renderDetail('classic')).not.toContain('Case study')
+    expect(renderDetail('editorial-marketing')).toContain('Case study')
+  })
+
+  it('uses the Builder preview override for project detail pages', () => {
+    expect(renderDetail('classic', 'editorial-marketing')).toContain('Case study')
+    expect(renderDetail('editorial-marketing', 'classic')).not.toContain('Case study')
+  })
+})
+
 describe('project detail item CTA rendering', () => {
   it.each(['classic', 'editorial-marketing'] as const)(
     '%s accepts a persisted page whose real slug begins with new-',
