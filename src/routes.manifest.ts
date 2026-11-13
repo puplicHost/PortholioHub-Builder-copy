@@ -60,6 +60,8 @@ export const ROUTES_MANIFEST: RouteEntry[] = [
   { path: '/api/me/notifications/[id]/read', level: 'user' },
   { path: '/api/me/notifications/read-all', level: 'user' },
   { path: '/api/me/storage', level: 'user' },
+  // CV import (paid users; authenticated extraction only)
+  { path: '/api/cv-import/extract', level: 'user' },
   // R2 file uploads/downloads (authenticated; public files readable)
   { path: '/api/files/r2/presign', level: 'user' },
   { path: '/api/files/r2/complete', level: 'user' },

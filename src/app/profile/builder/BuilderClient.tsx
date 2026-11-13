@@ -88,6 +88,7 @@ import { EducationEditor } from './EducationEditor'
 import { ClientsEditor } from './ClientsEditor'
 import { IconPicker } from './ui/IconPicker'
 import { ImageDeleteButton } from './ui/ImageDeleteButton'
+import { CvImportModal } from './CvImportModal'
 
 function UploadOverlay({ active, label, progress }: { active: boolean; label: string; progress?: number }) {
   if (!active) return null
@@ -917,10 +918,12 @@ export function BuilderClient({
   initialProfile,
   initialSubscriptionState = 'NONE',
   whatsappNumber = '',
+  cvExternalProcessing = false,
 }: {
   initialProfile: any
   initialSubscriptionState?: string
   whatsappNumber?: string
+  cvExternalProcessing?: boolean
 }) {
   const { toast } = useToast()
   const { locale, dir, t, toggleLocale } = useBuilderI18n()
@@ -992,6 +995,7 @@ export function BuilderClient({
     router.push('/login')
     router.refresh()
   }
+  const [cvImportOpen, setCvImportOpen] = useState(false)
   const [profile, setProfile] = useState(() => {
     if (!initialProfile?.pages?.[0]?.sections) return initialProfile
     let sections = [...(initialProfile.pages[0].sections || [])]
@@ -1592,6 +1596,29 @@ export function BuilderClient({
     setProfile((p: any) => ({ ...p, version: serverVersion }))
     setConflict(null)
     await handleSaveChanges(serverVersion)
+  }
+
+  // CV import applies only field-scoped changes server-side. Reload the
+  // authoritative profile afterwards so the builder's version and snapshot
+  // match the committed row.
+  const handleCvApplied = async () => {
+    const fresh = await getOrCreateProfile()
+    setProfile(fresh)
+    setSavedSnapshot(getProfileSnapshot(fresh))
+    backoffRef.current = 0
+    setSaveStatus('saved')
+  }
+
+  const openCvImport = () => {
+    if (isFreePlan) {
+      showLockedToast()
+      return
+    }
+    if (isDirty || saveStatus === 'saving') {
+      toast('warning', t('cv.saveFirst'))
+      return
+    }
+    setCvImportOpen(true)
   }
 
   // Warn before leaving with unsaved changes.
@@ -4657,6 +4684,15 @@ case 'skills':
         applying={applyingTemplate}
         upgradeHref={upgradeHref}
       />
+      <CvImportModal
+        open={cvImportOpen}
+        onClose={() => setCvImportOpen(false)}
+        profile={profile}
+        externalProcessing={cvExternalProcessing}
+        isDirty={isDirty}
+        saving={saveStatus === 'saving'}
+        onApplied={handleCvApplied}
+      />
       {previewTemplateId && !templateModalOpen && (
         <div className="fixed bottom-4 left-1/2 z-40 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-medium text-[var(--color-text-primary)] shadow-lg">
           <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
@@ -5254,6 +5290,14 @@ case 'skills':
                     </button>
                   ))}
                 </div>
+                <button
+                  type="button"
+                  onClick={openCvImport}
+                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-xs font-semibold text-[var(--color-primary)] transition-colors hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-primary)]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                >
+                  <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                  {t('cv.open')}
+                </button>
               </div>
               )}
             </>

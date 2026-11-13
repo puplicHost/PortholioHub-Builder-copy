@@ -23,6 +23,10 @@ export default async function PortfolioBuilderPage() {
     cookies(),
   ])
 
+  // Only a boolean crosses the server/client boundary. Never expose the key,
+  // provider name, or model name to the builder.
+  const cvExternalProcessing = Boolean((process.env.NVIDIA_API_KEY || '').trim())
+
   // Builder UI language is independent from the app language: cookie first,
   // then the per-user preference, then English.
   const { locale, stored } = await resolveBuilderLocale(
@@ -36,6 +40,7 @@ export default async function PortfolioBuilderPage() {
           initialProfile={profile}
           initialSubscriptionState={sub?.state ?? 'NONE'}
           whatsappNumber={typeof whatsapp === 'string' ? whatsapp : ''}
+          cvExternalProcessing={cvExternalProcessing}
         />
       </ConfirmProvider>
     </BuilderI18nProvider>
